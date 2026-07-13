@@ -183,14 +183,12 @@ class Secp256k1CFFIExtension(FFIExtension):
 
         # add source for safe callback
         with open(self.wd / "src" / "secp256k1.c", "a") as f:
-            f.write(
-                """
+            f.write("""
             void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
             }
             void secp256k1_default_error_callback_fn(const char* str, void* data) {
             }
-            """
-            )
+            """)
 
         subprocess.call(["make"], cwd=self.wd)  # nosec B603 B607
         subprocess.call(["git", "reset", "--hard"], cwd=self.wd)  # nosec B603 B607
