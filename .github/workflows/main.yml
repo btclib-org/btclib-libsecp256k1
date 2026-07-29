@@ -76,26 +76,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # ubuntu-latest/macos-13 are x86_64, ubuntu-24.04-arm/macos-latest
-        # are arm64; windows-latest and windows-11-arm build natively with
-        # MSVC, which picks its target from the host, so win_amd64 and
-        # win_arm64 need no configuration of their own. The vendored
-        # library is built with CMake everywhere, provisioned as a build
-        # requirement: no runner needs a toolchain installed by hand
+        # ubuntu-latest/macos-26-intel are x86_64,
+        # ubuntu-24.04-arm/macos-latest are arm64; windows-latest and
+        # windows-11-arm build natively with MSVC, which picks its target
+        # from the host, so win_amd64 and win_arm64 need no configuration
+        # of their own. The vendored library is built with CMake
+        # everywhere, provisioned as a build requirement: no runner needs
+        # a toolchain installed by hand.
+        # Actions drops x86_64 macOS in August 2027, after which no runner
+        # can build a macosx x86_64 wheel at all
         os:
           [
             ubuntu-latest,
             ubuntu-24.04-arm,
-            macos-13,
+            macos-26-intel,
             macos-latest,
             windows-latest,
             windows-11-arm,
           ]
-        # macos-13 (the last Intel macOS runner) has long queue times:
-        # run it only on master, on PRs targeting master, and on the tag
-        # or the manual dispatch of a release, which have to build every
-        # artifact that release ships
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -122,14 +120,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # ubuntu-latest/macos-13 are x86_64, ubuntu-24.04-arm/macos-latest
-        # are arm64
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-13, macos-latest]
-        # macos-13 (the last Intel macOS runner) has long queue times:
-        # run it only on master, on PRs targeting master, and on the tag
-        # or the manual dispatch of a release, which have to build every
-        # artifact that release ships
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
+        # ubuntu-latest/macos-26-intel are x86_64,
+        # ubuntu-24.04-arm/macos-latest are arm64
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,11 +141,12 @@ jobs:
       # (CMAKE_OSX_DEPLOYMENT_TARGET defaults to it), so the vendored
       # library is built for the floor its tag then claims. 11.0 is where
       # arm64 macOS starts; 10.13 is what cibuildwheel gives the static
-      # x86_64 wheels of CPython 3.12 and later
+      # x86_64 wheels of CPython 3.12 and later, and the Xcode of the
+      # macOS 26 image still compiles for it
       - name: Set the macOS deployment target
         if: runner.os == 'macOS'
         run: |
-          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-13' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-26-intel' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
 
       - name: Build wheel
         run: |
@@ -314,7 +308,7 @@ jobs:
           [
             ubuntu-latest,
             ubuntu-24.04-arm,
-            macos-13,
+            macos-26-intel,
             macos-latest,
             windows-latest,
           ]
@@ -335,12 +329,6 @@ jobs:
         # free-threaded interpreter installs, and unlike the static wheels
         # nothing else exercises it (cibuildwheel tests every wheel it
         # builds, including cp314t; this job has no such counterpart)
-        #
-        # macos-13 (the last Intel macOS runner) has long queue times:
-        # run it only on master, on PRs targeting master, and on the tag
-        # or the manual dispatch of a release, which have to build every
-        # artifact that release ships
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
@@ -390,7 +378,7 @@ jobs:
           [
             ubuntu-latest,
             ubuntu-24.04-arm,
-            macos-13,
+            macos-26-intel,
             macos-latest,
             windows-latest,
             windows-11-arm,
@@ -404,10 +392,16 @@ jobs:
         # PyPy wheels are not built on Windows, on either architecture.
         # CPython has no Windows arm64 build before 3.11, so there is no
         # interpreter to test a win_arm64 wheel against and cibuildwheel
-        # does not produce one. macos-13 (the last Intel macOS runner) has
-        # long queue times and only runs on master, on PRs targeting
-        # master, and on the tag or the manual dispatch of a release
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"3.9"},{"os":"windows-11-arm","python-version":"3.10"}]') || fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"3.9"},{"os":"windows-11-arm","python-version":"3.10"}, {"os":"macos-13"}]') }}
+        # does not produce one
+        exclude:
+          - os: windows-latest
+            python-version: "pypy-3.11"
+          - os: windows-11-arm
+            python-version: "pypy-3.11"
+          - os: windows-11-arm
+            python-version: "3.9"
+          - os: windows-11-arm
+            python-version: "3.10"
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}

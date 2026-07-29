@@ -19,9 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  # reuse the whole build/test pipeline; on a tag, and on a dispatch, the
-  # matrices include macos-13 (Intel), so every artifact of the release
-  # is built and tested here
+  # reuse the whole build/test pipeline: every artifact the release ships
+  # is built and tested here, by the very matrices that run on a push
   build:
     uses: ./.github/workflows/main.yml
 

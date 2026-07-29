@@ -21,8 +21,7 @@ and burns that version.
 2. add the release notes to `HISTORY.md`; if the vendored libsecp256k1
    moved, update the version named at the top of `README.md` too
 3. merge `dev` into `master` with a green CI. Development happens on
-   `dev`, and `master` only receives merges from it; the merge is also
-   where the Intel macOS jobs first run, being skipped elsewhere
+   `dev`, and `master` only receives merges from it
 4. tag the merge commit, and push that tag alone:
 
        git tag v0.7.1
@@ -30,7 +29,7 @@ and burns that version.
 
    `git push --tags` would push whatever other local tags happen to
    exist. The workflow then builds and tests every artifact the release
-   ships, Intel macOS included, and stops at the `pypi` environment
+   ships and stops at the `pypi` environment
 5. approve the `pypi` deployment when the run pauses for review. Up to
    here nothing is public and the tag can still be deleted; the upload
    that follows is the point of no return
@@ -61,11 +60,11 @@ release that only bumps versions and notes does not need one.
    upload on TestPyPI as much as on PyPI, so a second attempt needs
    `rc2`; a local version (`0.7.1+test1`) is refused by both
 2. run the `release` workflow from the Actions tab, on the branch
-   holding it: a manual run builds the full matrix, Intel macOS
-   included, and stops at the `testpypi` environment. Never tag a
-   rehearsal: the trigger is what picks the index, so a `v0.7.1rc1` tag
-   would take the pre-release to PyPI itself and burn it there, and
-   `0.7.1rc1` is a version PyPI would then hand to `--pre` installs
+   holding it: a manual run builds the full matrix and stops at the
+   `testpypi` environment. Never tag a rehearsal: the trigger is what
+   picks the index, so a `v0.7.1rc1` tag would take the pre-release to
+   PyPI itself and burn it there, and `0.7.1rc1` is a version PyPI would
+   then hand to `--pre` installs
 3. approve it, then check that what was published installs:
 
    <!-- markdownlint-disable MD013 -->
