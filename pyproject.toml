@@ -212,9 +212,9 @@ max-complexity = 10
 "tests/*" = ["S101", "D103"]
 # the benchmark script asserts its own results before timing them
 "scripts/benchmark.py" = ["S101"]
-# the build scripts drive autotools/make and load the cffi build
-# description by exec(): both are inherent to compiling a C dependency
-# from a build backend, and neither ever sees untrusted input
+# the build scripts drive CMake and load the cffi build description by
+# exec(): both are inherent to compiling a C dependency from a build
+# backend, and neither ever sees untrusted input
 "scripts/cffi_build.py" = ["S404", "S603", "S607"]
 "scripts/hatch_build.py" = ["S102"]
 # the build scripts are not part of the documented API

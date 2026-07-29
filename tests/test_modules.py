@@ -24,7 +24,18 @@ import hashlib
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, ecdh, ellswift, ffi, keys, lib, mult, recovery, ssa
+from btclib_libsecp256k1 import (
+    context,
+    dsa,
+    ecdh,
+    ellswift,
+    ffi,
+    keys,
+    lib,
+    mult,
+    recovery,
+    ssa,
+)
 from btclib_libsecp256k1.context import ctx
 
 msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
@@ -234,3 +245,13 @@ def test_musig() -> None:
     assert lib.secp256k1_xonly_pubkey_serialize(ctx, xonly_bytes, agg_pubkey)
     pubkey_bytes = ffi.unpack(xonly_bytes, 32)
     assert ssa.verify(msg, pubkey_bytes, ffi.unpack(sig, 64))
+
+    # signing zeroed the secret nonces, so signing again with one of them
+    # is refused: the whole point of the session, and the reason a call
+    # made through lib is worth following with context.check(), which
+    # turns the bare 0 into what libsecp256k1 has to say about it
+    assert not lib.secp256k1_musig_partial_sign(
+        ctx, partial_sigs[0], secnonces[0], keypairs[0], keyagg_cache, session
+    )
+    with pytest.raises(ValueError, match="secnonce_magic"):
+        context.check()

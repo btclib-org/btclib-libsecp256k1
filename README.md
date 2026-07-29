@@ -79,6 +79,23 @@ being a plain BIP340 signature. The 17 `musig` entry points remain
 available through `lib`, and `tests/test_modules.py` drives a complete
 2-of-2 signing session with them.
 
+A call made through `lib` has no argument validation in front of it, so
+libsecp256k1 is the only thing checking its preconditions: it reports a
+violated one through a callback of the context and returns 0, leaving
+nothing in the return value to say what happened. `context.check()`
+raises what was reported, the failed precondition verbatim, and is meant
+to follow such a call:
+
+    if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
+        context.check()  # ValueError, naming the failed precondition
+
+That example is the one that matters: partial signing zeroes the secret
+nonce, so signing twice with it is refused, and this is how a session
+learns why. The bindings need none of this, validating their arguments
+before calling, and the abort()ing libsecp256k1 defaults are replaced by
+do-nothing stubs in the vendored build, so no illegal argument can take
+the hosting process down.
+
 ## Thread safety
 
 The bindings can be called concurrently from several threads. They hold
@@ -90,6 +107,10 @@ the buffers it writes to.
 This matters on a free-threaded interpreter, for which a wheel is built
 (`cp314t`), where those calls are no longer serialized;
 `tests/test_concurrency.py` exercises it.
+
+What `context.check()` reports is per thread: the callback recording it
+runs on the thread of the call that triggered it, which is what
+attributes a message to the right caller.
 
 What is not protected is the secret material itself, which lives in
 Python objects for as long as the interpreter keeps them: see

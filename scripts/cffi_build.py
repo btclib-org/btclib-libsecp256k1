@@ -26,7 +26,11 @@ static = os.environ.get("BTCLIB_LIBSECP256K1_DYNAMIC", "false") != "true"
 # do-nothing implementations of the external default callbacks: they replace
 # the abort()ing upstream defaults, so that illegal inputs never crash the
 # hosting Python process; compiled as a separate unit, without mutating the
-# vendored sources
+# vendored sources.
+#
+# These are the defaults, which apply to every context whose callbacks are
+# not set: the shared context of the bindings sets them to record what was
+# reported, so that context.check() can raise it
 CALLBACK_STUBS = """
 void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
     (void)str;

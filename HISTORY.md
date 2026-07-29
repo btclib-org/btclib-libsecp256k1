@@ -123,6 +123,17 @@ Major changes include:
 - A single shared libsecp256k1 context is created with the modern
   `SECP256K1_CONTEXT_NONE` flag (the SIGN/VERIFY flags are deprecated)
   and randomized to protect against side-channel leakage
+- The shared context now records what libsecp256k1 reports through its
+  illegal argument and internal error callbacks, and the new
+  `context.check()` raises it, the failed precondition verbatim, as a
+  `ValueError` or a `RuntimeError`. The do-nothing stubs of the vendored
+  build keep an illegal argument from aborting the process, but left the
+  caller a bare 0 and no reason for it; that is unreachable through the
+  bindings, which validate their arguments first, and matters for a call
+  made through `lib`, as a MuSig2 session is: signing twice with the
+  same secret nonce is refused by libsecp256k1 through that very
+  callback. What is recorded is per thread, as the callback runs on the
+  thread of the call that triggered it
 - The bindings are documented as safe to call concurrently, and tested
   for it: the shared context is only mutated at import time, and a
   wheel is built for the free-threaded interpreter (`cp314t`), where
