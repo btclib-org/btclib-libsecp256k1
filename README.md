@@ -125,6 +125,55 @@ When a new release of the bindings is needed while still wrapping the
 same libsecp256k1 version, a fourth number is appended:
 0.7.1.1, 0.7.1.2, etc.
 
+## The vendored library is not optional
+
+Linking against a libsecp256k1 already installed on the system, instead
+of the vendored one, is what a distribution packager needs: Debian,
+Fedora, conda-forge, Nix and Alpine have policies against vendored copies
+of a cryptographic library. This package does not offer that mode, by
+decision, and the account of it belongs here rather than in a closed
+issue.
+
+In favour of it:
+
+- it is the only way to reach the users of apt, dnf and conda, who do not
+  install from PyPI at all; the coincurve fork
+  [libsecp256k1-py-bindings](https://github.com/MementoRC/libsecp256k1-py-bindings)
+  exists to fill exactly that gap for a conda-forge recipe
+- a libsecp256k1 vulnerability would then be fixed once for the whole
+  system, instead of once per wheel of every package vendoring it
+- it would cost little to add: the build is a single CMake path, so there
+  is exactly one method to bypass, and pkg-config already knows where an
+  installed library and its headers are
+
+Against it:
+
+- the versioning contract above breaks, and nothing can detect that it
+  has: libsecp256k1 has no runtime version function, and no version macro
+  in its headers either, so `__version__` would go on claiming the
+  version it wraps over a library of any vintage. The only
+  machine-readable version is the pkg-config field, read at build time
+  and gone afterwards
+- the module set stops being an assertion: headers are installed per
+  module, so what is there can be detected, but a distribution ships an
+  older library, without `musig` or `ellswift`, and `recovery` is off by
+  default upstream. Every binding module would need a capability check,
+  and the table above a column of conditions
+- the abort() semantics would differ between the two builds: the shared
+  context sets its own callbacks, so the bindings stay safe either way,
+  but a system library is built with the abort()ing defaults, so a
+  context created through `lib` could take the process down, which is
+  what `tests/test_core.py` asserts cannot happen
+- the test suite would become conditional on the library it finds, while
+  the coverage ratchet is measured on one configuration
+- it is a second build path, which unifying on CMake removed, and a
+  support surface: reports about a libsecp256k1 this project did not
+  build, possibly patched downstream, in consensus critical code
+
+It stays out until a packager asks for it. The value is in opening a
+channel, and the costs above are paid from the first day, whether anyone
+walks it or not.
+
 ## Release process
 
 Releases are published to PyPI by the `release` GitHub workflow using
