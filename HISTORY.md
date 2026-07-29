@@ -53,6 +53,28 @@ Major changes include:
   Publishing (OIDC, no long-lived tokens) and PEP 740 attestations,
   behind a manual approval gate
 - Updated all pre-commit hooks to their latest versions
+- Replaced black, isort, flake8, autoflake, pyupgrade, bandit,
+  pydocstringformatter and yesqa with ruff: one linter and formatter,
+  one configuration section
+- mypy now runs in strict mode; the cffi extension module is described
+  by a hand-written stub (`stubs/_btclib_libsecp256k1.pyi`), without
+  which `ffi` and `lib` are `Any` and the whole package type-checks
+  vacuously. Opaque libsecp256k1 handles are spelled `CData` in the
+  public signatures that return them
+- The package now exposes `__version__`
+- CI additionally gates on the pre-commit hooks, on branch coverage
+  with a `fail_under` ratchet, on installing from the sdist (the only
+  path that compiles libsecp256k1 on the user's machine), and on the
+  `twine check --strict` and `check-wheel-contents` validation of every
+  wheel and sdist before a release can reach PyPI
+- Development environment managed by [uv](https://docs.astral.sh/uv/),
+  with PEP 735 dependency groups and the interpreter pinned in
+  `.python-version`; the hatch environments and the noxfile are gone
+- PEP 639 license metadata (`license = "MIT"` plus `license-files`,
+  replacing the deprecated license table and the `License ::`
+  classifier)
+- An import failure of the extension now raises `ImportError` naming
+  the directory searched, instead of a bare `NameError`
 - Fixed sdist builds with multi-pass PEP 517 frontends such as uv:
   the callback stubs are now a separate compilation unit,
   no longer mutating the vendored sources (#20)

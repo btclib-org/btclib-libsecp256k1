@@ -3,7 +3,10 @@ name="btclib_libsecp256k1"
 version="0.7.1"
 description="Simple python bindings to libsecp256k1"
 readme = "README.md"
-license = {text = "MIT"}
+# PEP 639: a SPDX expression and the files it refers to, replacing the
+# deprecated license table and the License :: classifier
+license = "MIT"
+license-files = ["LICENSE", "COPYRIGHT"]
 requires-python = ">=3.9"
 authors = [
     {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
@@ -22,7 +25,6 @@ classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
-        "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
         "Operating System :: OS Independent",
         "Topic :: Security :: Cryptography",
@@ -36,7 +38,7 @@ homepage = "https://btclib.org"
 documentation = "https://btclib.readthedocs.io/"
 repository = "https://github.com/btclib-org/btclib_libsecp256k1"
 download = "https://github.com/btclib-org/btclib_libsecp256k1/releases"
-changelog = "https://github.com/btclib-org/btclib_libsecp256k1/HISTORY.md"
+changelog = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/HISTORY.md"
 issues = "https://github.com/btclib-org/btclib_libsecp256k1/issues"
 pull_requests = "https://github.com/btclib-org/btclib_libsecp256k1/pulls"
 
@@ -87,6 +89,13 @@ exclude = [
     "secp256k1/build-aux/m4/ltversion.m4",
     "secp256k1/build-aux/m4/lt~obsolete.m4",
 ]
+
+[tool.check-wheel-contents]
+# a dynamic (cffi ABI mode) wheel ships the shared libsecp256k1 next to
+# the package, and __init__.py dlopen()s it from there: a non-module at
+# the top level (W003), and therefore a second top-level entry (W009),
+# are exactly what that wheel is supposed to contain
+ignore = ["W003", "W009"]
 
 # PEP 735 groups, resolved by uv (or by pip --group): they replace the
 # hatch environments, which duplicated what nox and pre-commit already
