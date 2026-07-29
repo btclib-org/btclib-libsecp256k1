@@ -19,5 +19,6 @@ def pre_commit(session):
 def tests(session):
     session.install(".")
     session.install("pytest", "pytest-cov")
-    pytest = "pytest --cov-report term-missing:skip-covered --cov=btclib_libsecp256k1"
-    session.run(*pytest.split())
+    # the source, the branch mode and the fail_under ratchet all come
+    # from the coverage configuration in pyproject.toml
+    session.run("pytest", "--cov")

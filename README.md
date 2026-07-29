@@ -133,7 +133,10 @@ To test:
 
 To measure the code coverage provided by tests:
 
-    hatch -e test run pytest --cov-report term-missing:skip-covered --cov=btclib_libsecp256k1
+    hatch -e test run pytest --cov
+
+Coverage is measured in branch mode and gated by the `fail_under`
+ratchet in `pyproject.toml`; the same check runs in CI.
 
 It is however recommended to use nox to better isolate tests
 

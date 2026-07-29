@@ -181,9 +181,30 @@ max-complexity = 10
 "noxfile.py" = ["D"]
 
 [tool.pytest.ini_options]
-python_files = "test*.py"
-python_functions = "test*"
+testpaths = ["tests"]
+# belt and braces: testpaths is ignored when pytest is given explicit
+# paths, and the vendored tree carries python files of its own
 norecursedirs = ["secp256k1"]
+addopts = "-ra --strict-markers --strict-config"
+# an unknown warning is a deprecation the 3.9 to 3.14 spread will turn
+# into a breakage, so make it fail while it is still cheap
+filterwarnings = ["error"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["btclib_libsecp256k1"]
+# the interesting misses are the guard clauses of a wrapper: statement
+# coverage alone would call a half-tested if fully covered
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# a ratchet at the level the suite currently reaches, not a target: the
+# gap is made of error paths that need libsecp256k1 itself to fail, plus
+# the dlopen fallback of __init__.py, which is unreachable code in a
+# static build and the only covered branch in a dynamic one
+fail_under = 84
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]
