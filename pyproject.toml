@@ -48,6 +48,46 @@ build-backend = "hatchling.build"
 path = "scripts/hatch_build.py"
 cffi_modules = ["scripts/cffi_build.py:ffi_ext"]
 
+[tool.hatch.build.targets.sdist]
+# ship pristine vendored sources only: build artifacts from a local build
+# would be stale (or plain wrong) on the machine installing the sdist
+exclude = [
+    "/build",
+    "/dist",
+    "/wheelhouse",
+    "_btclib_libsecp256k1.*",
+    "**/.libs",
+    "**/.deps",
+    "**/*.o",
+    "**/*.lo",
+    "**/*.la",
+    "**/*~",
+    "secp256k1/src/btclib_default_callbacks.c",
+    "secp256k1/autom4te.cache",
+    "secp256k1/aclocal.m4",
+    "secp256k1/configure",
+    "secp256k1/Makefile",
+    "secp256k1/Makefile.in",
+    "secp256k1/config.log",
+    "secp256k1/config.status",
+    "secp256k1/libtool",
+    "secp256k1/libsecp256k1.pc",
+    "secp256k1/build-aux/ar-lib",
+    "secp256k1/build-aux/compile",
+    "secp256k1/build-aux/config.guess",
+    "secp256k1/build-aux/config.sub",
+    "secp256k1/build-aux/depcomp",
+    "secp256k1/build-aux/install-sh",
+    "secp256k1/build-aux/ltmain.sh",
+    "secp256k1/build-aux/missing",
+    "secp256k1/build-aux/test-driver",
+    "secp256k1/build-aux/m4/libtool.m4",
+    "secp256k1/build-aux/m4/ltoptions.m4",
+    "secp256k1/build-aux/m4/ltsugar.m4",
+    "secp256k1/build-aux/m4/ltversion.m4",
+    "secp256k1/build-aux/m4/lt~obsolete.m4",
+]
+
 [tool.hatch.envs.dev]
 detached = true
 dependencies = [

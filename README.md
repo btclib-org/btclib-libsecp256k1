@@ -10,11 +10,9 @@
 [![lint: flake8](https://img.shields.io/badge/lint-flake8-yellowgreen.svg?logo=flake8)](https://flake8.pycqa.org)
 [![lint: pylint](https://img.shields.io/badge/lint-pylint-yellowgreen.svg?logo=pylint)](https://github.com/PyCQA/pylint)
 [![type-check: mypy](https://img.shields.io/badge/type--check-mypy-yellowgreen.svg?logo=mypy)](http://mypy-lang.org/)
-[![type-check: pyright](https://img.shields.io/badge/type--check-pyright-yellowgreen.svg)](https://github.com/microsoft/pyright)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellowgreen.svg?logo=bandit)](https://github.com/PyCQA/bandit)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib_libsecp256k1/master.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib_libsecp256k1/master)
-[![build](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/build.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/build.yml)
-[![test](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml)
+[![main](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/main.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/main.yml)
 
 [![Follow on Twitter](https://img.shields.io/twitter/follow/btclib?style=social&logo=twitter)](https://twitter.com/intent/follow?screen_name=btclib)
 
