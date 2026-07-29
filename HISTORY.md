@@ -96,6 +96,10 @@ Major changes include:
 - A single shared libsecp256k1 context is created with the modern
   `SECP256K1_CONTEXT_NONE` flag (the SIGN/VERIFY flags are deprecated)
   and randomized to protect against side-channel leakage
+- The bindings are documented as safe to call concurrently, and tested
+  for it: the shared context is only mutated at import time, and a
+  wheel is built for the free-threaded interpreter (`cp314t`), where
+  those calls are no longer serialized
 
 ## v0.4.0
 

@@ -52,6 +52,22 @@ needs an interface that makes secret nonce reuse hard, which is still
 to be designed. `tests/test_modules.py` shows a complete 2-of-2
 signing session through the raw bindings.
 
+## Thread safety
+
+The bindings can be called concurrently from several threads. They hold
+a single libsecp256k1 context, created and randomized at import time and
+passed to every call: `secp256k1_context_randomize` is what mutates a
+context, it runs once before any thread exists, and each call allocates
+the buffers it writes to.
+
+This matters on a free-threaded interpreter, for which a wheel is built
+(`cp314t`), where those calls are no longer serialized;
+`tests/test_concurrency.py` exercises it.
+
+What is not protected is the secret material itself, which lives in
+Python objects for as long as the interpreter keeps them: see
+[SECURITY.md](SECURITY.md).
+
 ## Versioning
 
 btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
