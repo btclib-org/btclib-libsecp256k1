@@ -220,13 +220,18 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# a ratchet at the level the suite currently reaches. Every ValueError
-# the bindings raise is now exercised: what is left uncovered is only the
-# RuntimeError paths, which need libsecp256k1 itself to fail and cannot
-# be reached through the API, plus the dlopen fallback of __init__.py,
-# unreachable code in a static build and the only covered branch in a
-# dynamic one. Raising this number now means testing the untestable
-fail_under = 90
+# the two exceptions the bindings raise are not equally reachable, and
+# counting them together made the ratchet meaningless: a ValueError
+# reports an argument out of the domain, and every one of them is
+# exercised, while a RuntimeError reports a libsecp256k1 call failing
+# where no input can make it fail, and none of them can be. Excluding
+# the latter leaves a number that only untested code can lower
+exclude_also = ["raise RuntimeError"]
+# with those excluded the suite reaches every line and every branch, so
+# the ratchet can be the only value that fails on a single new untested
+# one. It assumes the static extension the coverage job builds: on a
+# dynamic one the linked-in branch of _load_lib is the unexecuted one
+fail_under = 100
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]

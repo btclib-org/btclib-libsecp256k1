@@ -26,24 +26,33 @@ CData = Any
 ffi = _btclib_libsecp256k1.ffi
 
 
-def _load_lib() -> Any:
-    """Return the libsecp256k1 handle of the extension module."""
+def _load_lib(module: Any) -> Any:
+    """Return the libsecp256k1 handle of the extension module.
+
+    The extension is taken as an argument, rather than read from the
+    enclosing scope, because only one of the two branches below exists
+    in any given build: the other one is only reachable, and therefore
+    only testable, with a stand-in.
+    """
 
     # a static extension has the library linked in
-    if hasattr(_btclib_libsecp256k1, "lib"):
-        return _btclib_libsecp256k1.lib
+    if hasattr(module, "lib"):
+        return module.lib
 
     # a dynamic one (cffi ABI mode) has to find, at run time, the shared
     # object shipped beside it
-    path = pathlib.Path(_btclib_libsecp256k1.__file__).parent
+    path = pathlib.Path(module.__file__).parent
     for suffix in (".dll", ".so", ".dylib"):
         for file in path.glob(f"libsecp256k1*{suffix}*"):
             try:
                 return ffi.dlopen(str(file))
             except OSError:
+                # a file the loader rejects does not end the search: a
+                # wheel repaired by auditwheel or delocate can ship more
+                # than one match, only one of which is the library
                 pass
     msg = f"no loadable shared libsecp256k1 found in {path}"
     raise ImportError(msg)
 
 
-lib = _load_lib()
+lib = _load_lib(_btclib_libsecp256k1)

@@ -85,7 +85,10 @@ Major changes include:
 - Tests now cover the official BIP340 test vectors, the published
   RFC6979 deterministic ECDSA vectors for secp256k1, the secp256k1-py
   ECDSA vectors used by btclib, DER edge cases, and the error paths
-  of the bindings
+  of the bindings: every line and branch reachable through the API is
+  covered, the `fail_under` ratchet is at 100%, and the unreachable
+  `RuntimeError` paths are excluded from the measure instead of being
+  counted as a gap that could never be closed
 - Bindings now validate inputs and check libsecp256k1 return codes,
   raising `ValueError` with a clear message; malformed keys and
   signatures were previously verified against uninitialized memory
