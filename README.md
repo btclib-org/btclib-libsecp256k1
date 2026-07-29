@@ -32,6 +32,26 @@ To install (and/or upgrade):
 
     python -m pip install --upgrade btclib_libsecp256k1
 
+## Wrapped modules
+
+All the optional libsecp256k1 modules are compiled in and their
+declarations are available through the `lib` and `ffi` cffi objects:
+
+| libsecp256k1 module | bindings                                  |
+| ------------------- | ----------------------------------------- |
+| (core)              | `dsa`, `mult`                             |
+| `ecdh`              | `ecdh`                                    |
+| `recovery`          | `recovery`                                |
+| `extrakeys`         | used by `ssa`                             |
+| `schnorrsig`        | `ssa`                                     |
+| `musig`             | raw `lib` bindings only, see the tests    |
+| `ellswift`          | `ellswift` (BIP324)                       |
+
+MuSig2 has no dedicated binding module yet: its two-round protocol
+needs an interface that makes secret nonce reuse hard, which is still
+to be designed. `tests/test_modules.py` shows a complete 2-of-2
+signing session through the raw bindings.
+
 ## Versioning
 
 btclib_libsecp256k1 version numbers track the wrapped libsecp256k1

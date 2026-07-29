@@ -183,10 +183,17 @@ class Secp256k1CFFIExtension(FFIExtension):
         # working directory
         self.wd = pathlib.Path(__file__).parent.parent.resolve() / "secp256k1"
         self.include_dir = self.wd / "include"
+        # #include directives are stripped before preprocessing, so the
+        # concatenation order must satisfy the inter-header dependencies:
+        # musig needs the extrakeys types, everything needs secp256k1.h
         self.headers = [
             "secp256k1.h",
+            "secp256k1_ecdh.h",
+            "secp256k1_recovery.h",
             "secp256k1_extrakeys.h",
             "secp256k1_schnorrsig.h",
+            "secp256k1_musig.h",
+            "secp256k1_ellswift.h",
         ]
         self.library_dirs = [self.wd / ".libs"]
         self.libraries = ["secp256k1"]
@@ -229,8 +236,14 @@ class Secp256k1CFFIExtension(FFIExtension):
             build_dir,
             "-DBUILD_SHARED_LIBS=OFF",
             "-DSECP256K1_USE_EXTERNAL_DEFAULT_CALLBACKS=ON",
-            "-DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON",
+            # all the modules wrapped by the bindings are requested
+            # explicitly: upstream defaults are not part of its API
+            "-DSECP256K1_ENABLE_MODULE_ECDH=ON",
+            "-DSECP256K1_ENABLE_MODULE_RECOVERY=ON",
             "-DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON",
+            "-DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON",
+            "-DSECP256K1_ENABLE_MODULE_MUSIG=ON",
+            "-DSECP256K1_ENABLE_MODULE_ELLSWIFT=ON",
             "-DSECP256K1_BUILD_BENCHMARK=OFF",
             "-DSECP256K1_BUILD_TESTS=OFF",
             "-DSECP256K1_BUILD_EXHAUSTIVE_TESTS=OFF",
@@ -274,7 +287,15 @@ class Secp256k1CFFIExtension(FFIExtension):
             "--disable-exhaustive-tests",
             "--disable-benchmark",
             "--enable-experimental",
+            # all the modules wrapped by the bindings are requested
+            # explicitly: upstream defaults are not part of its API
+            # (recovery, in particular, is disabled by default)
+            "--enable-module-ecdh",
+            "--enable-module-recovery",
+            "--enable-module-extrakeys",
             "--enable-module-schnorrsig",
+            "--enable-module-musig",
+            "--enable-module-ellswift",
             "--enable-external-default-callbacks",
             "--with-pic",
         ]

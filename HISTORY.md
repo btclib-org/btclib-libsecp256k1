@@ -9,6 +9,16 @@ Major changes include:
 - Wrapped
   [libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
   (1a53f49)
+- Wrapped the `ecdh`, `recovery`, `ellswift` (BIP324) and `musig`
+  (MuSig2) libsecp256k1 modules, besides the already wrapped
+  `extrakeys` and `schnorrsig` ones; new `ecdh`, `recovery`, and
+  `ellswift` binding modules, while MuSig2 is only available through
+  the raw cffi bindings, as a Pythonic interface for its two-round
+  protocol is still to be designed
+- All the wrapped modules are now requested explicitly at configure
+  time (`recovery`, in particular, is disabled by default upstream):
+  upstream defaults are not part of its API, and the autotools and
+  CMake build paths were enabling different module sets
 - New versioning scheme: release numbers now track the wrapped
   libsecp256k1 version; binding-only releases append a fourth number
   (0.7.1.1, 0.7.1.2, etc.)
