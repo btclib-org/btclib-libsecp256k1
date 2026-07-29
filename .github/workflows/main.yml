@@ -141,6 +141,19 @@ jobs:
         with:
           python-version: "3.14"
 
+      # a dynamic wheel compiles no extension, so nothing derives its
+      # platform tag from a toolchain: without this the macOS version in
+      # the tag is the runner's own, and pip on any older macOS refuses a
+      # wheel that would have loaded there. CMake reads the same variable
+      # (CMAKE_OSX_DEPLOYMENT_TARGET defaults to it), so the vendored
+      # library is built for the floor its tag then claims. 11.0 is where
+      # arm64 macOS starts; 10.13 is what cibuildwheel gives the static
+      # x86_64 wheels of CPython 3.12 and later
+      - name: Set the macOS deployment target
+        if: runner.os == 'macOS'
+        run: |
+          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-13' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
+
       - name: Build wheel
         run: |
           python -m pip install -U pip build
