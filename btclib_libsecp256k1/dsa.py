@@ -11,15 +11,14 @@
 from __future__ import annotations
 
 from . import CData, ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 
 def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> bytes:
     """Create an ECDSA signature."""
 
-    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
-    if len(prvkey_bytes) != 32:
-        raise ValueError("the private key must be 32 bytes")
+    prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
 

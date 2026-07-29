@@ -19,6 +19,7 @@ point, to be committed to by the taproot output.
 from __future__ import annotations
 
 from . import CData, ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 
@@ -40,7 +41,7 @@ def tweak_add(pubkey_bytes: bytes, tweak: bytes | int) -> tuple[bytes, int]:
     """
 
     internal_pubkey = _parse(pubkey_bytes)
-    tweak_bytes = _scalar(tweak, "tweak")
+    tweak_bytes = scalar(tweak, "tweak")
 
     tweaked_pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_xonly_pubkey_tweak_add(
@@ -68,7 +69,7 @@ def tweak_add_check(
         raise ValueError("the parity must be 0 or 1")
 
     internal_pubkey = _parse(pubkey_bytes)
-    tweak_bytes = _scalar(tweak, "tweak")
+    tweak_bytes = scalar(tweak, "tweak")
 
     return bool(
         lib.secp256k1_xonly_pubkey_tweak_add_check(
@@ -87,7 +88,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     """
 
     keypair = _keypair(prvkey)
-    tweak_bytes = _scalar(tweak, "tweak")
+    tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair, tweak_bytes):
         raise ValueError("invalid tweak or resulting private key")
 
@@ -134,15 +135,6 @@ def _keypair(prvkey: bytes | int) -> CData:
     """Create a keypair from a private key."""
 
     keypair = ffi.new("secp256k1_keypair *")
-    if not lib.secp256k1_keypair_create(ctx, keypair, _scalar(prvkey, "private key")):
+    if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
         raise ValueError("invalid private key")
     return keypair
-
-
-def _scalar(num: bytes | int, name: str) -> bytes:
-    """Normalize a scalar argument to 32 bytes."""
-
-    num_bytes = num.to_bytes(32, "big") if isinstance(num, int) else num
-    if len(num_bytes) != 32:
-        raise ValueError(f"the {name} must be 32 bytes")
-    return num_bytes

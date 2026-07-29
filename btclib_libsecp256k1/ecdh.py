@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from . import ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 
@@ -21,9 +22,7 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
     libsecp256k1 default hash function; it is computed in constant time.
     """
 
-    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
-    if len(prvkey_bytes) != 32:
-        raise ValueError("the private key must be 32 bytes")
+    prvkey_bytes = scalar(prvkey, "private key")
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):

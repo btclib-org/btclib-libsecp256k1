@@ -11,15 +11,14 @@
 from __future__ import annotations
 
 from . import ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 
 def mult_(num: bytes | int) -> bytes:
     """Multply the generator point."""
 
-    num_bytes = num.to_bytes(32, "big") if isinstance(num, int) else num
-    if len(num_bytes) != 32:
-        raise ValueError("the scalar must be 32 bytes")
+    num_bytes = scalar(num, "scalar")
     point = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_create(ctx, point, num_bytes):
         raise ValueError("invalid scalar: not in [1, n-1]")

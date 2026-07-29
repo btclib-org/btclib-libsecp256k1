@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from . import CData, ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -26,9 +27,7 @@ def sign(
     Return the 64-byte compact signature and its recovery id.
     """
 
-    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
-    if len(prvkey_bytes) != 32:
-        raise ValueError("the private key must be 32 bytes")
+    prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
 

@@ -218,7 +218,7 @@ skip_covered = true
 # gap is made of error paths that need libsecp256k1 itself to fail, plus
 # the dlopen fallback of __init__.py, which is unreachable code in a
 # static build and the only covered branch in a dynamic one
-fail_under = 84
+fail_under = 85
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]

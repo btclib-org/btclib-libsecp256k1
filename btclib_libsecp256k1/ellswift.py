@@ -16,6 +16,7 @@ from __future__ import annotations
 import secrets
 
 from . import ffi, lib
+from ._scalar import scalar
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -30,9 +31,7 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     is used as entropy for the encoding.
     """
 
-    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
-    if len(prvkey_bytes) != 32:
-        raise ValueError("the private key must be 32 bytes")
+    prvkey_bytes = scalar(prvkey, "private key")
 
     if not aux_rand32:
         aux_rand32 = secrets.token_bytes(32)
@@ -101,9 +100,7 @@ def xdh(
     if party not in (0, 1):
         raise ValueError("the party must be 0 (A) or 1 (B)")
 
-    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
-    if len(prvkey_bytes) != 32:
-        raise ValueError("the private key must be 32 bytes")
+    prvkey_bytes = scalar(prvkey, "private key")
 
     output = ffi.new("char[32]")
     if not lib.secp256k1_ellswift_xdh(
