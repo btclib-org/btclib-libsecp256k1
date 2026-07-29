@@ -174,6 +174,16 @@ linters and the type checker:
 
     uv run pre-commit run --all-files
 
+To time these bindings against the other python wrappers of
+libsecp256k1, and against the pure python implementation of btclib:
+
+    uv run --group bench scripts/benchmark.py
+
+That group is not part of `dev`, and installing it is a choice: btclib
+depends on this package, so it cannot be a dependency of developing it,
+and `coincurve` and `secp256k1` build a libsecp256k1 of their own, which
+needs `pkg-config` besides the toolchain above.
+
 To test against another supported interpreter, bypass the build cache:
 uv keys it on the sources, which do not tell it that the compiled
 extension belongs to one ABI version only.

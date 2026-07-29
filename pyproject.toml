@@ -112,6 +112,14 @@ test = ["pytest", "pytest-cov"]
 # errors the gate does not (and passes what the gate would reject)
 lint = ["pre-commit", "ruff", "mypy", "types-cffi", "hatchling"]
 build = ["build", "cibuildwheel"]
+# what scripts/benchmark.py times these bindings against, deliberately
+# left out of dev: btclib depends on this package, so it cannot be a
+# dependency of developing it. Here it is harmless, the lock resolving
+# its own btclib_libsecp256k1 requirement to the editable build of this
+# very tree rather than to a second copy from PyPI. coincurve and
+# secp256k1 compile a libsecp256k1 of their own, so building this group
+# needs pkg-config besides the toolchain the README lists
+bench = ["btclib", "coincurve", "secp256k1"]
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
