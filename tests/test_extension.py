@@ -6,7 +6,9 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
-"""Tests of the extension module boundary.
+"""Tests of what installing the package provides, rather than its source.
+
+That is the extension module and the distribution metadata.
 
 One package works with both extensions: the static one, which has
 libsecp256k1 linked in, and the dynamic one (cffi ABI mode), which has
@@ -24,7 +26,16 @@ import types
 
 import pytest
 
-from btclib_libsecp256k1 import _load_lib
+from btclib_libsecp256k1 import __version__, _load_lib
+
+
+def test_version() -> None:
+    # that the distribution is installed under the name __init__.py asks
+    # for is not what this checks: were it not, importlib.metadata would
+    # raise at import time and every test would fail. What is checked is
+    # that the package keeps exposing the attribute, and with a value
+    assert isinstance(__version__, str)
+    assert __version__
 
 
 def test_load_lib_no_candidate(tmp_path: pathlib.Path) -> None:
