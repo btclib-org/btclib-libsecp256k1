@@ -1,22 +1,22 @@
 [project]
 name="btclib_libsecp256k1"
-version="0.4.0"
+version="0.7.1"
 description="Simple python bindings to libsecp256k1"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 authors = [
     {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
 ]
 keywords=["bitcoin", "libsecp256k1"]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Development Status :: 4 - Beta",
@@ -125,3 +125,5 @@ test-requires = ["pytest"]
 test-command = "pytest {project}/tests/"
 build-frontend = "build"
 archs = "auto64"
+# PyPy wheels are opt-in since cibuildwheel 3.0
+enable = ["pypy"]

@@ -2,9 +2,25 @@
 
 Notable changes to the codebase are documented here.
 
-## v0.5.0 (unreleased)
+## v0.7.1
 
 Major changes include:
+
+- Wrapped
+  [libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
+  (1a53f49)
+- New versioning scheme: release numbers now track the wrapped
+  libsecp256k1 version; binding-only releases append a fourth number
+  (0.7.1.1, 0.7.1.2, etc.)
+- Added support for Python 3.13 and 3.14
+- Dropped support for Python 3.7 and 3.8 (minimum is now 3.9)
+- Updated CI to current GitHub Actions runners and actions,
+  cibuildwheel 4.x (static wheels now cp39-cp314, PyPy opt-in)
+- Updated all pre-commit hooks to their latest versions
+- Fixed sdist builds with multi-pass PEP 517 frontends such as uv:
+  the callback stubs are now a separate compilation unit,
+  no longer mutating the vendored sources (#20)
+- Build scripts now fail fast on subprocess errors
 
 ## v0.4.0
 

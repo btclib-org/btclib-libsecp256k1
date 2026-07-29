@@ -24,6 +24,30 @@ import cffi
 cross_compile = os.environ.get("BTCLIB_LIBSECP256K1_CROSS_COMPILE", "false") == "true"
 static = os.environ.get("BTCLIB_LIBSECP256K1_DYNAMIC", "false") != "true"
 
+# do-nothing implementations of the external default callbacks: they replace
+# the abort()ing upstream defaults, so that illegal inputs never crash the
+# hosting Python process; compiled as a separate unit, without mutating the
+# vendored sources
+CALLBACK_STUBS = """
+void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
+    (void)str;
+    (void)data;
+}
+
+void secp256k1_default_error_callback_fn(const char* str, void* data) {
+    (void)str;
+    (void)data;
+}
+"""
+
+# build the callback stubs into the library (static archive and shared
+# object alike); -no-undefined is required by libtool to build a DLL
+MAKEFILE_AM_EXTRA = """
+# btclib additions
+LDFLAGS = -no-undefined
+libsecp256k1_la_SOURCES += src/btclib_default_callbacks.c
+"""
+
 # [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
 # https://bandit.readthedocs.io/en/1.7.4/plugins/b603_subprocess_without_shell_equals_true.html
 
@@ -97,8 +121,10 @@ class FFIExtension:
                 str(so_filename),
             ]
 
-            subprocess.call(compile_command, cwd=build_dir)  # nosec B603 B607
-            subprocess.call(link_command, cwd=build_dir)  # nosec B603 B607
+            subprocess.run(
+                compile_command, cwd=build_dir, check=True
+            )  # nosec B603 B607
+            subprocess.run(link_command, cwd=build_dir, check=True)  # nosec B603 B607
             artifacts.append(so_path)
         else:
             py_filename = f"{str(self.name)}.py"
@@ -148,22 +174,39 @@ class Secp256k1CFFIExtension(FFIExtension):
         super().__init__()
 
     def clean(self) -> None:
-        subprocess.call(["git", "reset", "--hard"], cwd=self.wd)  # nosec B603 B607
-        subprocess.call(["git", "clean", "-fxd"], cwd=self.wd)  # nosec B603 B607
-        clean_libs = False
-        for libs_dir in self.library_dirs:
-            if libs_dir.exists():
-                clean_libs = True
-        if clean_libs:
-            subprocess.call(["make", "clean"], cwd=self.wd)  # nosec B603 B607
+        # in an sdist there is no .git: skip the git cleanup
+        if (self.wd / ".git").exists():
+            subprocess.run(
+                ["git", "reset", "--hard"], cwd=self.wd, check=True
+            )  # nosec B603 B607
+            subprocess.run(
+                ["git", "clean", "-fxd"], cwd=self.wd, check=True
+            )  # nosec B603 B607
+        clean_libs = any(libs_dir.exists() for libs_dir in self.library_dirs)
+        if clean_libs and (self.wd / "Makefile").exists():
+            subprocess.run(
+                ["make", "clean"], cwd=self.wd, check=True
+            )  # nosec B603 B607
         for pattern in self.clean_patterns:
             for file in glob.glob(pattern):
                 os.remove(file)
 
     def build_c(self) -> None:
-        subprocess.call(["bash", "autogen.sh"], cwd=self.wd)  # nosec B603 B607
-        with open(self.wd / "Makefile.am", "a") as f:
-            f.write("\nLDFLAGS = -no-undefined\n")
+        # the callback stubs live in their own compilation unit: overwriting
+        # is idempotent, so repeated build passes of a PEP 517 frontend on
+        # the same tree (where the git cleanup is unavailable, e.g. in an
+        # sdist) are safe
+        (self.wd / "src" / "btclib_default_callbacks.c").write_text(CALLBACK_STUBS)
+
+        # idempotent guard for the same reason as above
+        makefile_am = self.wd / "Makefile.am"
+        if MAKEFILE_AM_EXTRA not in makefile_am.read_text():
+            with open(makefile_am, "a") as f:
+                f.write(MAKEFILE_AM_EXTRA)
+
+        subprocess.run(
+            ["bash", "autogen.sh"], cwd=self.wd, check=True
+        )  # nosec B603 B607
         command = [
             "bash",
             "configure",
@@ -179,21 +222,13 @@ class Secp256k1CFFIExtension(FFIExtension):
             command.append("--host=x86_64-w64-mingw32")
         elif static:
             command.append("--disable-shared")
-        subprocess.call(command, cwd=self.wd)  # nosec B603
+        subprocess.run(command, cwd=self.wd, check=True)  # nosec B603
 
-        # add source for safe callback
-        with open(self.wd / "src" / "secp256k1.c", "a") as f:
-            f.write(
-                """
-            void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
-            }
-            void secp256k1_default_error_callback_fn(const char* str, void* data) {
-            }
-            """
-            )
-
-        subprocess.call(["make"], cwd=self.wd)  # nosec B603 B607
-        subprocess.call(["git", "reset", "--hard"], cwd=self.wd)  # nosec B603 B607
+        subprocess.run(["make"], cwd=self.wd, check=True)  # nosec B603 B607
+        if (self.wd / ".git").exists():
+            subprocess.run(
+                ["git", "reset", "--hard"], cwd=self.wd, check=True
+            )  # nosec B603 B607
 
     def generate_def(self):
         ffi_header = ""
@@ -204,16 +239,22 @@ class Secp256k1CFFIExtension(FFIExtension):
 
         ffi_header = re.sub(r"#include .*", "", ffi_header)
 
-        command = "gcc -P -E -D SECP256K1_BUILD  -".split()
+        # expand all __attribute__ ((...)) to nothing: cffi cannot parse them
+        command = [
+            "gcc",
+            "-P",
+            "-E",
+            "-D",
+            "SECP256K1_BUILD",
+            "-D",
+            "__attribute__(x)=",
+            "-",
+        ]
         with Popen(command, stdin=PIPE, stdout=PIPE) as p:  # nosec B603
             definitions = p.communicate(input=ffi_header.encode())[0].decode()
-            definitions = definitions.replace(
-                '__attribute__ ((visibility ("default")))', ""
-            )
-            definitions = definitions.replace(
-                "__attribute__ ((__warn_unused_result__))", ""
-            )
             definitions = definitions.replace("\r", "\n")
+        if p.returncode != 0:
+            raise RuntimeError(f"header preprocessing failed: {p.returncode}")
         return ffi_header, definitions
 
 

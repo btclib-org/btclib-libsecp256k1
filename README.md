@@ -26,13 +26,22 @@
 
 Simple python bindings to
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
-([v0.2.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.2.0)).
+([v0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)).
 It is intended to be used with the
 [btclib](https://github.com/btclib-org/btclib) library.
 
 To install (and/or upgrade):
 
     python -m pip install --upgrade btclib_libsecp256k1
+
+## Versioning
+
+btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
+version: release M.N.P wraps libsecp256k1 vM.N.P
+(e.g. btclib_libsecp256k1 0.7.1 wraps libsecp256k1 v0.7.1).
+When a new release of the bindings is needed while still wrapping the
+same libsecp256k1 version, a fourth number is appended:
+0.7.1.1, 0.7.1.2, etc.
 
 ## Build, test, develop, and contribute
 

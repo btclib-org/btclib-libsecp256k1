@@ -38,7 +38,7 @@ def sign(
     if not aux_rand32:
         aux_rand32 = secrets.token_bytes(32)
     aux_rand32 = b"\x00" * (32 - len(aux_rand32)) + aux_rand32
-    if lib.secp256k1_schnorrsig_sign(ctx, sig, msg_bytes, keypair, aux_rand32):
+    if lib.secp256k1_schnorrsig_sign32(ctx, sig, msg_bytes, keypair, aux_rand32):
         return ffi.unpack(sig, 64)
     raise RuntimeError
 
