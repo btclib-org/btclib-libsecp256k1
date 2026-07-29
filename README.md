@@ -179,3 +179,12 @@ uv keys it on the sources, which do not tell it that the compiled
 extension belongs to one ABI version only.
 
     uv run --python 3.9 --no-cache pytest
+
+Beware that this replaces `.venv` with an environment built on that
+interpreter, and leaves it there. Going back is another `uv sync`, and
+`--reinstall-package btclib_libsecp256k1 --no-cache` if the extension it
+finds in the cache is the one of the ABI just left behind. Requesting a
+free-threaded interpreter (`--python 3.14t`) has a second effect: it
+installs it as a managed one, and `uv sync` then prefers it to a system
+3.14, so `uv python install 3.14` is what makes the default environment
+reproducible again.
