@@ -32,6 +32,10 @@ Major changes include:
   the callback stubs are now a separate compilation unit,
   no longer mutating the vendored sources (#20)
 - Build scripts now fail fast on subprocess errors
+- Tests now cover the official BIP340 test vectors, the published
+  RFC6979 deterministic ECDSA vectors for secp256k1, the secp256k1-py
+  ECDSA vectors used by btclib, DER edge cases, and the error paths
+  of the bindings
 - Bindings now validate inputs and check libsecp256k1 return codes,
   raising `ValueError` with a clear message; malformed keys and
   signatures were previously verified against uninitialized memory
