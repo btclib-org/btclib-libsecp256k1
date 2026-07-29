@@ -231,10 +231,15 @@ well, with `--no-build-isolation`.
 The cffi extension itself is compiled with the interpreter's own
 toolchain, which on Windows is the standard setuptools/MSVC one; a `gcc`
 in the PATH is still required there, as it preprocesses the library
-headers for cffi. Both Windows architectures are built this way: CMake
-and MSVC target the host, so `win_amd64` and `win_arm64` wheels need no
-configuration of their own. The `win_arm64` wheels start at CPython
-3.11, the first version with a Windows arm64 build.
+headers for cffi. Both Windows architectures are built this way: the
+vendored library is built for the architecture of the interpreter, which
+is what its toolchain compiles the extension for, and not for the one of
+the host, which is what CMake would otherwise pick. The two differ
+whenever the interpreter is emulated, and on Windows arm64 that is the
+default case rather than an exotic one; the same holds for a universal2
+interpreter on macOS, which needs both architectures in the archive it
+links. The `win_arm64` wheels start at CPython 3.11, the first version
+with a Windows arm64 build.
 The dynamic (ABI mode) Windows wheel is instead cross-compiled on Linux
 with mingw-w64, through the vendored CMake toolchain file, and is
 x86_64 only.
@@ -303,6 +308,13 @@ uv keys it on the sources, which do not tell it that the compiled
 extension belongs to one ABI version only.
 
     uv run --python 3.9 --no-cache pytest
+
+On a Windows arm64 machine, mind which interpreter that request gets:
+uv installs an x86-64 one unless the architecture is named
+(`--python cpython-3.13-windows-aarch64`), reporting that support for
+the native architecture is not yet mature. Both work — the build follows
+the interpreter, as above — but only the native one exercises what the
+`win_arm64` wheels are.
 
 Beware that this replaces `.venv` with an environment built on that
 interpreter, and leaves it there. Going back is another `uv sync`, and

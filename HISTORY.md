@@ -70,9 +70,15 @@ Major changes include:
   cibuildwheel, for both x86_64 and arm64 (`win_arm64` from CPython 3.11,
   the first version with a Windows arm64 build); the mingw
   cross-compiled dynamic wheel is still provided, x86_64 only
-- Dynamic wheels now carry the platform tag of the machine they are
-  built on (it was hardcoded to x86_64, with a fake macOS 10.16
+- Dynamic wheels now carry the platform tag of the interpreter they are
+  built with (it was hardcoded to x86_64, with a fake macOS 10.16
   minimum version)
+- The vendored library is now built for the architecture of the
+  interpreter, which is the one its toolchain compiles the extension
+  for, instead of the one CMake infers from the host: an emulated
+  interpreter (an x86-64 CPython on Windows arm64, which is what uv
+  installs there by default) used to get an archive of the wrong
+  architecture, and every libsecp256k1 symbol unresolved at link time
 - Updated CI to current GitHub Actions runners and actions,
   cibuildwheel 4.x (static wheels now cp39-cp314, PyPy opt-in)
 - Hardened CI: least-privilege GITHUB_TOKEN (contents: read), actions

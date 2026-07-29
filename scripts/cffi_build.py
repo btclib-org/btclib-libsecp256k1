@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 from subprocess import PIPE, Popen
-from sysconfig import get_config_var, get_path
+from sysconfig import get_config_var, get_path, get_platform
 from typing import Any
 
 import cffi
@@ -238,6 +238,58 @@ class Secp256k1CFFIExtension(FFIExtension):
             for file in pathlib.Path().glob(pattern):
                 file.unlink()
 
+    def target_architecture_options(self) -> list[str]:
+        """CMake options aiming the build at the interpreter's architecture.
+
+        The extension is compiled by the interpreter's own toolchain, which
+        targets the architecture that interpreter was built for; CMake
+        instead defaults to the one of the host. That is the same thing
+        only as long as the two agree, and on Windows arm64 they need not:
+        uv installs an emulated x86-64 CPython there by default (native
+        aarch64 "is not yet mature"), and MSVC then compiles the extension
+        for x86-64 against an arm64 archive, leaving every secp256k1
+        symbol unresolved at link time (LNK2001). The macOS counterparts
+        are an x86-64 interpreter under Rosetta, and the universal2 one of
+        the python.org installer, which compiles for both architectures
+        and so needs both in the archive it links.
+
+        sysconfig.get_platform() is where setuptools reads its own target
+        from, so deriving this from it keeps the two in agreement by
+        construction; on POSIX it also follows the _PYTHON_HOST_PLATFORM
+        that a cross-compiling cibuildwheel sets, so an arm64 macOS wheel
+        built on an Intel runner is built for arm64 throughout.
+
+        Linux has no equivalent option to set: a 32-bit interpreter on a
+        64-bit host would need the -m32 of a multilib toolchain, which is
+        not a target CMake selects.
+        """
+
+        if cross_compile:
+            # the target is the toolchain file's, not this machine's
+            return []
+        target = get_platform()
+        if platform.system() == "Windows":
+            # -A belongs to the Visual Studio generators, and the others
+            # reject it: CMake picks one of them unless told otherwise
+            generator = os.environ.get("CMAKE_GENERATOR", "Visual Studio")
+            if not generator.startswith("Visual Studio"):
+                return []
+            arch = {
+                "win32": "Win32",
+                "win-amd64": "x64",
+                "win-arm32": "ARM",
+                "win-arm64": "ARM64",
+            }.get(target)
+            # an unknown platform leaves CMake its default: guessing an
+            # architecture would be worse than building for the host
+            return ["-A", arch] if arch else []
+        if platform.system() == "Darwin":
+            arch = target.rsplit("-", 1)[-1]
+            if arch == "universal2":
+                arch = "x86_64;arm64"
+            return [f"-DCMAKE_OSX_ARCHITECTURES={arch}"]
+        return []
+
     def build_c(self) -> None:
         """Build the vendored library with CMake, on every platform."""
         self.cmake_dir.mkdir(parents=True, exist_ok=True)
@@ -275,6 +327,7 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_BUILD_CTIME_TESTS=OFF",
             "-DSECP256K1_BUILD_EXAMPLES=OFF",
             "-DSECP256K1_INSTALL=OFF",
+            *self.target_architecture_options(),
         ]
         if cross_compile:
             # the toolchain file is the vendored one, upstream tested

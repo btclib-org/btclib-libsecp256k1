@@ -9,6 +9,7 @@
 import os
 import platform
 import shutil
+import sysconfig
 from pathlib import Path
 from typing import Any
 
@@ -76,9 +77,15 @@ class CustomBuildHook(BuildHookInterface[Any]):
             # cross-compilation: the target machine cannot be inspected;
             # x86_64 mingw Windows is the only supported cross target
             return "win_amd64"
-        machine = platform.machine().lower()
+        # the architecture of the interpreter, not of the host: the two
+        # differ under emulation (an x86-64 CPython on Windows arm64 or on
+        # Rosetta), and what this wheel carries is a library built for the
+        # former, as scripts/cffi_build.py explains
+        machine = sysconfig.get_platform().rsplit("-", 1)[-1]
         if self.platform == "Windows":
-            return {"amd64": "win_amd64", "arm64": "win_arm64"}[machine]
+            return {"amd64": "win_amd64", "arm64": "win_arm64", "win32": "win32"}[
+                machine
+            ]
         if self.platform == "Darwin":
             target = os.environ.get("MACOSX_DEPLOYMENT_TARGET") or platform.mac_ver()[0]
             major, _, minor = target.partition(".")
