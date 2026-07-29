@@ -62,7 +62,10 @@ release that only bumps versions and notes does not need one.
    `rc2`; a local version (`0.7.1+test1`) is refused by both
 2. run the `release` workflow from the Actions tab, on the branch
    holding it: a manual run builds the full matrix, Intel macOS
-   included, and stops at the `testpypi` environment
+   included, and stops at the `testpypi` environment. Never tag a
+   rehearsal: the trigger is what picks the index, so a `v0.7.1rc1` tag
+   would take the pre-release to PyPI itself and burn it there, and
+   `0.7.1rc1` is a version PyPI would then hand to `--pre` installs
 3. approve it, then check that what was published installs:
 
    <!-- markdownlint-disable MD013 -->
