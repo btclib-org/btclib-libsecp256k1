@@ -59,11 +59,22 @@ class CustomBuildHook(BuildHookInterface):
         if static:
             build_data["infer_tag"] = True
         else:
-            os_tag_dict = {
-                "Windows": "win_amd64",
-                "Darwin": "macosx_10_16_x86_64",
-                "Linux": "linux_x86_64",
-            }
-            os_tag = os_tag_dict[self.platform]
-            # TODO: get os_tag from os variable if present
-            build_data["tag"] = f"py3-none-{os_tag}"
+            build_data["tag"] = f"py3-none-{self.dynamic_platform_tag()}"
+
+    def dynamic_platform_tag(self) -> str:
+        """Platform tag of a dynamic (cffi ABI mode) wheel."""
+        if self.platform != platform.system():
+            # cross-compilation: the target machine cannot be inspected;
+            # x86_64 mingw Windows is the only supported cross target
+            return "win_amd64"
+        machine = platform.machine().lower()
+        if self.platform == "Windows":
+            return {"amd64": "win_amd64", "arm64": "win_arm64"}[machine]
+        if self.platform == "Darwin":
+            target = os.environ.get("MACOSX_DEPLOYMENT_TARGET") or platform.mac_ver()[0]
+            major, _, minor = target.partition(".")
+            # from macOS 11 on, compatibility is per major version
+            minor = "0" if int(major) >= 11 else minor.split(".")[0]
+            return f"macosx_{major}_{minor}_{machine}"
+        # Linux: auditwheel repair upgrades this to a manylinux tag
+        return f"{self.platform.lower()}_{machine}"
