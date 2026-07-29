@@ -48,7 +48,6 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
-.nox/
 .coverage
 .coverage.*
 .cache
@@ -81,8 +80,8 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# pyenv / uv: .python-version is tracked, it pins the interpreter the
+# development environment is built on (the newest supported one)
 
 # celery beat schedule file
 celerybeat-schedule

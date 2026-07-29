@@ -68,5 +68,4 @@ repos:
           - cffi
           - types-cffi
           - hatchling
-          - nox
           - pytest

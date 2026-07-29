@@ -111,45 +111,40 @@ and check out the appropriate commit.
     Cloning into 'secp256k1'...
 <!-- markdownlint-enable MD013 -->
 
-The project uses [hatch](https://hatch.pypa.io/latest/) as a project manager.
+The project uses [uv](https://docs.astral.sh/uv/) to manage the
+development environment. The interpreter it is built on is pinned in
+`.python-version`, and uv installs it if missing: neither pyenv nor a
+hand-made virtualenv is needed. The development dependencies are the
+PEP 735 groups declared in `pyproject.toml`.
 
-Some additional tools are required to develop and test btclib_libsecp256k1;
-they can be installed with:
+    uv sync
 
-    python -m pip install -U nox cibuildwheel pre-commit
+This also builds and installs the extension in editable mode, so the
+autotools toolchain listed above must be available.
 
 To build:
 
-    hatch build -t sdist
-    hatch build -t wheel
-
-Developers might also consider installing btclib_libsecp256k1 in editable way::
-
-    python -m pip install --upgrade -e ./
+    uv build --sdist
+    uv build --wheel
 
 To test:
 
-    hatch -e test run pytest
+    uv run pytest
 
 To measure the code coverage provided by tests:
 
-    hatch -e test run pytest --cov
+    uv run pytest --cov
 
 Coverage is measured in branch mode and gated by the `fail_under`
 ratchet in `pyproject.toml`; the same check runs in CI.
 
-It is however recommended to use nox to better isolate tests
+To run everything CI checks before a PR, i.e. the formatter, the
+linters and the type checker:
 
-    nox -s tests
+    uv run pre-commit run --all-files
 
-To format the code
+To test against another supported interpreter, bypass the build cache:
+uv keys it on the sources, which do not tell it that the compiled
+extension belongs to one ABI version only.
 
-    hatch -e dev run format
-
-To run re-commit hooks
-
-    hatch -e dev run pre_commit
-
-Please run nox to check everything before a PR
-
-    nox
+    uv run --python 3.9 --no-cache pytest

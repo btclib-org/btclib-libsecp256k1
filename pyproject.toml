@@ -88,28 +88,19 @@ exclude = [
     "secp256k1/build-aux/m4/lt~obsolete.m4",
 ]
 
-[tool.hatch.envs.dev]
-detached = true
-dependencies = [
-  "ruff",
-  "pre-commit",
-  "nox",
-  "cibuildwheel"
-]
-
-[tool.hatch.envs.dev.scripts]
-format = [
-    "ruff check --fix .",
-    "ruff format ."
-]
-pre_commit = [
-  "pre-commit run --all-files"
-]
-
-[tool.hatch.envs.test]
-dependencies = [
-  "pytest",
-  "pytest-cov"
+# PEP 735 groups, resolved by uv (or by pip --group): they replace the
+# hatch environments, which duplicated what nox and pre-commit already
+# did. The authoritative versions of the linters remain the revisions
+# pinned in .pre-commit-config.yaml, which is the gate; the ones here
+# are for editor integration and ad hoc runs
+[dependency-groups]
+test = ["pytest", "pytest-cov"]
+lint = ["pre-commit", "ruff", "mypy"]
+build = ["build", "cibuildwheel"]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "build" },
 ]
 
 [tool.mypy]
@@ -191,9 +182,8 @@ max-complexity = 10
 # from a build backend, and neither ever sees untrusted input
 "scripts/cffi_build.py" = ["S404", "S603", "S607"]
 "scripts/hatch_build.py" = ["S102"]
-# build scripts and the noxfile are not part of the documented API
+# the build scripts are not part of the documented API
 "scripts/*" = ["D"]
-"noxfile.py" = ["D"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
