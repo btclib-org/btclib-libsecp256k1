@@ -182,15 +182,22 @@ class Secp256k1CFFIExtension(FFIExtension):
         subprocess.call(command, cwd=self.wd)  # nosec B603
 
         # add source for safe callback
-        with open(self.wd / "src" / "secp256k1.c", "a") as f:
-            f.write(
-                """
+        # idempotent guard: in an sdist there is no .git, so the git reset
+        # below cannot undo the append, and the second build pass of a
+        # PEP 517 frontend would duplicate the definitions, failing the
+        # compilation with "error: redefinition of ..."
+        callbacks = """
             void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
             }
             void secp256k1_default_error_callback_fn(const char* str, void* data) {
             }
             """
-            )
+        src_file = self.wd / "src" / "secp256k1.c"
+        with open(src_file) as f:
+            already_appended = callbacks in f.read()
+        if not already_appended:
+            with open(src_file, "a") as f:
+                f.write(callbacks)
 
         subprocess.call(["make"], cwd=self.wd)  # nosec B603 B607
         subprocess.call(["git", "reset", "--hard"], cwd=self.wd)  # nosec B603 B607
