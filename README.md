@@ -39,7 +39,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `recovery`          | `recovery`                                |
 | `extrakeys`         | `xonly`, used by `ssa`                    |
 | `schnorrsig`        | `ssa`                                     |
-| `musig`             | raw `lib` bindings only, see the tests    |
+| `musig`             | raw `lib` bindings, by decision           |
 | `ellswift`          | `ellswift` (BIP324)                       |
 
 `keys` provides the scalar and point algebra (tweaking, negation,
@@ -60,10 +60,24 @@ takes it as a C callback, and a protocol needing another derivation has
 the shared point itself as `keys.pubkey_tweak_mul(pubkey, prvkey)`,
 constant time like the ECDH call and without python in the middle of it.
 
-MuSig2 has no dedicated binding module yet: its two-round protocol
-needs an interface that makes secret nonce reuse hard, which is still
-to be designed. `tests/test_modules.py` shows a complete 2-of-2
-signing session through the raw bindings.
+MuSig2 has no binding module, by decision. What its two-round protocol
+needs is a session whose secret nonce cannot be reused, and that is a
+property of an object's lifetime rather than of a function: only whoever
+owns the session can invalidate it. This package is stateless by
+construction, every function being one libsecp256k1 call with its
+arguments validated, so the place to enforce it is where the signing
+state already lives, in [btclib](https://github.com/btclib-org/btclib):
+its PSBT is the multi-party signing machinery MuSig2 plugs into, and the
+specifications say the same (BIP327 the protocol, BIP373 its PSBT
+fields, BIP328 its descriptors).
+
+What MuSig2 needs from here is what has no state, and it is all present:
+`keys.pubkey_sort` for the key ordering and `keys.pubkey_combine` for
+aggregation, `xonly.tweak_add` for the taproot output,
+`hashes.tagged_sha256`, and `ssa.verify`, an aggregate MuSig2 signature
+being a plain BIP340 signature. The 17 `musig` entry points remain
+available through `lib`, and `tests/test_modules.py` drives a complete
+2-of-2 signing session with them.
 
 ## Thread safety
 

@@ -12,9 +12,13 @@ Major changes include:
 - Wrapped the `ecdh`, `recovery`, `ellswift` (BIP324) and `musig`
   (MuSig2) libsecp256k1 modules, besides the already wrapped
   `extrakeys` and `schnorrsig` ones; new `ecdh`, `recovery`, and
-  `ellswift` binding modules, while MuSig2 is only available through
-  the raw cffi bindings, as a Pythonic interface for its two-round
-  protocol is still to be designed
+  `ellswift` binding modules, while MuSig2 is available through the raw
+  cffi bindings only, by decision: its two-round protocol needs a
+  session whose secret nonce cannot be reused, which is a property of an
+  object's lifetime and belongs where the signing state lives, in
+  btclib; what has no state in it is wrapped here (key ordering and
+  aggregation, taproot tweaking, tagged hashing, and the BIP340
+  verification an aggregate signature reduces to)
 - New `keys` binding module: private and public key algebra (verify,
   negate, tweak add and multiply, combine), including the
   multiplication of an arbitrary point, which `mult` does not provide
