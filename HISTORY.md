@@ -40,8 +40,9 @@ Major changes include:
   runners no longer provide those interpreters
 - Added macOS arm64 and Linux aarch64 wheels
 - Added native Windows wheels for CPython, built with CMake/MSVC via
-  cibuildwheel; the mingw cross-compiled dynamic wheel is still
-  provided
+  cibuildwheel, for both x86_64 and arm64 (`win_arm64` from CPython 3.11,
+  the first version with a Windows arm64 build); the mingw
+  cross-compiled dynamic wheel is still provided, x86_64 only
 - Dynamic wheels now carry the platform tag of the machine they are
   built on (it was hardcoded to x86_64, with a fake macOS 10.16
   minimum version)

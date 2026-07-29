@@ -94,9 +94,13 @@ On POSIX systems the vendored libsecp256k1 is built with autotools
 (automake, libtool, and a C toolchain must be available).
 On Windows it is built natively with CMake/MSVC and the cffi extension
 with the standard setuptools toolchain; a `gcc` in the PATH is still
-required, as it preprocesses the library headers for cffi.
+required, as it preprocesses the library headers for cffi. Both
+architectures are built this way: CMake and MSVC target the host, so
+`win_amd64` and `win_arm64` wheels need no configuration of their own.
+The `win_arm64` wheels start at CPython 3.11, the first version with a
+Windows arm64 build.
 The dynamic (ABI mode) Windows wheel is instead cross-compiled
-on Linux with mingw-w64.
+on Linux with mingw-w64, and is x86_64 only.
 
 The btclib_libsecp256k1 project includes
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)

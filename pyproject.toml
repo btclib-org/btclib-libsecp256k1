@@ -244,4 +244,7 @@ enable = ["pypy"]
 # the ABI-mode dynamic wheel (py3-none-win_amd64), the cffi mode
 # recommended on PyPy, which pip falls back to; a static pp3 wheel
 # would take precedence over it and perform worse
-skip = "pp*-win*"
+# cp39 and cp310 have no Windows arm64 build: cibuildwheel lists those
+# identifiers (it used to cross-compile them from an x86_64 host) but on
+# the native arm64 runner there is no interpreter to build them with
+skip = "pp*-win* cp39-win_arm64 cp310-win_arm64"

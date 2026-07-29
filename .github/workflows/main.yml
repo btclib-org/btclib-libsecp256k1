@@ -83,7 +83,9 @@ jobs:
     strategy:
       matrix:
         # ubuntu-latest/macos-13 are x86_64, ubuntu-24.04-arm/macos-latest
-        # are arm64; windows-latest builds natively with CMake/MSVC
+        # are arm64; windows-latest and windows-11-arm build natively with
+        # CMake/MSVC, which picks its target from the host, so win_amd64
+        # and win_arm64 need no configuration of their own
         os:
           [
             ubuntu-latest,
@@ -91,6 +93,7 @@ jobs:
             macos-13,
             macos-latest,
             windows-latest,
+            windows-11-arm,
           ]
         # macos-13 (the last Intel macOS runner) has long queue times:
         # run it only on master and on PRs targeting master
@@ -367,13 +370,17 @@ jobs:
             macos-13,
             macos-latest,
             windows-latest,
+            windows-11-arm,
           ]
         python-version:
           ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "pypy-3.11"]
-        # PyPy wheels are not built on Windows; macos-13 (the last Intel
-        # macOS runner) has long queue times and only runs on master and
-        # on PRs targeting master
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"}]') || fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"macos-13"}]') }}
+        # PyPy wheels are not built on Windows, on either architecture.
+        # CPython has no Windows arm64 build before 3.11, so there is no
+        # interpreter to test a win_arm64 wheel against and cibuildwheel
+        # does not produce one. macos-13 (the last Intel macOS runner) has
+        # long queue times and only runs on master and on PRs targeting
+        # master
+        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"3.9"},{"os":"windows-11-arm","python-version":"3.10"}]') || fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"pypy-3.11"},{"os":"windows-11-arm","python-version":"3.9"},{"os":"windows-11-arm","python-version":"3.10"}, {"os":"macos-13"}]') }}
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
