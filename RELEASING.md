@@ -1,7 +1,8 @@
 # Release process
 
-Releases are published by the `release` workflow, which reuses the whole
-`main` build and test pipeline and then uploads what it produced. Where
+Releases are published by the `release` workflow, which reuses the `lint`
+gate and the whole `test` build and test pipeline, and then uploads what
+the latter produced. Where
 it uploads is not an input to choose at dispatch time: a `v*` tag
 publishes to PyPI, a manual run publishes to TestPyPI. Both go through
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so no

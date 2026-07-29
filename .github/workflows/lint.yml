@@ -1,0 +1,65 @@
+name: lint
+
+# fast gate, kept apart from the test workflow: the pre-commit hooks
+# (formatting, linting, typing) are worthless unless something enforces
+# them, and the build matrix is far too expensive to be the place where a
+# style error surfaces. A workflow of its own is also what makes the
+# distinction visible: two badges, two lines in the checks list, and a
+# lint failure that no longer reads as "the build is red"
+
+on:
+  push:
+    # master only: a push to a branch that has an open pull request would
+    # run this workflow twice, once per event, and the two runs land in
+    # different concurrency groups (refs/heads/dev against
+    # refs/pull/N/merge) so neither cancels the other. The pull_request
+    # run is the one worth keeping, because it tests the merge commit and
+    # is the only run a fork's pull request produces at all.
+    # master keeps a trigger of its own because a merge creates a commit
+    # that is not the one the pull request tested, and nothing else would
+    # ever test it. Tag pushes are covered by the release workflow
+    branches: [master]
+  pull_request:
+  # allows the release workflow to reuse this gate
+  workflow_call:
+  # the escape hatch: a run on demand for a branch whose pull request is
+  # not open yet
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, pip dependencies, build scripts) can read the token, so it
+# must not be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs on the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      # the hook environments are the slow part; they only change when
+      # the pinned revisions in .pre-commit-config.yaml change
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
+      # uvx, not uv sync: linting does not need the project installed,
+      # and installing it would mean compiling libsecp256k1 for nothing
+      - name: Run pre-commit
+        run: uvx pre-commit run --all-files --show-diff-on-failure

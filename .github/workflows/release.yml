@@ -19,10 +19,15 @@ permissions:
   contents: read
 
 jobs:
+  # the same gate a push gets: a release is not the moment to discover
+  # that the tagged commit does not lint
+  lint:
+    uses: ./.github/workflows/lint.yml
+
   # reuse the whole build/test pipeline: every artifact the release ships
   # is built and tested here, by the very matrices that run on a push
   build:
-    uses: ./.github/workflows/main.yml
+    uses: ./.github/workflows/test.yml
 
   # the two publish jobs differ only in where they upload to, and are two
   # jobs rather than one parameterized by an expression on purpose. The
@@ -33,7 +38,7 @@ jobs:
   publish-testpypi:
     name: Publish to TestPyPI
     if: github.event_name == 'workflow_dispatch'
-    needs: build
+    needs: [lint, build]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -65,7 +70,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     if: github.event_name == 'push'
-    needs: build
+    needs: [lint, build]
     runs-on: ubuntu-latest
     # deployment gate: configure required reviewers on the "pypi"
     # environment to require a manual approval before publishing
