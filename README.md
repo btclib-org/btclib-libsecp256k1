@@ -20,12 +20,21 @@
 Simple python bindings to
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
 ([v0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)).
-It is intended to be used with the
+As used by the
 [btclib](https://github.com/btclib-org/btclib) library.
 
 To install (and/or upgrade):
 
     python -m pip install --upgrade btclib_libsecp256k1
+
+## Versioning
+
+btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
+version: release M.N.P wraps libsecp256k1 vM.N.P
+(e.g. btclib_libsecp256k1 0.7.1 wraps libsecp256k1 v0.7.1).
+When a new release of the bindings is needed while still wrapping the
+same libsecp256k1 version, a fourth number is appended:
+0.7.1.1, 0.7.1.2, etc.
 
 ## Design
 
@@ -72,15 +81,6 @@ went:
   tested in public CI from the pinned source, and published by the
   workflow itself through Trusted Publishing with PEP 740 attestations
   — no long-lived token, and no maintainer laptop in the path
-
-## Versioning
-
-btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
-version: release M.N.P wraps libsecp256k1 vM.N.P
-(e.g. btclib_libsecp256k1 0.7.1 wraps libsecp256k1 v0.7.1).
-When a new release of the bindings is needed while still wrapping the
-same libsecp256k1 version, a fourth number is appended:
-0.7.1.1, 0.7.1.2, etc.
 
 ## Wrapped modules
 
@@ -220,19 +220,6 @@ It stays out until a packager asks for it. The value is in opening a
 channel, and the costs above are paid from the first day, whether anyone
 walks it or not.
 
-## Release process
-
-Releases are published to PyPI by the `release` GitHub workflow using
-[Trusted Publishing](https://docs.pypi.org/trusted-publishers/):
-no long-lived PyPI token exists anywhere; PyPI trusts the workflow
-itself (via GitHub OIDC) and hands out a short-lived upload token at
-run time. Wheels and sdist are uploaded with PEP 740 attestations, so
-their provenance can be verified on PyPI.
-
-The steps to cut a release, to rehearse one on TestPyPI, and the
-one-time setup each index needs are in
-[RELEASING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/RELEASING.md).
-
 ## Build, test, develop, and contribute
 
 The vendored libsecp256k1 is built with CMake on every platform, out of
@@ -325,3 +312,16 @@ free-threaded interpreter (`--python 3.14t`) has a second effect: it
 installs it as a managed one, and `uv sync` then prefers it to a system
 3.14, so `uv python install 3.14` is what makes the default environment
 reproducible again.
+
+## Release process
+
+Releases are published to PyPI by the `release` GitHub workflow using
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/):
+no long-lived PyPI token exists anywhere; PyPI trusts the workflow
+itself (via GitHub OIDC) and hands out a short-lived upload token at
+run time. Wheels and sdist are uploaded with PEP 740 attestations, so
+their provenance can be verified on PyPI.
+
+The steps to cut a release, to rehearse one on TestPyPI, and the
+one-time setup each index needs are in
+[RELEASING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/RELEASING.md).
