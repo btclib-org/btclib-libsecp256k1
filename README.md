@@ -91,8 +91,13 @@ One-time setup (already done, documented for reference):
 
 ## Build, test, develop, and contribute
 
-Disclaimer: building and testing on Windows is not currently supported;
-Windows support is achieved with cross compilation
+On POSIX systems the vendored libsecp256k1 is built with autotools
+(automake, libtool, and a C toolchain must be available).
+On Windows it is built natively with CMake/MSVC and the cffi extension
+with the standard setuptools toolchain; a `gcc` in the PATH is still
+required, as it preprocesses the library headers for cffi.
+The dynamic (ABI mode) Windows wheel is instead cross-compiled
+on Linux with mingw-w64.
 
 The btclib_libsecp256k1 project includes
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
