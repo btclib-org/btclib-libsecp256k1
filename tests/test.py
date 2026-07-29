@@ -6,6 +6,8 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
+import pytest
+
 from btclib_libsecp256k1 import dsa, ffi, lib, mult, ssa
 
 # [B101:assert_used] Use of assert detected. The enclosed code will be
@@ -46,3 +48,32 @@ def test_mult() -> None:
     assert pubkey_[1:33] == pubkey_bytes[1:]
     pubkey = mult.mult(prvkey)
     assert pubkey[0] == int.from_bytes(pubkey_bytes[1:], "big")
+
+
+def test_invalid_inputs() -> None:
+    msg = b"\x01" * 32
+
+    dsa_sig = dsa.sign(msg, prvkey)
+    with pytest.raises(ValueError, match="private key"):
+        dsa.sign(msg, 0)
+    with pytest.raises(ValueError, match="32 bytes"):
+        dsa.sign(msg[1:], prvkey)
+    with pytest.raises(ValueError, match="DER"):
+        dsa.verify(msg, pubkey_bytes, b"\x00" * 10)
+    with pytest.raises(ValueError, match="public key"):
+        dsa.verify(msg, b"\x02" + b"\x00" * 32, dsa_sig)
+
+    ssa_sig = ssa.sign(msg, prvkey)
+    with pytest.raises(ValueError, match="private key"):
+        ssa.sign(msg, 0)
+    with pytest.raises(ValueError, match="64 bytes"):
+        ssa.verify(msg, pubkey_bytes, ssa_sig[1:])
+    with pytest.raises(ValueError, match="public key"):
+        ssa.verify(msg, b"\x00" * 32, ssa_sig)
+
+    # a tampered signature does not raise: it just does not verify
+    tampered = bytes([ssa_sig[0] ^ 1]) + ssa_sig[1:]
+    assert not ssa.verify(msg, pubkey_bytes, tampered)  # nosec B101
+
+    with pytest.raises(ValueError, match="scalar"):
+        mult.mult(0)

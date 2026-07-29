@@ -10,8 +10,7 @@
 from __future__ import annotations
 
 from . import ffi, lib
-
-ctx = lib.secp256k1_context_create(769)
+from .context import ctx
 
 
 def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> bytes:
@@ -21,6 +20,10 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
         prvkey_bytes = prvkey.to_bytes(32, "big")
     else:
         prvkey_bytes = prvkey
+    if len(prvkey_bytes) != 32:
+        raise ValueError("the private key must be 32 bytes")
+    if len(msg_bytes) != 32:
+        raise ValueError("the message hash must be 32 bytes")
 
     sig = ffi.new("secp256k1_ecdsa_signature *")
     sig_bytes = ffi.new("char[73]")
@@ -29,21 +32,26 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
     noncefc = ffi.NULL
     ndata = b"\x00" * (32 - len(ndata)) + ndata if ndata else ffi.NULL
     if not lib.secp256k1_ecdsa_sign(ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata):
-        raise RuntimeError
+        raise ValueError("invalid private key")
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, sig):
-        raise RuntimeError
+        raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, length[0])
 
 
 def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> int:
     """Verify a ECDSA signature."""
 
+    if len(msg_bytes) != 32:
+        raise ValueError("the message hash must be 32 bytes")
+
     signature = ffi.new("secp256k1_ecdsa_signature *")
-    lib.secp256k1_ecdsa_signature_parse_der(
+    if not lib.secp256k1_ecdsa_signature_parse_der(
         ctx, signature, signature_bytes, len(signature_bytes)
-    )
+    ):
+        raise ValueError("invalid DER signature")
 
     pubkey = ffi.new("secp256k1_pubkey *")
-    lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes))
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
+        raise ValueError("invalid public key")
 
     return lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey)

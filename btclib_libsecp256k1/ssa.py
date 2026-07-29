@@ -16,8 +16,7 @@ from __future__ import annotations
 import secrets
 
 from . import ffi, lib
-
-ctx = lib.secp256k1_context_create(769)
+from .context import ctx
 
 
 def sign(
@@ -29,31 +28,45 @@ def sign(
         prvkey_bytes = prvkey.to_bytes(32, "big")
     else:
         prvkey_bytes = prvkey
+    if len(prvkey_bytes) != 32:
+        raise ValueError("the private key must be 32 bytes")
+    if len(msg_bytes) != 32:
+        raise ValueError("the message hash must be 32 bytes")
 
     keypair = ffi.new("secp256k1_keypair *")
-    lib.secp256k1_keypair_create(ctx, keypair, prvkey_bytes)
+    if not lib.secp256k1_keypair_create(ctx, keypair, prvkey_bytes):
+        raise ValueError("invalid private key")
 
     sig = ffi.new("char[64]")
 
     if not aux_rand32:
         aux_rand32 = secrets.token_bytes(32)
+    if len(aux_rand32) > 32:
+        raise ValueError("aux_rand32 must be at most 32 bytes")
     aux_rand32 = b"\x00" * (32 - len(aux_rand32)) + aux_rand32
     if lib.secp256k1_schnorrsig_sign32(ctx, sig, msg_bytes, keypair, aux_rand32):
         return ffi.unpack(sig, 64)
-    raise RuntimeError
+    raise RuntimeError("schnorr signing failed")
 
 
 def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> int:
     """Verify a Schhnorr signature."""
 
+    if len(signature_bytes) != 64:
+        raise ValueError("the signature must be 64 bytes")
+
     if len(pubkey_bytes) == 32:
         pubkey_bytes = b"\x02" + pubkey_bytes
 
     pubkey = ffi.new("secp256k1_pubkey *")
-    lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes))
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
+        raise ValueError("invalid public key")
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    lib.secp256k1_xonly_pubkey_from_pubkey(ctx, xonly_pubkey, ffi.new("int *"), pubkey)
+    if not lib.secp256k1_xonly_pubkey_from_pubkey(
+        ctx, xonly_pubkey, ffi.new("int *"), pubkey
+    ):
+        raise RuntimeError("x-only public key conversion failed")
 
     return lib.secp256k1_schnorrsig_verify(
         ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey

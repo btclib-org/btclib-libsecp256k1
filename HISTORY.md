@@ -32,6 +32,12 @@ Major changes include:
   the callback stubs are now a separate compilation unit,
   no longer mutating the vendored sources (#20)
 - Build scripts now fail fast on subprocess errors
+- Bindings now validate inputs and check libsecp256k1 return codes,
+  raising `ValueError` with a clear message; malformed keys and
+  signatures were previously verified against uninitialized memory
+- A single shared libsecp256k1 context is created with the modern
+  `SECP256K1_CONTEXT_NONE` flag (the SIGN/VERIFY flags are deprecated)
+  and randomized to protect against side-channel leakage
 
 ## v0.4.0
 

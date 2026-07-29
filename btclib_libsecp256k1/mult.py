@@ -11,23 +11,25 @@
 from __future__ import annotations
 
 from . import ffi, lib
-
-ctx = lib.secp256k1_context_create(769)
+from .context import ctx
 
 
 def mult_(num: bytes | int) -> bytes:
     """Multply the generator point."""
 
     num_bytes = num.to_bytes(32, "big") if isinstance(num, int) else num
+    if len(num_bytes) != 32:
+        raise ValueError("the scalar must be 32 bytes")
     point = ffi.new("secp256k1_pubkey *")
-    lib.secp256k1_ec_pubkey_create(ctx, point, num_bytes)
+    if not lib.secp256k1_ec_pubkey_create(ctx, point, num_bytes):
+        raise ValueError("invalid scalar: not in [1, n-1]")
 
     output = ffi.new("char[65]")
     length = ffi.new("size_t *", 65)
 
     if lib.secp256k1_ec_pubkey_serialize(ctx, output, length, point, 2):
         return ffi.unpack(output, 65)
-    raise RuntimeError
+    raise RuntimeError("point serialization failed")
 
 
 def mult(num: bytes | int) -> tuple[int, int]:
