@@ -1,0 +1,242 @@
+# Copyright (C) The btclib developers
+#
+# This file is part of btclib. It is subject to the license terms in the
+# LICENSE file found in the top-level directory of this distribution.
+#
+# No part of btclib including this file, may be copied, modified, propagated,
+# or distributed except according to the terms contained in the LICENSE file.
+
+"""Tests for the keys and xonly modules, and for the ECDSA signature forms.
+
+The scalar and point operations are cross-checked against the mult
+bindings, computing the expected result modulo the group order; the
+x-only tweaking is cross-checked against the plain public key tweaking,
+which is a distinct libsecp256k1 code path; the taproot key path is
+checked end to end, signing with the tweaked private key and verifying
+against the tweaked x-only public key.
+"""
+
+from __future__ import annotations
+
+import hashlib
+
+import pytest
+
+from btclib_libsecp256k1 import dsa, keys, mult, ssa, xonly
+
+# [B101:assert_used] tests legitimately use assert
+# https://bandit.readthedocs.io/en/1.7.4/plugins/b101_assert_used.html
+
+# secp256k1 group order
+N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+
+msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
+
+
+def compress(pubkey_bytes: bytes) -> bytes:
+    """Compress an uncompressed 65-byte public key."""
+
+    return bytes([2 + (pubkey_bytes[64] & 1)]) + pubkey_bytes[1:33]
+
+
+def test_prvkey_verify() -> None:
+    assert keys.prvkey_verify(1)  # nosec B101
+    assert keys.prvkey_verify(N - 1)  # nosec B101
+    # zero and the group order are out of the [1, n-1] range
+    assert not keys.prvkey_verify(0)  # nosec B101
+    assert not keys.prvkey_verify(N)  # nosec B101
+    assert not keys.prvkey_verify(b"\xff" * 32)  # nosec B101
+
+
+def test_prvkey_algebra() -> None:
+    a, b = 3, 5
+
+    assert keys.prvkey_negate(a) == (N - a).to_bytes(32, "big")  # nosec B101
+    assert keys.prvkey_negate(keys.prvkey_negate(a)) == (  # nosec B101
+        a.to_bytes(32, "big")
+    )
+    assert keys.prvkey_tweak_add(a, b) == (a + b).to_bytes(32, "big")  # nosec B101
+    assert keys.prvkey_tweak_mul(a, b) == (a * b).to_bytes(32, "big")  # nosec B101
+
+    # the sum wraps around the group order
+    assert keys.prvkey_tweak_add(N - 1, 3) == (2).to_bytes(32, "big")  # nosec B101
+    # a sum which is zero has no valid private key
+    with pytest.raises(ValueError, match="private key or tweak"):
+        keys.prvkey_tweak_add(a, N - a)
+
+
+def test_pubkey_algebra() -> None:
+    a, b = 3, 5
+    pubkey_a, pubkey_b = mult.mult_(a), mult.mult_(b)
+
+    # tweaking a public key matches tweaking its private key
+    assert keys.pubkey_tweak_add(pubkey_a, b) == (  # nosec B101
+        compress(mult.mult_(a + b))
+    )
+    assert keys.pubkey_tweak_mul(pubkey_a, b) == (  # nosec B101
+        compress(mult.mult_(a * b))
+    )
+    assert keys.pubkey_negate(pubkey_a) == (compress(mult.mult_(N - a)))  # nosec B101
+    assert keys.pubkey_negate(keys.pubkey_negate(pubkey_a)) == (  # nosec B101
+        compress(pubkey_a)
+    )
+
+    # adding public keys matches adding their private keys
+    combined = keys.pubkey_combine([pubkey_a, pubkey_b])
+    assert combined == compress(mult.mult_(a + b))  # nosec B101
+    assert combined == keys.pubkey_combine([pubkey_b, pubkey_a])  # nosec B101
+    # a single key is combined with itself only
+    assert keys.pubkey_combine([pubkey_a]) == compress(pubkey_a)  # nosec B101
+
+    # the point at infinity is not a valid public key
+    with pytest.raises(ValueError, match="public key sum"):
+        keys.pubkey_combine([pubkey_a, keys.pubkey_negate(pubkey_a)])
+
+
+def test_pubkey_serialization() -> None:
+    pubkey_bytes = mult.mult_(7)
+
+    # both forms parse, and either can be serialized from the other
+    compressed = keys.serialize(keys.parse(pubkey_bytes))
+    assert compressed == compress(pubkey_bytes)  # nosec B101
+    assert keys.serialize(keys.parse(compressed), False) == pubkey_bytes  # nosec B101
+    assert keys.pubkey_negate(compressed, False)[0] == 0x04  # nosec B101
+
+
+def test_keys_invalid_inputs() -> None:
+    pubkey_bytes = mult.mult_(7)
+
+    with pytest.raises(ValueError, match="private key"):
+        keys.prvkey_negate(b"\x01" * 31)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        keys.prvkey_tweak_add(7, b"\x01" * 33)
+    with pytest.raises(ValueError, match="private key"):
+        keys.prvkey_negate(0)
+    with pytest.raises(ValueError, match="public key"):
+        keys.pubkey_tweak_add(b"\x02" + b"\x00" * 32, 3)
+    with pytest.raises(ValueError, match="tweak"):
+        keys.pubkey_tweak_mul(pubkey_bytes, 0)
+    with pytest.raises(ValueError, match="at least one public key"):
+        keys.pubkey_combine([])
+
+
+def test_xonly_from_pubkey() -> None:
+    for prvkey in (1, 2, 3):
+        pubkey_bytes = mult.mult_(prvkey)
+        xonly_bytes, parity = xonly.from_pubkey(pubkey_bytes)
+        assert xonly_bytes == pubkey_bytes[1:33]  # nosec B101
+        assert parity == pubkey_bytes[64] & 1  # nosec B101
+        # the compressed form is accepted too
+        assert xonly.from_pubkey(compress(pubkey_bytes)) == (  # nosec B101
+            xonly_bytes,
+            parity,
+        )
+
+
+def test_xonly_tweak_add() -> None:
+    prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
+    xonly_bytes, _ = xonly.from_pubkey(mult.mult_(prvkey))
+
+    tweaked_bytes, parity = xonly.tweak_add(xonly_bytes, tweak)
+
+    # the same result is reached tweaking the even y lift of the key
+    # through the plain public key code path
+    lifted = keys.pubkey_tweak_add(b"\x02" + xonly_bytes, tweak)
+    assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)  # nosec B101
+
+    # the commitment can be checked without recomputing it
+    assert xonly.tweak_add_check(  # nosec B101
+        tweaked_bytes, parity, xonly_bytes, tweak
+    )
+    # a different tweak, key, or parity does not check out
+    assert not xonly.tweak_add_check(  # nosec B101
+        tweaked_bytes, parity, xonly_bytes, b"\x01" * 32
+    )
+    assert not xonly.tweak_add_check(  # nosec B101
+        tweaked_bytes, parity, xonly.from_pubkey(mult.mult_(12))[0], tweak
+    )
+    assert not xonly.tweak_add_check(  # nosec B101
+        tweaked_bytes, 1 - parity, xonly_bytes, tweak
+    )
+
+
+def test_taproot_key_path() -> None:
+    """Sign a taproot key path spending with a tweaked private key."""
+
+    prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
+    internal_bytes, _ = xonly.from_pubkey(mult.mult_(prvkey))
+    output_bytes, _ = xonly.tweak_add(internal_bytes, tweak)
+
+    tweaked_prvkey = xonly.prvkey_tweak_add(prvkey, tweak)
+    # the tweaked private key is the one of the tweaked x-only key
+    assert xonly.from_pubkey(mult.mult_(tweaked_prvkey))[0] == (  # nosec B101
+        output_bytes
+    )
+    # hence it signs for the taproot output key
+    signature_bytes = ssa.sign(msg, tweaked_prvkey)
+    assert ssa.verify(msg, output_bytes, signature_bytes)  # nosec B101
+    # while the internal key does not
+    assert not ssa.verify(msg, internal_bytes, signature_bytes)  # nosec B101
+
+
+def test_xonly_invalid_inputs() -> None:
+    xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
+
+    with pytest.raises(ValueError, match="x-only public key"):
+        # 32 bytes which are not a valid x coordinate
+        xonly.tweak_add(b"\xff" * 32, b"\x01" * 32)
+    with pytest.raises(ValueError, match="public key"):
+        xonly.tweak_add(b"\x02" + b"\x00" * 32, b"\x01" * 32)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        xonly.tweak_add(xonly_bytes, b"\x01" * 31)
+    with pytest.raises(ValueError, match="tweaked x-only public key"):
+        xonly.tweak_add_check(xonly_bytes[1:], parity, xonly_bytes, b"\x01" * 32)
+    with pytest.raises(ValueError, match="parity"):
+        xonly.tweak_add_check(xonly_bytes, 2, xonly_bytes, b"\x01" * 32)
+    with pytest.raises(ValueError, match="private key"):
+        xonly.prvkey_tweak_add(0, b"\x01" * 32)
+
+
+def test_dsa_signature_forms() -> None:
+    prvkey = 7
+    pubkey_bytes = compress(mult.mult_(prvkey))
+    der_bytes = dsa.sign(msg, prvkey)
+
+    compact_bytes = dsa.to_compact(der_bytes)
+    assert len(compact_bytes) == 64  # nosec B101
+    # the compact form is the concatenation of r and s
+    r, s = int.from_bytes(compact_bytes[:32], "big"), int.from_bytes(
+        compact_bytes[32:], "big"
+    )
+    assert 0 < r < N and 0 < s < N  # nosec B101
+    # and the conversion round trips
+    assert dsa.to_der(compact_bytes) == der_bytes  # nosec B101
+
+    with pytest.raises(ValueError, match="compact signature"):
+        dsa.to_der(compact_bytes[1:])
+    with pytest.raises(ValueError, match="compact signature"):
+        # an out of range r cannot be parsed
+        dsa.to_der(b"\xff" * 32 + compact_bytes[32:])
+    assert dsa.verify(msg, pubkey_bytes, dsa.to_der(compact_bytes))  # nosec B101
+
+
+def test_dsa_low_s() -> None:
+    prvkey = 7
+    pubkey_bytes = compress(mult.mult_(prvkey))
+    der_bytes = dsa.sign(msg, prvkey)
+
+    # signatures are created in the normalized lower-s form
+    assert dsa.is_low_s(der_bytes)  # nosec B101
+    assert dsa.normalize(der_bytes) == der_bytes  # nosec B101
+
+    # negating s yields the malleated signature of the same message
+    compact_bytes = dsa.to_compact(der_bytes)
+    s = int.from_bytes(compact_bytes[32:], "big")
+    malleated_bytes = dsa.to_der(compact_bytes[:32] + (N - s).to_bytes(32, "big"))
+
+    assert not dsa.is_low_s(malleated_bytes)  # nosec B101
+    # which does not verify, being a higher-s one
+    assert not dsa.verify(msg, pubkey_bytes, malleated_bytes)  # nosec B101
+    # but normalizes back to the original signature
+    assert dsa.normalize(malleated_bytes) == der_bytes  # nosec B101
+    assert dsa.verify(msg, pubkey_bytes, dsa.normalize(malleated_bytes))  # nosec B101

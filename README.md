@@ -39,13 +39,18 @@ declarations are available through the `lib` and `ffi` cffi objects:
 
 | libsecp256k1 module | bindings                                  |
 | ------------------- | ----------------------------------------- |
-| (core)              | `dsa`, `mult`                             |
+| (core)              | `dsa`, `mult`, `keys`                     |
 | `ecdh`              | `ecdh`                                    |
 | `recovery`          | `recovery`                                |
-| `extrakeys`         | used by `ssa`                             |
+| `extrakeys`         | `xonly`, used by `ssa`                    |
 | `schnorrsig`        | `ssa`                                     |
 | `musig`             | raw `lib` bindings only, see the tests    |
 | `ellswift`          | `ellswift` (BIP324)                       |
+
+`keys` provides the scalar and point algebra (tweaking, negation,
+combination, arbitrary point multiplication) underlying BIP32 key
+derivation; `xonly` provides the BIP341 taproot tweaking of x-only
+public keys and of their private keys.
 
 MuSig2 has no dedicated binding module yet: its two-round protocol
 needs an interface that makes secret nonce reuse hard, which is still

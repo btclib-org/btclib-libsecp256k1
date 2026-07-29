@@ -15,6 +15,16 @@ Major changes include:
   `ellswift` binding modules, while MuSig2 is only available through
   the raw cffi bindings, as a Pythonic interface for its two-round
   protocol is still to be designed
+- New `keys` binding module: private and public key algebra (verify,
+  negate, tweak add and multiply, combine), including the
+  multiplication of an arbitrary point, which `mult` does not provide
+- New `xonly` binding module: BIP341 taproot tweaking of x-only public
+  keys (`tweak_add`, `tweak_add_check`) and of the corresponding
+  private keys, so that a key path spending can be signed with `ssa`
+- `dsa` now exposes the signature malleability primitives
+  (`normalize`, `is_low_s`) and the conversions between the DER and the
+  64-byte compact encodings (`to_compact`, `to_der`)
+- `dsa.verify` and `ssa.verify` return `bool` instead of `int`
 - All the wrapped modules are now requested explicitly at configure
   time (`recovery`, in particular, is disabled by default upstream):
   upstream defaults are not part of its API, and the autotools and

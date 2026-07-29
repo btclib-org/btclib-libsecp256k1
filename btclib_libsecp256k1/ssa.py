@@ -49,7 +49,7 @@ def sign(
     raise RuntimeError("schnorr signing failed")
 
 
-def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> int:
+def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> bool:
     """Verify a Schhnorr signature."""
 
     if len(signature_bytes) != 64:
@@ -68,6 +68,8 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> int
     ):
         raise RuntimeError("x-only public key conversion failed")
 
-    return lib.secp256k1_schnorrsig_verify(
-        ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
+    return bool(
+        lib.secp256k1_schnorrsig_verify(
+            ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
+        )
     )
