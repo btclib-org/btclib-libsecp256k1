@@ -47,6 +47,13 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    # every job below caps its own runtime, this one included: the default
+    # is six hours, and with tens of jobs compiling C a single hang is
+    # measured in runner days rather than minutes. The values sit well
+    # above what these jobs are observed to take — nine minutes for a
+    # wheel build, under three for everything else — so a slow runner is
+    # not a failure, while a hung one is
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +80,7 @@ jobs:
   build-cibuildwheel:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       # as for the test matrices, and here it costs more: with the
       # default, one platform failing (or one flaky runner) cancels the
@@ -132,6 +140,7 @@ jobs:
   build-dynamic:
     name: Build dynamic wheel on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       # see build-cibuildwheel
       fail-fast: false
@@ -195,6 +204,7 @@ jobs:
   build-sdist:
     name: Build sdist
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -232,6 +242,7 @@ jobs:
   test-sdist:
     name: "Test sdist install on ${{ matrix.os }}${{ matrix.architecture && format(' ({0})', matrix.architecture) }}"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -281,6 +292,7 @@ jobs:
   build-windows:
     name: "Build on Linux for Windows"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -318,6 +330,7 @@ jobs:
   check-dist:
     name: Validate distributions
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [build-cibuildwheel, build-dynamic, build-sdist, build-windows]
 
     steps:
@@ -381,6 +394,7 @@ jobs:
   test-dynamic:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -451,6 +465,7 @@ jobs:
   test-static:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

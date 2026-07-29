@@ -1,0 +1,25 @@
+# the forms already say which of the three projects a report belongs in;
+# these links are the same routing, offered before the report is written
+# rather than after. Blank issues are off because the choice of project
+# is the one thing the forms exist to get right
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/btclib-org/btclib_libsecp256k1/security/advisories/new
+    about: >
+      Never a public issue. Report it privately here, or by email as the
+      security policy describes; a flaw in libsecp256k1 itself goes to
+      its own address, upstream.
+
+  - name: Something in btclib, not in the bindings
+    url: https://github.com/btclib-org/btclib/issues
+    about: >
+      Anything with state of its own — a wallet, a transaction, a signing
+      session — belongs in the library these bindings are for.
+
+  - name: Something in libsecp256k1 itself
+    url: https://github.com/bitcoin-core/secp256k1/issues
+    about: >
+      The cryptography is upstream, vendored here as a submodule and only
+      ever read from.

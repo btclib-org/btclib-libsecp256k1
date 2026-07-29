@@ -33,6 +33,7 @@ jobs:
   version-check:
     name: Check the declared versions
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,6 +100,12 @@ jobs:
   # expression that failed to evaluate as intended, the job would run
   # against some other environment, publishing with no gate in front of
   # it. Nothing here is computed, so nothing can go that way
+  # neither carries a timeout-minutes, unlike every other job here and in
+  # the workflows they call: a job held by an environment approval reports
+  # as waiting rather than running, and whether that time counts against
+  # the timer is nowhere documented. Cancelling a release that is waiting
+  # for its reviewer would cost more than the runner minutes a stuck
+  # upload can
   publish-testpypi:
     name: Publish to TestPyPI
     # the repository condition keeps a fork from attempting an upload it
@@ -174,6 +181,7 @@ jobs:
     name: Create the GitHub release
     needs: publish-pypi
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       # the one job that writes to the repository, and what it writes is a
       # release
