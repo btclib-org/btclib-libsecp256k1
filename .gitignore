@@ -134,3 +134,7 @@ Gemfile.lock
 *.dylib
 
 .pytest_cache/
+# ruff drops a .gitignore of its own inside .ruff_cache: that only hides
+# the cache once ruff has created it, and says nothing to a tree where
+# the directory does not exist yet
+.ruff_cache/
