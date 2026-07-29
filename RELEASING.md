@@ -9,9 +9,12 @@ publishes to PyPI, a manual run publishes to TestPyPI. Both go through
 long-lived token exists anywhere, and both upload PEP 740 attestations.
 
 The version published is the one in `pyproject.toml`; the tag only
-decides which index is reached. Nothing cross-checks the two, so a
-`v0.7.1` tag on a tree still reading `0.7.1rc1` publishes `0.7.1rc1`,
-and burns that version.
+decides which index is reached. The `version-check` job cross-checks
+them, and runs before anything is built: a `v0.7.1` tag on a tree still
+reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
+The same job checks that `uv.lock` carries the version the tree declares,
+and that the libsecp256k1 release named in `README.md` is the commit the
+submodule is pinned to.
 
 ## Cutting a release
 
@@ -39,9 +42,11 @@ and burns that version.
 
        python -m pip install --upgrade btclib_libsecp256k1
 
-7. publish the GitHub release for the tag, with the `HISTORY.md` entry
-   as its notes: the workflow does not create one, and `pyproject.toml`
-   points its download URL at that page
+7. check the GitHub release the workflow created once PyPI had accepted
+   the upload: its notes are the tag's section of `HISTORY.md`, and the
+   sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
+   generated the notes from the merged pull requests instead, and they
+   are worth replacing by hand
 
 ## Rehearsing on TestPyPI
 
@@ -56,17 +61,19 @@ The rehearsal is what the release machinery itself is tested with, when
 the workflow, the packaging metadata or the build matrix changed. A
 release that only bumps versions and notes does not need one.
 
-1. set the version in `pyproject.toml` to a pre-release of the one being
-   prepared (`0.7.1rc1`) and run `uv lock`. A version is consumed by the
-   upload on TestPyPI as much as on PyPI, so a second attempt needs
-   `rc2`; a local version (`0.7.1+test1`) is refused by both
-2. run the `release` workflow from the Actions tab, on the branch
-   holding it: a manual run builds the full matrix and stops at the
-   `testpypi` environment. Never tag a rehearsal: the trigger is what
-   picks the index, so a `v0.7.1rc1` tag would take the pre-release to
-   PyPI itself and burn it there, and `0.7.1rc1` is a version PyPI would
-   then hand to `--pre` installs
-3. approve it, then check that what was published installs:
+1. run the `release` workflow from the Actions tab, on the branch holding
+   it: a manual run builds the full matrix and stops at the `testpypi`
+   environment. Nothing has to be done to the version first. A version is
+   consumed by the upload on TestPyPI as much as on PyPI, so every build
+   job appends `.dev<run number>` to what `pyproject.toml` declares,
+   which is unique per dispatch and sorts before the release being
+   rehearsed. Re-running a finished rehearsal would reuse its run number
+   and collide: dispatch a fresh run instead.
+   Never tag a rehearsal: the trigger is what picks the index, so a
+   `v0.7.1rc1` tag would take the pre-release to PyPI itself and burn it
+   there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
+   installs
+2. approve it, then check that what was published installs:
 
    <!-- markdownlint-disable MD013 -->
 
@@ -74,14 +81,19 @@ release that only bumps versions and notes does not need one.
 
    <!-- markdownlint-enable MD013 -->
 
-   the extra index being needed for `cffi`, which TestPyPI does not have
-4. revert the version commit
+   the extra index being needed for `cffi`, which TestPyPI does not have.
+   The version installed carries the `.dev<run number>` suffix, and
+   `--pre` is what makes it resolvable
+
+There is no version commit to revert, and nothing to clean up: the
+suffix only ever exists inside the run that built it.
 
 What the rehearsal covers is the OIDC exchange, the approval gate, the
 artifacts the publish job collects, the PEP 740 attestations, and a real
 Warehouse accepting the metadata, which is more than `twine check
 --strict` can say. What it cannot cover is the trusted publisher on PyPI
-itself, a separate registration that can be wrong on its own.
+itself, a separate registration that can be wrong on its own, nor the
+tag comparison of `version-check`, there being no tag.
 
 ## When a release turns out to be broken
 

@@ -5,11 +5,12 @@
 # If want to disable all hooks while committing, use the --no-verify/-n option:
 # $ git commit -n -m "foo"
 
-# pre-commit.ci is enabled on this repository, and since the main
-# workflow grew a lint job the hooks are checked in two places. The gate
-# is the lint job, in the same run as the build and test matrices; what
-# pre-commit.ci alone provides, and what it is kept for, is the periodic
-# pull request bumping the revisions pinned below.
+# pre-commit.ci is enabled on this repository, so the hooks below are
+# checked in two places. The gate is the lint workflow, which runs this
+# very file: what CI enforces is therefore exactly what the hook does on
+# a developer's machine, with no second list of tools and versions to
+# keep in step. What pre-commit.ci alone provides, and what it is kept
+# for, is the periodic pull request bumping the revisions pinned below.
 ci:
   # a bot committing to a branch is at odds with the rest of this setup,
   # where the workflow token cannot write and every action is pinned to

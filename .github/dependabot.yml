@@ -1,14 +1,41 @@
+# three of the four things this repository tracks. The pre-commit hook
+# revisions are the one left out, dependabot having no pre-commit
+# ecosystem: pre-commit.ci opens that pull request instead, weekly, as
+# configured in .pre-commit-config.yaml
+#
+# every pull request here runs the whole build and test matrix, tens of
+# jobs compiling libsecp256k1 from source, so each ecosystem groups its
+# updates into a single pull request and asks monthly rather than weekly:
+# nothing any of them tracks is security-critical, and the cost of asking
+# is measured in machine hours
 version: 2
 updates:
-  # keep the GitHub Actions used in workflows up to date
+  # what this buys is the exact pins: every action is pinned to a commit
+  # SHA, which nothing but this moves
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     target-branch: "dev"
     groups:
       # one PR for all action bumps instead of one PR each
       github-actions:
+        patterns: ["*"]
+
+  # uv.lock is committed, the coverage job installs from it, and the
+  # dependency groups declare no version at all: what pytest, ruff and
+  # mypy resolve to for a developer is decided entirely by the lock file,
+  # which nothing else moves. The linter versions that gate a pull
+  # request are the pre-commit revisions, updated by pre-commit.ci; these
+  # are what an editor and an ad hoc run see, and they should not drift
+  # away from those
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    target-branch: "dev"
+    groups:
+      dev-tooling:
         patterns: ["*"]
 
   # signal upstream movement of the vendored secp256k1 submodule;

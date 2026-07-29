@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in these bindings does not work as documented
+labels: [bug]
+
+body:
+  - type: markdown
+    attributes:
+      value: >
+        This repository is the python bindings to libsecp256k1. Bugs in
+        the btclib library itself belong in
+        [btclib-org/btclib](https://github.com/btclib-org/btclib/issues),
+        and bugs in the C library itself in
+        [bitcoin-core/secp256k1](https://github.com/bitcoin-core/secp256k1/issues).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: >
+        The shortest python that shows it, and the full traceback if
+        there is one. Keys and messages that trigger it matter: paste the
+        actual values, in hex.
+      render: python
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >
+        `python -c "import btclib_libsecp256k1 as m; print(m.__version__)"`
+      placeholder: "0.7.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it was installed
+      description: >
+        The three artifacts differ in how libsecp256k1 is linked, and a
+        bug is rarely in all of them. If unsure, run
+        `python -c "import _btclib_libsecp256k1 as m; print(m.__file__, hasattr(m, 'lib'))"`:
+        `True` means the library is linked into the extension, i.e. a
+        static build, `False` that it is a shared object loaded at run
+        time.
+      options:
+        - Static wheel from PyPI (the default for a supported platform)
+        - Dynamic wheel from PyPI (py3-none, e.g. a free-threaded interpreter)
+        - Built from the sdist, or from a git checkout
+        - Some other way, described above
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and interpreter
+      description: >
+        `python -VV` and the operating system, architecture included.
+      placeholder: "CPython 3.13.5, macOS 15.6 arm64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: >
+        For a build failure, the output of
+        `python -m pip install --verbose btclib_libsecp256k1` is the
+        thing that matters most.

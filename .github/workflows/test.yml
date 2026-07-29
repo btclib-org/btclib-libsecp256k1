@@ -15,6 +15,16 @@ on:
   pull_request:
   # allows the release workflow to reuse the whole build/test pipeline
   workflow_call:
+    inputs:
+      version-suffix:
+        description: >
+          Appended to the version in pyproject.toml before anything is
+          built, by every build job. A release passes nothing and ships
+          the version the tree declares; the rehearsal passes a .dev
+          suffix, which is how it reaches TestPyPI with a version that
+          index has not already consumed.
+        type: string
+        default: ""
   # the escape hatch: the matrix on demand for a branch whose pull
   # request is not open yet
   workflow_dispatch:
@@ -44,6 +54,12 @@ jobs:
           submodules: recursive
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          # the wheels of the test group, not the extension: the root
+          # project is installed editable, so its build hook (and the
+          # CMake build of the vendored library) runs on every job either
+          # way. What this saves is the download, keyed on uv.lock
+          enable-cache: true
 
       # a static build, i.e. the worst case for coverage: the dlopen
       # fallback of __init__.py stays unreachable. The interpreter comes
@@ -88,6 +104,14 @@ jobs:
         with:
           python-version: "3.14"
 
+      # skipped on every trigger but a release rehearsal: the inputs
+      # context is empty unless this workflow was called, and an empty
+      # string is what the release passes for a tag push
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
       - name: Build wheels
         run: |
           python -m pip install -U pip build cibuildwheel
@@ -116,6 +140,12 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
 
       # a dynamic wheel compiles no extension, so nothing derives its
       # platform tag from a toolchain: without this the macOS version in
@@ -166,6 +196,12 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
 
       - name: Build source
         run: |
@@ -247,6 +283,12 @@ jobs:
         with:
           python-version: "3.14"
 
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
       - name: Install dependencies
         run: sudo apt install -y mingw-w64
 
@@ -274,6 +316,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          # the three tools below are fetched by uvx on every run
+          enable-cache: true
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -294,6 +339,14 @@ jobs:
 
       - name: Check wheel contents
         run: uvx check-wheel-contents dist/*.whl
+
+      # what twine cannot see: metadata that is valid but poor, a missing
+      # classifier or url, a version PyPI would sort in a way nobody
+      # meant. Run on the sdist rather than on the source tree, so it
+      # rates the metadata that was actually built and shipped; --min 10
+      # is a ratchet, the score being 10 today
+      - name: Rate the packaging metadata
+        run: uvx pyroma --min 10 dist/*.tar.gz
 
   test-dynamic:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"

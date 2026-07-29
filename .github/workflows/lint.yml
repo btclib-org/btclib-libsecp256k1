@@ -58,6 +58,10 @@ jobs:
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          # pre-commit itself, which uvx fetches on every run; the hook
+          # environments are the cache step above
+          enable-cache: true
 
       # uvx, not uv sync: linting does not need the project installed,
       # and installing it would mean compiling libsecp256k1 for nothing
