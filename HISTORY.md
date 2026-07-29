@@ -52,6 +52,9 @@ Major changes include:
 - New release workflow: tag-triggered, publishing to PyPI with Trusted
   Publishing (OIDC, no long-lived tokens) and PEP 740 attestations,
   behind a manual approval gate
+- New `SECURITY.md`: how to report a vulnerability, and where the
+  boundary with libsecp256k1 lies, as the cryptography is upstream and
+  what is ours is the layer driving it
 - Updated all pre-commit hooks to their latest versions
 - Replaced black, isort, flake8, autoflake, pyupgrade, bandit,
   pydocstringformatter and yesqa with ruff: one linter and formatter,
