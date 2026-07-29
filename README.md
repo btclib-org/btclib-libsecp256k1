@@ -123,7 +123,7 @@ attributes a message to the right caller.
 
 What is not protected is the secret material itself, which lives in
 Python objects for as long as the interpreter keeps them: see
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/SECURITY.md).
 
 ## The vendored library is not optional
 
@@ -184,7 +184,8 @@ run time. Wheels and sdist are uploaded with PEP 740 attestations, so
 their provenance can be verified on PyPI.
 
 The steps to cut a release, to rehearse one on TestPyPI, and the
-one-time setup each index needs are in [RELEASING.md](RELEASING.md).
+one-time setup each index needs are in
+[RELEASING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/RELEASING.md).
 
 ## Build, test, develop, and contribute
 
@@ -217,7 +218,7 @@ and check out the appropriate commit.
 
 <!-- markdownlint-disable MD013 -->
     $ git submodule init
-    Submodule 'secp256k1' (git@github.com:bitcoin-core/secp256k1.git) registered for path 'secp256k1'
+    Submodule 'secp256k1' (https://github.com/bitcoin-core/secp256k1.git) registered for path 'secp256k1'
     $ git submodule update
     Cloning into 'secp256k1'...
 <!-- markdownlint-enable MD013 -->

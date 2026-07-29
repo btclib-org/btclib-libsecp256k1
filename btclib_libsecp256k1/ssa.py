@@ -74,7 +74,7 @@ def sign_custom(
 
 
 def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> bool:
-    """Verify a Schhnorr signature."""
+    """Verify a Schnorr signature."""
 
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")

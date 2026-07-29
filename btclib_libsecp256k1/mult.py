@@ -16,7 +16,7 @@ from .context import ctx
 
 
 def mult_(num: bytes | int) -> bytes:
-    """Multply the generator point."""
+    """Multiply the generator point."""
 
     num_bytes = scalar(num, "scalar")
     point = ffi.new("secp256k1_pubkey *")
@@ -32,7 +32,7 @@ def mult_(num: bytes | int) -> bytes:
 
 
 def mult(num: bytes | int) -> tuple[int, int]:
-    """Multply the generator point."""
+    """Multiply the generator point."""
 
     result = mult_(num)
     return int.from_bytes(result[1:33], "big"), int.from_bytes(result[33:], "big")
