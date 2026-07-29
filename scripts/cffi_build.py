@@ -6,17 +6,13 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
-import glob
 import os
 import pathlib
 import platform
 import re
 import shutil
-
-# [B404:blacklist] Consider possible security implications associated with the subprocess module.
-# https://bandit.readthedocs.io/en/1.7.4/blacklists/blacklist_imports.html#b404-import-subprocess
-import subprocess  # nosec B404
-from subprocess import PIPE, Popen  # nosec B404
+import subprocess
+from subprocess import PIPE, Popen
 from sysconfig import get_config_var, get_path
 
 import cffi
@@ -48,13 +44,11 @@ LDFLAGS = -no-undefined
 libsecp256k1_la_SOURCES += src/btclib_default_callbacks.c
 """
 
-# [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
-# https://bandit.readthedocs.io/en/1.7.4/plugins/b603_subprocess_without_shell_equals_true.html
 
-# [B607:start_process_with_partial_path] Starting a process with a partial executable path
-# https://bandit.readthedocs.io/en/1.7.4/plugins/b607_start_process_with_partial_path.html
-
-
+# every subprocess call below drives the vendored autotools/make build
+# with argument lists assembled here: no shell, no untrusted input. The
+# executables (git, make, bash, cc) are looked up on PATH, as a build
+# from source has to do
 class FFIExtension:
     def __init__(self):
         self.clean()
@@ -64,12 +58,11 @@ class FFIExtension:
     def shared_library_extension(self):
         if self.platform == "Windows":
             return ".dll"
-        elif self.platform == "Darwin":
+        if self.platform == "Darwin":
             return ".dylib"
-        elif self.platform == "Linux":
+        if self.platform == "Linux":
             return ".so"
-        else:
-            raise RuntimeError
+        raise RuntimeError
 
     def clean(self):
         raise NotImplementedError
@@ -114,9 +107,9 @@ class FFIExtension:
         return [pathlib.Path(ffi.compile(tmpdir=str(build_dir)))]
 
     def compile_static_unix(self, ffi, build_dir):
-        c_filename = f"{str(self.name)}.c"
-        o_filename = f"{str(self.name)}.o"
-        so_filename = str(self.name) + get_config_var("EXT_SUFFIX")
+        c_filename = f"{self.name}.c"
+        o_filename = f"{self.name}.o"
+        so_filename = self.name + get_config_var("EXT_SUFFIX")
         c_path = build_dir / c_filename
         so_path = build_dir / so_filename
 
@@ -141,12 +134,12 @@ class FFIExtension:
             str(so_filename),
         ]
 
-        subprocess.run(compile_command, cwd=build_dir, check=True)  # nosec B603 B607
-        subprocess.run(link_command, cwd=build_dir, check=True)  # nosec B603 B607
+        subprocess.run(compile_command, cwd=build_dir, check=True)
+        subprocess.run(link_command, cwd=build_dir, check=True)
         return [so_path]
 
     def emit_dynamic(self, ffi, build_dir):
-        py_filename = f"{str(self.name)}.py"
+        py_filename = f"{self.name}.py"
         py_path = build_dir / py_filename
 
         ffi.emit_python_code(str(py_path))
@@ -202,20 +195,14 @@ class Secp256k1CFFIExtension(FFIExtension):
     def clean(self) -> None:
         # in an sdist there is no .git: skip the git cleanup
         if (self.wd / ".git").exists():
-            subprocess.run(
-                ["git", "reset", "--hard"], cwd=self.wd, check=True
-            )  # nosec B603 B607
-            subprocess.run(
-                ["git", "clean", "-fxd"], cwd=self.wd, check=True
-            )  # nosec B603 B607
+            subprocess.run(["git", "reset", "--hard"], cwd=self.wd, check=True)
+            subprocess.run(["git", "clean", "-fxd"], cwd=self.wd, check=True)
         clean_libs = any(libs_dir.exists() for libs_dir in self.library_dirs)
         if clean_libs and (self.wd / "Makefile").exists():
-            subprocess.run(
-                ["make", "clean"], cwd=self.wd, check=True
-            )  # nosec B603 B607
+            subprocess.run(["make", "clean"], cwd=self.wd, check=True)
         for pattern in self.clean_patterns:
-            for file in glob.glob(pattern):
-                os.remove(file)
+            for file in pathlib.Path().glob(pattern):
+                file.unlink()
 
     def build_c(self) -> None:
         # cross-compilation (CFFI_PLATFORM=Windows on a POSIX host) keeps
@@ -250,12 +237,12 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_BUILD_CTIME_TESTS=OFF",
             "-DSECP256K1_BUILD_EXAMPLES=OFF",
         ]
-        subprocess.run(configure, cwd=self.wd, check=True)  # nosec B603 B607
+        subprocess.run(configure, cwd=self.wd, check=True)
         subprocess.run(
             ["cmake", "--build", build_dir, "--config", "Release"],
             cwd=self.wd,
             check=True,
-        )  # nosec B603 B607
+        )
         # multi-config generators (MSVC) append the configuration name
         self.library_dirs = [
             self.wd / build_dir / "lib" / "Release",
@@ -274,12 +261,10 @@ class Secp256k1CFFIExtension(FFIExtension):
         # idempotent guard for the same reason as above
         makefile_am = self.wd / "Makefile.am"
         if MAKEFILE_AM_EXTRA not in makefile_am.read_text():
-            with open(makefile_am, "a") as f:
+            with makefile_am.open("a") as f:
                 f.write(MAKEFILE_AM_EXTRA)
 
-        subprocess.run(
-            ["bash", "autogen.sh"], cwd=self.wd, check=True
-        )  # nosec B603 B607
+        subprocess.run(["bash", "autogen.sh"], cwd=self.wd, check=True)
         command = [
             "bash",
             "configure",
@@ -303,19 +288,17 @@ class Secp256k1CFFIExtension(FFIExtension):
             command.append("--host=x86_64-w64-mingw32")
         elif static:
             command.append("--disable-shared")
-        subprocess.run(command, cwd=self.wd, check=True)  # nosec B603
+        subprocess.run(command, cwd=self.wd, check=True)
 
-        subprocess.run(["make"], cwd=self.wd, check=True)  # nosec B603 B607
+        subprocess.run(["make"], cwd=self.wd, check=True)
         if (self.wd / ".git").exists():
-            subprocess.run(
-                ["git", "reset", "--hard"], cwd=self.wd, check=True
-            )  # nosec B603 B607
+            subprocess.run(["git", "reset", "--hard"], cwd=self.wd, check=True)
 
     def generate_def(self):
         ffi_header = ""
         for h in self.headers:
             location = self.include_dir / h
-            with open(location) as f:
+            with location.open() as f:
                 ffi_header += f.read() + "\n"
 
         ffi_header = re.sub(r"#include .*", "", ffi_header)
@@ -331,7 +314,7 @@ class Secp256k1CFFIExtension(FFIExtension):
             "__attribute__(x)=",
             "-",
         ]
-        with Popen(command, stdin=PIPE, stdout=PIPE) as p:  # nosec B603
+        with Popen(command, stdin=PIPE, stdout=PIPE) as p:
             definitions = p.communicate(input=ffi_header.encode())[0].decode()
             definitions = definitions.replace("\r", "\n")
         if p.returncode != 0:
@@ -342,4 +325,4 @@ class Secp256k1CFFIExtension(FFIExtension):
 ffi_ext = Secp256k1CFFIExtension()
 
 if __name__ == "__main__":
-    ffi_ext.create_cffi(pathlib.Path("."))
+    ffi_ext.create_cffi(pathlib.Path())

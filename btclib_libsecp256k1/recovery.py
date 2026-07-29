@@ -7,6 +7,7 @@
 # or distributed except according to the terms contained in the LICENSE file.
 
 """ECDSA public key recovery."""
+
 from __future__ import annotations
 
 from . import ffi, lib
@@ -25,10 +26,7 @@ def sign(
     Return the 64-byte compact signature and its recovery id.
     """
 
-    if isinstance(prvkey, int):
-        prvkey_bytes = prvkey.to_bytes(32, "big")
-    else:
-        prvkey_bytes = prvkey
+    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
     if len(prvkey_bytes) != 32:
         raise ValueError("the private key must be 32 bytes")
     if len(msg_bytes) != 32:

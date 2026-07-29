@@ -6,11 +6,11 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
-"""
-ElligatorSwift encoding and x-only ECDH, according.
+"""ElligatorSwift encoding and x-only ECDH, according to BIP324.
 
-to BIP324: https://github.com/bitcoin/bips/blob/master/bip-0324.mediawiki
+https://github.com/bitcoin/bips/blob/master/bip-0324.mediawiki
 """
+
 from __future__ import annotations
 
 import secrets
@@ -30,10 +30,7 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     is used as entropy for the encoding.
     """
 
-    if isinstance(prvkey, int):
-        prvkey_bytes = prvkey.to_bytes(32, "big")
-    else:
-        prvkey_bytes = prvkey
+    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
     if len(prvkey_bytes) != 32:
         raise ValueError("the private key must be 32 bytes")
 
@@ -104,10 +101,7 @@ def xdh(
     if party not in (0, 1):
         raise ValueError("the party must be 0 (A) or 1 (B)")
 
-    if isinstance(prvkey, int):
-        prvkey_bytes = prvkey.to_bytes(32, "big")
-    else:
-        prvkey_bytes = prvkey
+    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
     if len(prvkey_bytes) != 32:
         raise ValueError("the private key must be 32 bytes")
 

@@ -1,3 +1,11 @@
+# Copyright (C) The btclib developers
+#
+# This file is part of btclib. It is subject to the license terms in the
+# LICENSE file found in the top-level directory of this distribution.
+#
+# No part of btclib including this file, may be copied, modified, propagated,
+# or distributed except according to the terms contained in the LICENSE file.
+
 import os
 import platform
 import shutil
@@ -12,13 +20,13 @@ class CustomBuildHook(BuildHookInterface):
         self.platform = os.environ.get("CFFI_PLATFORM", platform.system())
 
     def get_ext_object(self, script: Path, ext_name: str):
-        # Issue: [B102:exec_used] Use of exec detected.
-        # https://bandit.readthedocs.io/en/1.7.4/plugins/b102_exec_used.html
-
+        # the cffi build description is a module of this very repository,
+        # named in pyproject.toml: exec() runs it without importing it,
+        # so that the build backend needs no import path setup
         src = Path(script).read_text()
         code = compile(src, script, "exec")
         build_vars = {"__name__": "__cffi__", "__file__": script}
-        exec(code, build_vars, build_vars)  # nosec B102
+        exec(code, build_vars, build_vars)
         if ext_name not in build_vars:
             raise RuntimeError
         return build_vars[ext_name]

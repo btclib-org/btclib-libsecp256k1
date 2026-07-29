@@ -24,9 +24,6 @@ import pytest
 
 from btclib_libsecp256k1 import dsa, keys, mult, ssa, xonly
 
-# [B101:assert_used] tests legitimately use assert
-# https://bandit.readthedocs.io/en/1.7.4/plugins/b101_assert_used.html
-
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
@@ -40,26 +37,24 @@ def compress(pubkey_bytes: bytes) -> bytes:
 
 
 def test_prvkey_verify() -> None:
-    assert keys.prvkey_verify(1)  # nosec B101
-    assert keys.prvkey_verify(N - 1)  # nosec B101
+    assert keys.prvkey_verify(1)
+    assert keys.prvkey_verify(N - 1)
     # zero and the group order are out of the [1, n-1] range
-    assert not keys.prvkey_verify(0)  # nosec B101
-    assert not keys.prvkey_verify(N)  # nosec B101
-    assert not keys.prvkey_verify(b"\xff" * 32)  # nosec B101
+    assert not keys.prvkey_verify(0)
+    assert not keys.prvkey_verify(N)
+    assert not keys.prvkey_verify(b"\xff" * 32)
 
 
 def test_prvkey_algebra() -> None:
     a, b = 3, 5
 
-    assert keys.prvkey_negate(a) == (N - a).to_bytes(32, "big")  # nosec B101
-    assert keys.prvkey_negate(keys.prvkey_negate(a)) == (  # nosec B101
-        a.to_bytes(32, "big")
-    )
-    assert keys.prvkey_tweak_add(a, b) == (a + b).to_bytes(32, "big")  # nosec B101
-    assert keys.prvkey_tweak_mul(a, b) == (a * b).to_bytes(32, "big")  # nosec B101
+    assert keys.prvkey_negate(a) == (N - a).to_bytes(32, "big")
+    assert keys.prvkey_negate(keys.prvkey_negate(a)) == (a.to_bytes(32, "big"))
+    assert keys.prvkey_tweak_add(a, b) == (a + b).to_bytes(32, "big")
+    assert keys.prvkey_tweak_mul(a, b) == (a * b).to_bytes(32, "big")
 
     # the sum wraps around the group order
-    assert keys.prvkey_tweak_add(N - 1, 3) == (2).to_bytes(32, "big")  # nosec B101
+    assert keys.prvkey_tweak_add(N - 1, 3) == (2).to_bytes(32, "big")
     # a sum which is zero has no valid private key
     with pytest.raises(ValueError, match="private key or tweak"):
         keys.prvkey_tweak_add(a, N - a)
@@ -70,23 +65,17 @@ def test_pubkey_algebra() -> None:
     pubkey_a, pubkey_b = mult.mult_(a), mult.mult_(b)
 
     # tweaking a public key matches tweaking its private key
-    assert keys.pubkey_tweak_add(pubkey_a, b) == (  # nosec B101
-        compress(mult.mult_(a + b))
-    )
-    assert keys.pubkey_tweak_mul(pubkey_a, b) == (  # nosec B101
-        compress(mult.mult_(a * b))
-    )
-    assert keys.pubkey_negate(pubkey_a) == (compress(mult.mult_(N - a)))  # nosec B101
-    assert keys.pubkey_negate(keys.pubkey_negate(pubkey_a)) == (  # nosec B101
-        compress(pubkey_a)
-    )
+    assert keys.pubkey_tweak_add(pubkey_a, b) == (compress(mult.mult_(a + b)))
+    assert keys.pubkey_tweak_mul(pubkey_a, b) == (compress(mult.mult_(a * b)))
+    assert keys.pubkey_negate(pubkey_a) == (compress(mult.mult_(N - a)))
+    assert keys.pubkey_negate(keys.pubkey_negate(pubkey_a)) == (compress(pubkey_a))
 
     # adding public keys matches adding their private keys
     combined = keys.pubkey_combine([pubkey_a, pubkey_b])
-    assert combined == compress(mult.mult_(a + b))  # nosec B101
-    assert combined == keys.pubkey_combine([pubkey_b, pubkey_a])  # nosec B101
+    assert combined == compress(mult.mult_(a + b))
+    assert combined == keys.pubkey_combine([pubkey_b, pubkey_a])
     # a single key is combined with itself only
-    assert keys.pubkey_combine([pubkey_a]) == compress(pubkey_a)  # nosec B101
+    assert keys.pubkey_combine([pubkey_a]) == compress(pubkey_a)
 
     # the point at infinity is not a valid public key
     with pytest.raises(ValueError, match="public key sum"):
@@ -98,9 +87,9 @@ def test_pubkey_serialization() -> None:
 
     # both forms parse, and either can be serialized from the other
     compressed = keys.serialize(keys.parse(pubkey_bytes))
-    assert compressed == compress(pubkey_bytes)  # nosec B101
-    assert keys.serialize(keys.parse(compressed), False) == pubkey_bytes  # nosec B101
-    assert keys.pubkey_negate(compressed, False)[0] == 0x04  # nosec B101
+    assert compressed == compress(pubkey_bytes)
+    assert keys.serialize(keys.parse(compressed), False) == pubkey_bytes
+    assert keys.pubkey_negate(compressed, False)[0] == 0x04
 
 
 def test_keys_invalid_inputs() -> None:
@@ -124,10 +113,10 @@ def test_xonly_from_pubkey() -> None:
     for prvkey in (1, 2, 3):
         pubkey_bytes = mult.mult_(prvkey)
         xonly_bytes, parity = xonly.from_pubkey(pubkey_bytes)
-        assert xonly_bytes == pubkey_bytes[1:33]  # nosec B101
-        assert parity == pubkey_bytes[64] & 1  # nosec B101
+        assert xonly_bytes == pubkey_bytes[1:33]
+        assert parity == pubkey_bytes[64] & 1
         # the compressed form is accepted too
-        assert xonly.from_pubkey(compress(pubkey_bytes)) == (  # nosec B101
+        assert xonly.from_pubkey(compress(pubkey_bytes)) == (
             xonly_bytes,
             parity,
         )
@@ -142,22 +131,16 @@ def test_xonly_tweak_add() -> None:
     # the same result is reached tweaking the even y lift of the key
     # through the plain public key code path
     lifted = keys.pubkey_tweak_add(b"\x02" + xonly_bytes, tweak)
-    assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)  # nosec B101
+    assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)
 
     # the commitment can be checked without recomputing it
-    assert xonly.tweak_add_check(  # nosec B101
-        tweaked_bytes, parity, xonly_bytes, tweak
-    )
+    assert xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, tweak)
     # a different tweak, key, or parity does not check out
-    assert not xonly.tweak_add_check(  # nosec B101
-        tweaked_bytes, parity, xonly_bytes, b"\x01" * 32
-    )
-    assert not xonly.tweak_add_check(  # nosec B101
+    assert not xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, b"\x01" * 32)
+    assert not xonly.tweak_add_check(
         tweaked_bytes, parity, xonly.from_pubkey(mult.mult_(12))[0], tweak
     )
-    assert not xonly.tweak_add_check(  # nosec B101
-        tweaked_bytes, 1 - parity, xonly_bytes, tweak
-    )
+    assert not xonly.tweak_add_check(tweaked_bytes, 1 - parity, xonly_bytes, tweak)
 
 
 def test_taproot_key_path() -> None:
@@ -169,14 +152,12 @@ def test_taproot_key_path() -> None:
 
     tweaked_prvkey = xonly.prvkey_tweak_add(prvkey, tweak)
     # the tweaked private key is the one of the tweaked x-only key
-    assert xonly.from_pubkey(mult.mult_(tweaked_prvkey))[0] == (  # nosec B101
-        output_bytes
-    )
+    assert xonly.from_pubkey(mult.mult_(tweaked_prvkey))[0] == (output_bytes)
     # hence it signs for the taproot output key
     signature_bytes = ssa.sign(msg, tweaked_prvkey)
-    assert ssa.verify(msg, output_bytes, signature_bytes)  # nosec B101
+    assert ssa.verify(msg, output_bytes, signature_bytes)
     # while the internal key does not
-    assert not ssa.verify(msg, internal_bytes, signature_bytes)  # nosec B101
+    assert not ssa.verify(msg, internal_bytes, signature_bytes)
 
 
 def test_xonly_invalid_inputs() -> None:
@@ -203,21 +184,22 @@ def test_dsa_signature_forms() -> None:
     der_bytes = dsa.sign(msg, prvkey)
 
     compact_bytes = dsa.to_compact(der_bytes)
-    assert len(compact_bytes) == 64  # nosec B101
+    assert len(compact_bytes) == 64
     # the compact form is the concatenation of r and s
-    r, s = int.from_bytes(compact_bytes[:32], "big"), int.from_bytes(
-        compact_bytes[32:], "big"
+    r, s = (
+        int.from_bytes(compact_bytes[:32], "big"),
+        int.from_bytes(compact_bytes[32:], "big"),
     )
-    assert 0 < r < N and 0 < s < N  # nosec B101
+    assert 0 < r < N and 0 < s < N
     # and the conversion round trips
-    assert dsa.to_der(compact_bytes) == der_bytes  # nosec B101
+    assert dsa.to_der(compact_bytes) == der_bytes
 
     with pytest.raises(ValueError, match="compact signature"):
         dsa.to_der(compact_bytes[1:])
     with pytest.raises(ValueError, match="compact signature"):
         # an out of range r cannot be parsed
         dsa.to_der(b"\xff" * 32 + compact_bytes[32:])
-    assert dsa.verify(msg, pubkey_bytes, dsa.to_der(compact_bytes))  # nosec B101
+    assert dsa.verify(msg, pubkey_bytes, dsa.to_der(compact_bytes))
 
 
 def test_dsa_low_s() -> None:
@@ -226,17 +208,17 @@ def test_dsa_low_s() -> None:
     der_bytes = dsa.sign(msg, prvkey)
 
     # signatures are created in the normalized lower-s form
-    assert dsa.is_low_s(der_bytes)  # nosec B101
-    assert dsa.normalize(der_bytes) == der_bytes  # nosec B101
+    assert dsa.is_low_s(der_bytes)
+    assert dsa.normalize(der_bytes) == der_bytes
 
     # negating s yields the malleated signature of the same message
     compact_bytes = dsa.to_compact(der_bytes)
     s = int.from_bytes(compact_bytes[32:], "big")
     malleated_bytes = dsa.to_der(compact_bytes[:32] + (N - s).to_bytes(32, "big"))
 
-    assert not dsa.is_low_s(malleated_bytes)  # nosec B101
+    assert not dsa.is_low_s(malleated_bytes)
     # which does not verify, being a higher-s one
-    assert not dsa.verify(msg, pubkey_bytes, malleated_bytes)  # nosec B101
+    assert not dsa.verify(msg, pubkey_bytes, malleated_bytes)
     # but normalizes back to the original signature
-    assert dsa.normalize(malleated_bytes) == der_bytes  # nosec B101
-    assert dsa.verify(msg, pubkey_bytes, dsa.normalize(malleated_bytes))  # nosec B101
+    assert dsa.normalize(malleated_bytes) == der_bytes
+    assert dsa.verify(msg, pubkey_bytes, dsa.normalize(malleated_bytes))

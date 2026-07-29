@@ -6,11 +6,12 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
-"""
-Variant of Elliptic Curve Schnorr Signature Algorithm (ECSSA), according.
+"""Variant of Elliptic Curve Schnorr Signature Algorithm (ECSSA).
 
-to BIP340-Schnorr: https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
+According to BIP340-Schnorr:
+https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 """
+
 from __future__ import annotations
 
 import secrets
@@ -24,10 +25,7 @@ def sign(
 ) -> bytes:
     """Create a Schnorr signature."""
 
-    if isinstance(prvkey, int):
-        prvkey_bytes = prvkey.to_bytes(32, "big")
-    else:
-        prvkey_bytes = prvkey
+    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
     if len(prvkey_bytes) != 32:
         raise ValueError("the private key must be 32 bytes")
     if len(msg_bytes) != 32:

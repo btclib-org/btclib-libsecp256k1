@@ -7,6 +7,7 @@
 # or distributed except according to the terms contained in the LICENSE file.
 
 """Elliptic Curve Diffie-Hellman (ECDH)."""
+
 from __future__ import annotations
 
 from . import ffi, lib
@@ -20,10 +21,7 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
     libsecp256k1 default hash function; it is computed in constant time.
     """
 
-    if isinstance(prvkey, int):
-        prvkey_bytes = prvkey.to_bytes(32, "big")
-    else:
-        prvkey_bytes = prvkey
+    prvkey_bytes = prvkey.to_bytes(32, "big") if isinstance(prvkey, int) else prvkey
     if len(prvkey_bytes) != 32:
         raise ValueError("the private key must be 32 bytes")
 

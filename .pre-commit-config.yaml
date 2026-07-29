@@ -37,61 +37,21 @@ repos:
     hooks:
       - id: copyright-notice
         args: [--notice=COPYRIGHT]
-        files: python
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.21.2
+        # "python" as a filename pattern never matched anything: the
+        # notice was checked on no file at all
+        files: \.py$
+  # ruff replaces black, isort, flake8, autoflake, pyupgrade, bandit,
+  # pydocstringformatter and yesqa: one tool, one config section in
+  # pyproject.toml, and a fraction of the runtime. The rule selection
+  # (and what each family stands in for) is documented there
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
     hooks:
-      - id: pyupgrade
-        args: [--py39-plus]
-        # exclude: *fixtures
-  - repo: https://github.com/PyCQA/autoflake
-    rev: v2.3.3
-    hooks:
-      - id: autoflake
-        args:
-          - --in-place
-          - --expand-star-imports
-          - --remove-all-unused-imports
-          - --ignore-init-module-imports
-          - --remove-duplicate-keys
-          - --remove-unused-variables
-          - --remove-rhs-for-unused-variables
-  - repo: https://github.com/PyCQA/isort
-    rev: 8.0.1
-    hooks:
-      - id: isort
-        name: isort (black profile, in place fixes)
-        args: ["--profile", "black", "--filter-files"]
-  - repo: https://github.com/DanielNoord/pydocstringformatter
-    rev: v1.0.0
-    hooks:
-      - id: pydocstringformatter
-  - repo: https://github.com/asottile/yesqa
-    rev: v1.5.0
-    hooks:
-      - id: yesqa
-  - repo: https://github.com/psf/black
-    rev: 26.5.1
-    hooks:
-      - id: black
-        name: black (in place fixes)
-        # args: [--diff, --check]
-        # It is recommended to specify the latest version of Python
-        # supported by your project here, or alternatively use
-        # pre-commit's default_language_version, see
-        # https://pre-commit.com/#top_level-default_language_version
-        # language_version: python3.11
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.3.0
-    hooks:
-      - id: flake8
-        additional_dependencies: [Flake8-pyproject]
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.9.4
-    hooks:
-      - id: bandit
-        # disable B101 (Test for use of assert)
-        args: ["-s", "B101"]
+      - id: ruff-check
+        name: ruff (lint, in place fixes)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format, in place fixes)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.3.0
     hooks:

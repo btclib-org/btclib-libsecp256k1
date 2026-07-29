@@ -15,6 +15,7 @@ seckey function names.
 
 Public keys are returned in compressed form, unless otherwise required.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

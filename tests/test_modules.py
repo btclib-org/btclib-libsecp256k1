@@ -27,9 +27,6 @@ import pytest
 from btclib_libsecp256k1 import dsa, ecdh, ellswift, ffi, lib, mult, recovery, ssa
 from btclib_libsecp256k1.context import ctx
 
-# [B101:assert_used] tests legitimately use assert
-# https://bandit.readthedocs.io/en/1.7.4/plugins/b101_assert_used.html
-
 msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
 
 
@@ -45,14 +42,12 @@ def test_ecdh() -> None:
 
     secret = ecdh.shared_secret(pubkey_b, prvkey_a)
     # both parties compute the same secret
-    assert secret == ecdh.shared_secret(pubkey_a, prvkey_b)  # nosec B101
+    assert secret == ecdh.shared_secret(pubkey_a, prvkey_b)
     # which is the SHA256 of the compressed shared point
     shared_point = mult.mult_(prvkey_a * prvkey_b)
-    assert secret == hashlib.sha256(compress(shared_point)).digest()  # nosec B101
+    assert secret == hashlib.sha256(compress(shared_point)).digest()
     # bytes and int private keys are interchangeable
-    assert secret == ecdh.shared_secret(  # nosec B101
-        pubkey_b, prvkey_a.to_bytes(32, "big")
-    )
+    assert secret == ecdh.shared_secret(pubkey_b, prvkey_a.to_bytes(32, "big"))
 
 
 def test_ecdh_invalid_inputs() -> None:
@@ -71,19 +66,19 @@ def test_recovery() -> None:
     pubkey_bytes = compress(mult.mult_(prvkey))
 
     signature_bytes, recid = recovery.sign(msg, prvkey)
-    assert len(signature_bytes) == 64  # nosec B101
-    assert recid in (0, 1)  # nosec B101
-    assert recovery.recover(msg, signature_bytes, recid) == pubkey_bytes  # nosec B101
+    assert len(signature_bytes) == 64
+    assert recid in (0, 1)
+    assert recovery.recover(msg, signature_bytes, recid) == pubkey_bytes
 
     # the recoverable signature is the deterministic ECDSA one
     der_bytes = recovery.to_der(signature_bytes, recid)
-    assert der_bytes == dsa.sign(msg, prvkey)  # nosec B101
-    assert dsa.verify(msg, pubkey_bytes, der_bytes)  # nosec B101
+    assert der_bytes == dsa.sign(msg, prvkey)
+    assert dsa.verify(msg, pubkey_bytes, der_bytes)
 
     # a custom nonce yields a different, still recoverable signature
     custom = recovery.sign(msg, prvkey, b"\x01" * 32)
-    assert custom[0] != signature_bytes  # nosec B101
-    assert recovery.recover(msg, *custom) == pubkey_bytes  # nosec B101
+    assert custom[0] != signature_bytes
+    assert recovery.recover(msg, *custom) == pubkey_bytes
 
 
 def test_recovery_invalid_inputs() -> None:
@@ -111,21 +106,21 @@ def test_ellswift() -> None:
     pubkey_a = compress(mult.mult_(prvkey_a))
 
     ell_a = ellswift.create(prvkey_a, b"\x01" * 32)
-    assert len(ell_a) == 64  # nosec B101
+    assert len(ell_a) == 64
     # the encoding decodes back to the public key
-    assert ellswift.decode(ell_a) == pubkey_a  # nosec B101
+    assert ellswift.decode(ell_a) == pubkey_a
     # as does the one of an already computed public key
-    assert ellswift.decode(ellswift.encode(pubkey_a)) == pubkey_a  # nosec B101
+    assert ellswift.decode(ellswift.encode(pubkey_a)) == pubkey_a
     # the encoding is randomized: a fresh one differs
-    assert ellswift.create(prvkey_a) != ell_a  # nosec B101
+    assert ellswift.create(prvkey_a) != ell_a
 
     # x-only ECDH: both parties agree on the BIP324 shared secret
     ell_b = ellswift.create(prvkey_b)
     secret = ellswift.xdh(ell_a, ell_b, prvkey_a, 0)
-    assert len(secret) == 32  # nosec B101
-    assert secret == ellswift.xdh(ell_a, ell_b, prvkey_b, 1)  # nosec B101
+    assert len(secret) == 32
+    assert secret == ellswift.xdh(ell_a, ell_b, prvkey_b, 1)
     # the secret is bound to the transcript: swapping the roles changes it
-    assert secret != ellswift.xdh(ell_b, ell_a, prvkey_b, 0)  # nosec B101
+    assert secret != ellswift.xdh(ell_b, ell_a, prvkey_b, 0)
 
 
 def test_ellswift_invalid_inputs() -> None:
@@ -159,16 +154,16 @@ def test_musig() -> None:
     keypairs, pubkeys = [], []
     for prvkey in prvkeys:
         keypair = ffi.new("secp256k1_keypair *")
-        assert lib.secp256k1_keypair_create(ctx, keypair, prvkey)  # nosec B101
+        assert lib.secp256k1_keypair_create(ctx, keypair, prvkey)
         pubkey = ffi.new("secp256k1_pubkey *")
-        assert lib.secp256k1_keypair_pub(ctx, pubkey, keypair)  # nosec B101
+        assert lib.secp256k1_keypair_pub(ctx, pubkey, keypair)
         keypairs.append(keypair)
         pubkeys.append(pubkey)
 
     # key aggregation
     keyagg_cache = ffi.new("secp256k1_musig_keyagg_cache *")
     agg_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    assert lib.secp256k1_musig_pubkey_agg(  # nosec B101
+    assert lib.secp256k1_musig_pubkey_agg(
         ctx, agg_pubkey, keyagg_cache, ffi.new("secp256k1_pubkey *[]", pubkeys), 2
     )
 
@@ -179,7 +174,7 @@ def test_musig() -> None:
         pubnonce = ffi.new("secp256k1_musig_pubnonce *")
         # the session randomness is zeroed by the call
         session_secrand = ffi.new("char[32]", bytes([i + 10]) * 32)
-        assert lib.secp256k1_musig_nonce_gen(  # nosec B101
+        assert lib.secp256k1_musig_nonce_gen(
             ctx,
             secnonce,
             pubnonce,
@@ -194,29 +189,27 @@ def test_musig() -> None:
         pubnonces.append(pubnonce)
 
     aggnonce = ffi.new("secp256k1_musig_aggnonce *")
-    assert lib.secp256k1_musig_nonce_agg(  # nosec B101
+    assert lib.secp256k1_musig_nonce_agg(
         ctx, aggnonce, ffi.new("secp256k1_musig_pubnonce *[]", pubnonces), 2
     )
 
     # partial signatures, second round
     session = ffi.new("secp256k1_musig_session *")
-    assert lib.secp256k1_musig_nonce_process(  # nosec B101
-        ctx, session, aggnonce, msg, keyagg_cache
-    )
+    assert lib.secp256k1_musig_nonce_process(ctx, session, aggnonce, msg, keyagg_cache)
 
     partial_sigs = []
     for i in range(2):
         partial_sig = ffi.new("secp256k1_musig_partial_sig *")
-        assert lib.secp256k1_musig_partial_sign(  # nosec B101
+        assert lib.secp256k1_musig_partial_sign(
             ctx, partial_sig, secnonces[i], keypairs[i], keyagg_cache, session
         )
-        assert lib.secp256k1_musig_partial_sig_verify(  # nosec B101
+        assert lib.secp256k1_musig_partial_sig_verify(
             ctx, partial_sig, pubnonces[i], pubkeys[i], keyagg_cache, session
         )
         partial_sigs.append(partial_sig)
 
     sig = ffi.new("char[64]")
-    assert lib.secp256k1_musig_partial_sig_agg(  # nosec B101
+    assert lib.secp256k1_musig_partial_sig_agg(
         ctx,
         sig,
         session,
@@ -226,8 +219,6 @@ def test_musig() -> None:
 
     # the aggregate signature is a plain BIP340 one, for the aggregate key
     xonly_bytes = ffi.new("char[32]")
-    assert lib.secp256k1_xonly_pubkey_serialize(  # nosec B101
-        ctx, xonly_bytes, agg_pubkey
-    )
+    assert lib.secp256k1_xonly_pubkey_serialize(ctx, xonly_bytes, agg_pubkey)
     pubkey_bytes = ffi.unpack(xonly_bytes, 32)
-    assert ssa.verify(msg, pubkey_bytes, ffi.unpack(sig, 64))  # nosec B101
+    assert ssa.verify(msg, pubkey_bytes, ffi.unpack(sig, 64))

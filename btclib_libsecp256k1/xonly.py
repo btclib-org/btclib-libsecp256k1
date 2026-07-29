@@ -6,16 +6,16 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
-"""
-X-only public keys and their tweaking, according.
+"""X-only public keys and their tweaking.
 
-to BIP340-Schnorr and to the BIP341 taproot key path:
+According to BIP340-Schnorr and to the BIP341 taproot key path:
 https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
 
 An x-only public key is the 32-byte x coordinate of the point with even
 y; the parity returned along a tweaked key is the one of the tweaked
 point, to be committed to by the taproot output.
 """
+
 from __future__ import annotations
 
 from . import ffi, lib

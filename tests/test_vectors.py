@@ -37,37 +37,34 @@ import pytest
 
 from btclib_libsecp256k1 import dsa, mult, ssa
 
-# [B101:assert_used] tests legitimately use assert
-# https://bandit.readthedocs.io/en/1.7.4/plugins/b101_assert_used.html
-
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 
 def der_decode(sig: bytes) -> tuple[int, int]:
     """Parse a canonical DER ECDSA signature, returning (r, s)."""
-    assert sig[0] == 0x30, "not a DER sequence"  # nosec B101
-    assert sig[1] == len(sig) - 2, "wrong DER length byte"  # nosec B101
+    assert sig[0] == 0x30, "not a DER sequence"
+    assert sig[1] == len(sig) - 2, "wrong DER length byte"
     ints = []
     cursor = 2
     for _ in range(2):
-        assert sig[cursor] == 0x02, "not a DER integer"  # nosec B101
+        assert sig[cursor] == 0x02, "not a DER integer"
         length = sig[cursor + 1]
         payload = sig[cursor + 2 : cursor + 2 + length]
-        assert len(payload) == length, "truncated DER integer"  # nosec B101
-        assert payload[0] < 0x80, "negative DER integer"  # nosec B101
+        assert len(payload) == length, "truncated DER integer"
+        assert payload[0] < 0x80, "negative DER integer"
         if payload[0] == 0x00:
-            assert length > 1, "zero-length DER integer"  # nosec B101
-            assert payload[1] >= 0x80, "non-minimal DER integer"  # nosec B101
+            assert length > 1, "zero-length DER integer"
+            assert payload[1] >= 0x80, "non-minimal DER integer"
         ints.append(int.from_bytes(payload, "big"))
         cursor += 2 + length
-    assert cursor == len(sig), "trailing garbage in DER"  # nosec B101
+    assert cursor == len(sig), "trailing garbage in DER"
     return ints[0], ints[1]
 
 
 def bip340_vectors() -> list[dict[str, str]]:
     path = pathlib.Path(__file__).parent / "bip340_test_vectors.csv"
-    with open(path, newline="") as csv_file:
+    with path.open(newline="") as csv_file:
         return list(csv.DictReader(csv_file))
 
 
@@ -84,14 +81,14 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
     if vector["secret key"] and len(msg) == 32:
         seckey = bytes.fromhex(vector["secret key"])
         aux_rand = bytes.fromhex(vector["aux_rand"])
-        assert ssa.sign(msg, seckey, aux_rand) == sig  # nosec B101
+        assert ssa.sign(msg, seckey, aux_rand) == sig
 
     try:
         result = bool(ssa.verify(msg, pubkey, sig))
     except ValueError:
         # structurally invalid inputs raise instead of returning false
         result = False
-    assert result == expected, vector["comment"]  # nosec B101
+    assert result == expected, vector["comment"]
 
 
 # (secret key, message, k, r, s)
@@ -164,14 +161,14 @@ def test_rfc6979_ecdsa_vector(
     s = int(s_hex, 16)
 
     # vector self-consistency: r is the x coordinate of k*G
-    assert mult.mult(bytes.fromhex(k_hex))[0] == r  # nosec B101
+    assert mult.mult(bytes.fromhex(k_hex))[0] == r
 
     # libsecp256k1 always produces low-s signatures
     der = dsa.sign(msg32, bytes.fromhex(seckey_hex))
-    assert der_decode(der) == (r, min(s, N - s))  # nosec B101
+    assert der_decode(der) == (r, min(s, N - s))
 
     pubkey = mult.mult_(bytes.fromhex(seckey_hex))
-    assert dsa.verify(msg32, pubkey, der)  # nosec B101
+    assert dsa.verify(msg32, pubkey, der)
 
 
 # (secret key, digest, 64-byte compact signature r||s)
@@ -199,10 +196,10 @@ def test_trezor_ecdsa_vector(seckey_hex: str, digest_hex: str, sig_hex: str) -> 
     s = int.from_bytes(sig[32:], "big")
 
     der = dsa.sign(digest, bytes.fromhex(seckey_hex))
-    assert der_decode(der) == (r, min(s, N - s))  # nosec B101
+    assert der_decode(der) == (r, min(s, N - s))
 
     pubkey = mult.mult_(bytes.fromhex(seckey_hex))
-    assert dsa.verify(digest, pubkey, der)  # nosec B101
+    assert dsa.verify(digest, pubkey, der)
 
 
 # encodings accepted by secp256k1_ecdsa_signature_parse_der: they parse
@@ -248,7 +245,7 @@ REJECTED_DER = [
 
 def json_vectors(name: str) -> list[dict[str, str]]:
     path = pathlib.Path(__file__).parent / name
-    with open(path, encoding="ascii") as json_file:
+    with path.open(encoding="ascii") as json_file:
         return json.load(json_file)["vectors"]
 
 
@@ -259,9 +256,9 @@ def test_secp256k1py_ecdsa_vectors() -> None:
         # the vendored signature carries a trailing SIGHASH_ALL byte
         der = bytes.fromhex(vector["sig"])[:-1]
 
-        assert dsa.sign(msg32, prvkey) == der  # nosec B101
+        assert dsa.sign(msg32, prvkey) == der
         pubkey = mult.mult_(prvkey)
-        assert dsa.verify(msg32, pubkey, der)  # nosec B101
+        assert dsa.verify(msg32, pubkey, der)
 
 
 def test_secp256k1py_custom_nonce_vectors() -> None:
@@ -275,10 +272,10 @@ def test_secp256k1py_custom_nonce_vectors() -> None:
         der = bytes.fromhex(vector["sig"])
 
         r, s = der_decode(der)
-        assert s <= N // 2, "not a low-s signature"  # nosec B101
-        assert r == mult.mult(k)[0] % N  # nosec B101
+        assert s <= N // 2, "not a low-s signature"
+        assert r == mult.mult(k)[0] % N
         pubkey = mult.mult_(prvkey)
-        assert dsa.verify(msg32, pubkey, der)  # nosec B101
+        assert dsa.verify(msg32, pubkey, der)
 
 
 def test_der_parsing() -> None:
@@ -286,7 +283,7 @@ def test_der_parsing() -> None:
     pubkey = mult.mult_(1)
     for der_hex in PARSED_DER:
         # parses fine, does not verify
-        assert not dsa.verify(msg32, pubkey, bytes.fromhex(der_hex))  # nosec B101
+        assert not dsa.verify(msg32, pubkey, bytes.fromhex(der_hex))
     for der_hex in REJECTED_DER:
         with pytest.raises(ValueError, match="DER"):
             dsa.verify(msg32, pubkey, bytes.fromhex(der_hex))
