@@ -6,6 +6,8 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
+from __future__ import annotations
+
 import os
 import pathlib
 import platform
@@ -14,6 +16,7 @@ import shutil
 import subprocess
 from subprocess import PIPE, Popen
 from sysconfig import get_config_var, get_path
+from typing import Any
 
 import cffi
 
@@ -50,12 +53,19 @@ libsecp256k1_la_SOURCES += src/btclib_default_callbacks.c
 # executables (git, make, bash, cc) are looked up on PATH, as a build
 # from source has to do
 class FFIExtension:
-    def __init__(self):
+    # the contract a subclass has to fulfil before calling __init__
+    name: str
+    static: bool
+    clean_patterns: list[str]
+    library_dirs: list[pathlib.Path]
+    libraries: list[str]
+
+    def __init__(self) -> None:
         self.clean()
         self.platform = os.environ.get("CFFI_PLATFORM", platform.system())
 
     @property
-    def shared_library_extension(self):
+    def shared_library_extension(self) -> str:
         if self.platform == "Windows":
             return ".dll"
         if self.platform == "Darwin":
@@ -64,33 +74,35 @@ class FFIExtension:
             return ".so"
         raise RuntimeError
 
-    def clean(self):
+    def clean(self) -> None:
         raise NotImplementedError
 
-    def build_c(self):
+    def build_c(self) -> None:
         raise NotImplementedError
 
-    def generate_def(self):
+    def generate_def(self) -> tuple[str, str]:
         raise NotImplementedError
 
-    def create_cffi(self, build_dir):
+    def create_cffi(self, build_dir: pathlib.Path) -> tuple[Any, list[pathlib.Path]]:
         build_dir = pathlib.Path(build_dir)
 
         self.build_c()
         ffi = cffi.FFI()
-        ffi_header, definitions = self.generate_def()
-        if not self.static:
-            ffi_header = None
+        header, definitions = self.generate_def()
         ffi.cdef(definitions)
 
         if self.static and platform.system() == "Windows":
-            return ffi, self.compile_static_msvc(ffi, ffi_header, build_dir)
-        ffi.set_source(self.name, ffi_header)
+            return ffi, self.compile_static_msvc(ffi, header, build_dir)
+        # a dynamic (cffi ABI mode) extension is generated from the cdef
+        # alone: there is no C source to compile
+        ffi.set_source(self.name, header if self.static else None)
         if self.static:
             return ffi, self.compile_static_unix(ffi, build_dir)
         return ffi, self.emit_dynamic(ffi, build_dir)
 
-    def compile_static_msvc(self, ffi, ffi_header, build_dir):
+    def compile_static_msvc(
+        self, ffi: Any, ffi_header: str, build_dir: pathlib.Path
+    ) -> list[pathlib.Path]:
         # native Windows: compile the extension with the standard
         # setuptools/MSVC toolchain instead of the manual Unix one;
         # the callback stubs are compiled into the extension itself,
@@ -106,7 +118,9 @@ class FFIExtension:
         )
         return [pathlib.Path(ffi.compile(tmpdir=str(build_dir)))]
 
-    def compile_static_unix(self, ffi, build_dir):
+    def compile_static_unix(
+        self, ffi: Any, build_dir: pathlib.Path
+    ) -> list[pathlib.Path]:
         c_filename = f"{self.name}.c"
         o_filename = f"{self.name}.o"
         so_filename = self.name + get_config_var("EXT_SUFFIX")
@@ -138,7 +152,7 @@ class FFIExtension:
         subprocess.run(link_command, cwd=build_dir, check=True)
         return [so_path]
 
-    def emit_dynamic(self, ffi, build_dir):
+    def emit_dynamic(self, ffi: Any, build_dir: pathlib.Path) -> list[pathlib.Path]:
         py_filename = f"{self.name}.py"
         py_path = build_dir / py_filename
 
@@ -166,7 +180,7 @@ class FFIExtension:
 
 
 class Secp256k1CFFIExtension(FFIExtension):
-    def __init__(self):
+    def __init__(self) -> None:
         self.name = "_btclib_libsecp256k1"
         self.static = static and not cross_compile
         self.clean_patterns = [
@@ -294,7 +308,7 @@ class Secp256k1CFFIExtension(FFIExtension):
         if (self.wd / ".git").exists():
             subprocess.run(["git", "reset", "--hard"], cwd=self.wd, check=True)
 
-    def generate_def(self):
+    def generate_def(self) -> tuple[str, str]:
         ffi_header = ""
         for h in self.headers:
             location = self.include_dir / h

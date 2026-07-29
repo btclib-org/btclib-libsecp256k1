@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from . import ffi, lib
+from . import CData, ffi, lib
 from .context import ctx
 
 
@@ -96,7 +96,7 @@ def to_der(signature_bytes: bytes) -> bytes:
     return _serialize_der(signature)
 
 
-def _parse_der(signature_bytes: bytes):
+def _parse_der(signature_bytes: bytes) -> CData:
     """Parse a DER signature into its internal representation."""
 
     signature = ffi.new("secp256k1_ecdsa_signature *")
@@ -107,7 +107,7 @@ def _parse_der(signature_bytes: bytes):
     return signature
 
 
-def _serialize_der(sig) -> bytes:
+def _serialize_der(sig: CData) -> bytes:
     """Serialize an internal signature in DER form."""
 
     sig_bytes = ffi.new("char[73]")

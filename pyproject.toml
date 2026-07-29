@@ -113,12 +113,27 @@ dependencies = [
 ]
 
 [tool.mypy]
-strict = false
+# the package ships py.typed: its annotations are what btclib downstream
+# type-checks against, so a wrong one propagates
+strict = true
 show_column_numbers = true
 show_error_codes = true
+# stubs/_btclib_libsecp256k1.pyi describes the cffi boundary; without it
+# ffi and lib are Any and every wrapper checks out vacuously
+mypy_path = "stubs"
 exclude = [
-    "build",
+    "^build/",
+    "^secp256k1/",
 ]
+
+[[tool.mypy.overrides]]
+# comparands of the benchmark script, not dependencies of the project:
+# btclib in particular must not become one, as it is btclib that depends
+# on these bindings. secp256k1 also has to be skipped explicitly, or the
+# vendored C tree is picked up as a namespace package of the same name
+module = ["btclib.*", "coincurve", "secp256k1"]
+follow_imports = "skip"
+ignore_missing_imports = true
 
 [tool.ruff]
 # the vendored upstream sources are not ours to lint or reformat

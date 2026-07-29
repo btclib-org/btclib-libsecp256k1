@@ -10,13 +10,13 @@ import nox
 
 
 @nox.session
-def pre_commit(session):
+def pre_commit(session: nox.Session) -> None:
     session.install("pre-commit")
     session.run("pre-commit", "run", "--all-files")
 
 
 @nox.session
-def tests(session):
+def tests(session: nox.Session) -> None:
     session.install(".")
     session.install("pytest", "pytest-cov")
     # the source, the branch mode and the fail_under ratchet all come

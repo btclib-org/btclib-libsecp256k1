@@ -246,7 +246,8 @@ REJECTED_DER = [
 def json_vectors(name: str) -> list[dict[str, str]]:
     path = pathlib.Path(__file__).parent / name
     with path.open(encoding="ascii") as json_file:
-        return json.load(json_file)["vectors"]
+        vectors: list[dict[str, str]] = json.load(json_file)["vectors"]
+    return vectors
 
 
 def test_secp256k1py_ecdsa_vectors() -> None:

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from . import ffi, lib
+from . import CData, ffi, lib
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
@@ -118,7 +118,7 @@ def pubkey_combine(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> b
     return serialize(combined, compressed)
 
 
-def parse(pubkey_bytes: bytes):
+def parse(pubkey_bytes: bytes) -> CData:
     """Parse a public key into its internal libsecp256k1 representation."""
 
     pubkey = ffi.new("secp256k1_pubkey *")
@@ -127,7 +127,7 @@ def parse(pubkey_bytes: bytes):
     return pubkey
 
 
-def serialize(pubkey, compressed: bool = True) -> bytes:
+def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     """Serialize an internal public key, in compressed form by default."""
 
     size = 33 if compressed else 65

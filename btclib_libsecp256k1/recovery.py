@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from . import ffi, lib
+from . import CData, ffi, lib
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -105,7 +105,7 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
     return ffi.unpack(sig_bytes, length[0])
 
 
-def _parse(signature_bytes: bytes, recid: int):
+def _parse(signature_bytes: bytes, recid: int) -> CData:
     """Parse a compact signature and its recovery id."""
 
     signature = ffi.new("secp256k1_ecdsa_recoverable_signature *")

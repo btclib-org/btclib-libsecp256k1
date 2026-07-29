@@ -10,16 +10,17 @@ import os
 import platform
 import shutil
 from pathlib import Path
+from typing import Any
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 
-class CustomBuildHook(BuildHookInterface):
-    def __init__(self, *args, **kwargs):
+class CustomBuildHook(BuildHookInterface[Any]):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.platform = os.environ.get("CFFI_PLATFORM", platform.system())
 
-    def get_ext_object(self, script: Path, ext_name: str):
+    def get_ext_object(self, script: Path, ext_name: str) -> Any:
         # the cffi build description is a module of this very repository,
         # named in pyproject.toml: exec() runs it without importing it,
         # so that the build backend needs no import path setup
@@ -31,7 +32,7 @@ class CustomBuildHook(BuildHookInterface):
             raise RuntimeError
         return build_vars[ext_name]
 
-    def initialize(self, version, build_data):
+    def initialize(self, version: str, build_data: dict[str, Any]) -> None:
         if self.target_name != "wheel":
             return
 

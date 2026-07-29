@@ -12,9 +12,9 @@ import time
 from typing import Callable
 
 import coincurve
-from btclib.ecc import dsa, ssa  # type: ignore
-from btclib.hashes import reduce_to_hlen  # type: ignore
-from btclib.to_pub_key import pub_keyinfo_from_prv_key  # type: ignore
+from btclib.ecc import dsa, ssa
+from btclib.hashes import reduce_to_hlen
+from btclib.to_pub_key import pub_keyinfo_from_prv_key
 
 import btclib_libsecp256k1.dsa
 import btclib_libsecp256k1.ssa
@@ -44,14 +44,14 @@ def ssa_coincurve() -> None:
     assert coincurve.PublicKeyXOnly(xonly_pubkey).verify(ssa_sig, msg)
 
 
-def dsa_secp256k1():
+def dsa_secp256k1() -> None:
     pubkey_secp = secp256k1.PublicKey(pubkey, raw=True)
     assert pubkey_secp.ecdsa_verify(
         msg, pubkey_secp.ecdsa_deserialize(dsa_sig), raw=True
     )
 
 
-def ssa_secp256k1():
+def ssa_secp256k1() -> None:
     pubkey_secp = secp256k1.PublicKey(pubkey, raw=True)
     assert pubkey_secp.schnorr_verify(msg, ssa_sig, None, raw=True)
 

@@ -18,7 +18,7 @@ point, to be committed to by the taproot output.
 
 from __future__ import annotations
 
-from . import ffi, lib
+from . import CData, ffi, lib
 from .context import ctx
 
 
@@ -97,7 +97,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     return ffi.unpack(prvkey_buffer, 32)
 
 
-def _parse(pubkey_bytes: bytes):
+def _parse(pubkey_bytes: bytes) -> CData:
     """Parse an x-only public key, or the even y point of a public key."""
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
@@ -116,7 +116,7 @@ def _parse(pubkey_bytes: bytes):
     return xonly_pubkey
 
 
-def _to_xonly(pubkey) -> tuple[bytes, int]:
+def _to_xonly(pubkey: CData) -> tuple[bytes, int]:
     """Serialize a public key as its x-only form and y parity."""
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
@@ -130,7 +130,7 @@ def _to_xonly(pubkey) -> tuple[bytes, int]:
     return ffi.unpack(output, 32), parity[0]
 
 
-def _keypair(prvkey: bytes | int):
+def _keypair(prvkey: bytes | int) -> CData:
     """Create a keypair from a private key."""
 
     keypair = ffi.new("secp256k1_keypair *")

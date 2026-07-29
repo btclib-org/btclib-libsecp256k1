@@ -127,6 +127,8 @@ Gemfile.lock
 ~*.docx
 
 **/_btclib_libsecp256k1.*
+# ... but the hand-written type stub of the extension is source
+!stubs/_btclib_libsecp256k1.pyi
 *.o
 *.dll
 *.so

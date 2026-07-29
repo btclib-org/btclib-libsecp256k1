@@ -56,3 +56,17 @@ repos:
     rev: v2.3.0
     hooks:
       - id: mypy
+        # the mirror injects --ignore-missing-imports by default, which
+        # silently turns an unresolved (or misspelled) import into Any:
+        # that is the opposite of strict. The modules that legitimately
+        # cannot be resolved are declared in the pyproject overrides
+        args: [--scripts-are-modules]
+        # in strict mode an unresolved import is an error, and mypy runs
+        # in its own isolated environment: what the checked files import
+        # has to be declared here
+        additional_dependencies:
+          - cffi
+          - types-cffi
+          - hatchling
+          - nox
+          - pytest
