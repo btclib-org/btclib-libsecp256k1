@@ -29,6 +29,9 @@ Major changes include:
   cibuildwheel 4.x (static wheels now cp39-cp314, PyPy opt-in)
 - Hardened CI: least-privilege GITHUB_TOKEN (contents: read), actions
   pinned to commit SHAs, superseded runs auto-cancelled
+- New release workflow: tag-triggered, publishing to PyPI with Trusted
+  Publishing (OIDC, no long-lived tokens) and PEP 740 attestations,
+  behind a manual approval gate
 - Updated all pre-commit hooks to their latest versions
 - Fixed sdist builds with multi-pass PEP 517 frontends such as uv:
   the callback stubs are now a separate compilation unit,

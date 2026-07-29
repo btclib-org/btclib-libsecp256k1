@@ -1,6 +1,11 @@
 name: main
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["**"] # tag pushes are covered by the release workflow
+  pull_request:
+  # allows the release workflow to reuse the whole build/test pipeline
+  workflow_call:
 
 # least privilege for the GITHUB_TOKEN: everything running in a job
 # (actions, pip dependencies, build scripts) can read the token, so it
@@ -34,7 +39,7 @@ jobs:
           ]
         # macos-13 (the last Intel macOS runner) has long queue times:
         # run it only on master and on PRs targeting master
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
+        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,7 +71,7 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-13, macos-latest]
         # macos-13 (the last Intel macOS runner) has long queue times:
         # run it only on master and on PRs targeting master
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
+        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -182,7 +187,7 @@ jobs:
           ]
         # macos-13 (the last Intel macOS runner) has long queue times:
         # run it only on master and on PRs targeting master
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master') && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
+        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
@@ -237,7 +242,7 @@ jobs:
         # PyPy wheels are not built on Windows; macos-13 (the last Intel
         # macOS runner) has long queue times and only runs on master and
         # on PRs targeting master
-        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master') && fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"}]') || fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"macos-13"}]') }}
+        exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"}]') || fromJSON('[{"os":"windows-latest","python-version":"pypy-3.11"},{"os":"macos-13"}]') }}
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}

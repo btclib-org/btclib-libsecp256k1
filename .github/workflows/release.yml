@@ -1,0 +1,52 @@
+name: release
+
+# publish to PyPI with Trusted Publishing (OIDC): no long-lived PyPI
+# token exists anywhere; PyPI trusts this very workflow (registered in
+# the PyPI project settings under "Publishing") and hands out a
+# short-lived upload token at run time.
+# See the "Release process" section of README.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # reuse the whole build/test pipeline; on tag refs the matrices
+  # include macos-13 (Intel), so every artifact of the release is
+  # built and tested here
+  build:
+    uses: ./.github/workflows/main.yml
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # deployment gate: configure required reviewers on the "pypi"
+    # environment to require a manual approval before publishing
+    environment:
+      name: pypi
+      url: https://pypi.org/p/btclib_libsecp256k1
+    permissions:
+      # required by Trusted Publishing to request the OIDC token
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*-wheels-*"
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show distributions
+        run: ls -l dist
+
+      # generates PEP 740 attestations by default
+      - uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1

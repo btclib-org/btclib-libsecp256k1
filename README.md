@@ -41,6 +41,33 @@ When a new release of the bindings is needed while still wrapping the
 same libsecp256k1 version, a fourth number is appended:
 0.7.1.1, 0.7.1.2, etc.
 
+## Release process
+
+Releases are published to PyPI by the `release` GitHub workflow using
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/):
+no long-lived PyPI token exists anywhere; PyPI trusts the workflow
+itself (via GitHub OIDC) and hands out a short-lived upload token at
+run time. Wheels and sdist are uploaded with PEP 740 attestations, so
+their provenance can be verified on PyPI.
+
+To cut a release:
+
+1. update the version in `pyproject.toml` and HISTORY.md,
+   merge `dev` into `master` with a green CI
+2. tag `master` with the version (`git tag v0.7.1 && git push --tags`):
+   the `release` workflow builds and tests every artifact
+   (including the Intel macOS ones, skipped on development branches)
+3. approve the `pypi` deployment when the workflow pauses for review:
+   the artifacts are then published to PyPI
+
+One-time setup (already done, documented for reference):
+
+- on PyPI, project Publishing settings: add a GitHub trusted publisher
+  for `btclib-org/btclib_libsecp256k1`, workflow `release.yml`,
+  environment `pypi`
+- on GitHub, repository Settings, Environments: create the `pypi`
+  environment and add the required reviewers who approve releases
+
 ## Build, test, develop, and contribute
 
 Disclaimer: building and testing on Windows is not currently supported;
