@@ -130,5 +130,6 @@ Gemfile.lock
 *.o
 *.dll
 *.so
+*.dylib
 
 .pytest_cache/
