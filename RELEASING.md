@@ -1,0 +1,105 @@
+# Release process
+
+Releases are published by the `release` workflow, which reuses the whole
+`main` build and test pipeline and then uploads what it produced. Where
+it uploads is not an input to choose at dispatch time: a `v*` tag
+publishes to PyPI, a manual run publishes to TestPyPI. Both go through
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so no
+long-lived token exists anywhere, and both upload PEP 740 attestations.
+
+The version published is the one in `pyproject.toml`; the tag only
+decides which index is reached. Nothing cross-checks the two, so a
+`v0.7.1` tag on a tree still reading `0.7.1rc1` publishes `0.7.1rc1`,
+and burns that version.
+
+## Cutting a release
+
+1. bump the version in `pyproject.toml` and run `uv lock`, which carries
+   it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
+   with a fourth number for a release of the bindings alone: see the
+   Versioning section of [README.md](README.md)
+2. add the release notes to `HISTORY.md`; if the vendored libsecp256k1
+   moved, update the version named at the top of `README.md` too
+3. merge `dev` into `master` with a green CI. Development happens on
+   `dev`, and `master` only receives merges from it; the merge is also
+   where the Intel macOS jobs first run, being skipped elsewhere
+4. tag the merge commit, and push that tag alone:
+
+       git tag v0.7.1
+       git push origin v0.7.1
+
+   `git push --tags` would push whatever other local tags happen to
+   exist. The workflow then builds and tests every artifact the release
+   ships, Intel macOS included, and stops at the `pypi` environment
+5. approve the `pypi` deployment when the run pauses for review. Up to
+   here nothing is public and the tag can still be deleted; the upload
+   that follows is the point of no return
+6. check that what was published installs, and that the PyPI page shows
+   the attestations:
+
+       python -m pip install --upgrade btclib_libsecp256k1
+
+7. publish the GitHub release for the tag, with the `HISTORY.md` entry
+   as its notes: the workflow does not create one, and `pyproject.toml`
+   points its download URL at that page
+
+## Rehearsing on TestPyPI
+
+A tag cannot be taken back: a version, once on PyPI, can only be yanked,
+never replaced. So the same workflow can be run manually, and a manual
+run publishes to TestPyPI instead. It is the same file, the same jobs and
+the same gate as the release it rehearses, which a second workflow of its
+own could not be: a trusted publisher is registered for a workflow
+*filename*, so a `release-test.yml` would only ever prove itself.
+
+The rehearsal is what the release machinery itself is tested with, when
+the workflow, the packaging metadata or the build matrix changed. A
+release that only bumps versions and notes does not need one.
+
+1. set the version in `pyproject.toml` to a pre-release of the one being
+   prepared (`0.7.1rc1`) and run `uv lock`. A version is consumed by the
+   upload on TestPyPI as much as on PyPI, so a second attempt needs
+   `rc2`; a local version (`0.7.1+test1`) is refused by both
+2. run the `release` workflow from the Actions tab, on the branch
+   holding it: a manual run builds the full matrix, Intel macOS
+   included, and stops at the `testpypi` environment
+3. approve it, then check that what was published installs:
+
+   <!-- markdownlint-disable MD013 -->
+
+       pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre btclib_libsecp256k1
+
+   <!-- markdownlint-enable MD013 -->
+
+   the extra index being needed for `cffi`, which TestPyPI does not have
+4. revert the version commit
+
+What the rehearsal covers is the OIDC exchange, the approval gate, the
+artifacts the publish job collects, the PEP 740 attestations, and a real
+Warehouse accepting the metadata, which is more than `twine check
+--strict` can say. What it cannot cover is the trusted publisher on PyPI
+itself, a separate registration that can be wrong on its own.
+
+## When a release turns out to be broken
+
+Nothing can be reuploaded under the same version, on either index. A
+broken release is yanked, which hides it from resolution while leaving it
+installable by exact pin, and the fix ships as a new version: a fourth
+number when the wrapped libsecp256k1 is unchanged (`0.7.1.1`). Yanking
+is done from the PyPI project page; the tag and the GitHub release are
+worth keeping, as what a yanked file was built from.
+
+## One-time setup, per index
+
+The PyPI side is already done; this is here for the next index, or the
+next fork.
+
+- on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
+  trusted publisher for `btclib-org/btclib_libsecp256k1`, workflow
+  `release.yml`, environment `pypi` and `testpypi` respectively. The two
+  indexes are separate accounts and separate registrations; owning the
+  project on one says nothing about the other
+- on GitHub, repository Settings, Environments: create the `pypi` and
+  `testpypi` environments, each with the required reviewers who approve.
+  Leaving `testpypi` without reviewers would be the one part of a
+  release that the rehearsal stops exercising

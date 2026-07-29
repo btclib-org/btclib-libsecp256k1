@@ -4,7 +4,7 @@ name: release
 # token exists anywhere; PyPI trusts this very workflow (registered in
 # the PyPI project settings under "Publishing") and hands out a
 # short-lived upload token at run time.
-# See the "Release process" section of README.md.
+# See RELEASING.md.
 
 on:
   push:
