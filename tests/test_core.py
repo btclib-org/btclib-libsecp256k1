@@ -44,6 +44,33 @@ def test_sign_and_verify() -> None:
     # assert ssa_sig == ssa.sign(msg, prvkey.to_bytes(32, "big"))
 
 
+def test_ssa_sign_custom() -> None:
+    msg = b"\x02" * 32
+    aux_rand32 = b"\x11" * 32
+
+    # for a 32-byte message the two are the same signature: sign is
+    # sign_custom with the default nonce function and nothing else set
+    assert ssa.sign_custom(msg, prvkey, aux_rand32) == ssa.sign(msg, prvkey, aux_rand32)
+
+    # a message of any other length is what only sign_custom accepts,
+    # BIP340 not being restricted to 32 bytes
+    long_msg = b"Satoshi Nakamoto" * 7
+    long_sig = ssa.sign_custom(long_msg, prvkey, aux_rand32)
+    assert ssa.verify(long_msg, pubkey_bytes, long_sig)
+    # the same signature does not verify against a truncated message
+    assert not ssa.verify(long_msg[:-1], pubkey_bytes, long_sig)
+    with pytest.raises(ValueError, match="message hash"):
+        ssa.sign(long_msg, prvkey)
+
+    # the empty message is a length like any other
+    assert ssa.verify(b"", pubkey_bytes, ssa.sign_custom(b"", prvkey))
+
+    with pytest.raises(ValueError, match="private key"):
+        ssa.sign_custom(long_msg, 0)
+    with pytest.raises(ValueError, match="aux_rand32"):
+        ssa.sign_custom(long_msg, prvkey, b"\x01" * 33)
+
+
 def test_safe_abort() -> None:
     lib.secp256k1_ecdsa_sign(
         lib.secp256k1_context_create(769),

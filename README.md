@@ -34,7 +34,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 
 | libsecp256k1 module | bindings                                  |
 | ------------------- | ----------------------------------------- |
-| (core)              | `dsa`, `mult`, `keys`                     |
+| (core)              | `dsa`, `mult`, `keys`, `hashes`           |
 | `ecdh`              | `ecdh`                                    |
 | `recovery`          | `recovery`                                |
 | `extrakeys`         | `xonly`, used by `ssa`                    |
@@ -44,8 +44,15 @@ declarations are available through the `lib` and `ffi` cffi objects:
 
 `keys` provides the scalar and point algebra (tweaking, negation,
 combination, arbitrary point multiplication) underlying BIP32 key
-derivation; `xonly` provides the BIP341 taproot tweaking of x-only
-public keys and of their private keys.
+derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,
+`pubkey_sort`) that BIP67 and MuSig2 key aggregation call for; `xonly`
+provides the BIP341 taproot tweaking of x-only public keys and of their
+private keys; `hashes` provides the BIP340 tagged hash, the domain
+separation the taproot tags are built on.
+
+`ssa.sign` signs a 32-byte message hash, as bitcoin does; `ssa.sign_custom`
+signs a message of any length, which BIP340 allows and which a protocol
+of its own may define.
 
 MuSig2 has no dedicated binding module yet: its two-round protocol
 needs an interface that makes secret nonce reuse hard, which is still

@@ -21,6 +21,14 @@ Major changes include:
 - New `xonly` binding module: BIP341 taproot tweaking of x-only public
   keys (`tweak_add`, `tweak_add_check`) and of the corresponding
   private keys, so that a key path spending can be signed with `ssa`
+- New `hashes` binding module: the BIP340 tagged hash
+  (`tagged_sha256`), which the taproot tags of BIP341 (TapLeaf,
+  TapBranch, TapTweak) and the BIP340 challenge are built on
+- `keys` also provides the lexicographic ordering of public keys
+  (`pubkey_cmp`, `pubkey_sort`), which is the one of a BIP67 multisig
+  script and the one MuSig2 key aggregation applies by default
+- New `ssa.sign_custom`: BIP340 signing of a message of any length,
+  which `sign` cannot do and `verify` could already check
 - `dsa` now exposes the signature malleability primitives
   (`normalize`, `is_low_s`) and the conversions between the DER and the
   64-byte compact encodings (`to_compact`, `to_der`)

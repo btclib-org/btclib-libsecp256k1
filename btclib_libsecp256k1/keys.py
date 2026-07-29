@@ -119,6 +119,37 @@ def pubkey_combine(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> b
     return serialize(combined, compressed)
 
 
+def pubkey_cmp(pubkey1_bytes: bytes, pubkey2_bytes: bytes) -> int:
+    """Compare two public keys, in lexicographic order of compressed form.
+
+    Return a negative number, zero, or a positive number, according to
+    whether the first key sorts before, equal to, or after the second.
+    The order is the one of the compressed serialization, whichever form
+    the arguments are given in.
+    """
+
+    return int(
+        lib.secp256k1_ec_pubkey_cmp(ctx, parse(pubkey1_bytes), parse(pubkey2_bytes))
+    )
+
+
+def pubkey_sort(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> list[bytes]:
+    """Sort public keys, in lexicographic order of compressed form.
+
+    This is the ordering of a BIP67 multisig script, and the one MuSig2
+    key aggregation applies when the participants have not agreed on a
+    different one.
+    """
+
+    pubkeys = [parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
+    # the array holds borrowed pointers, and is what gets reordered: the
+    # list above is what keeps the keys it points to alive
+    array = ffi.new("secp256k1_pubkey *[]", pubkeys)
+    if not lib.secp256k1_ec_pubkey_sort(ctx, array, len(pubkeys)):
+        raise RuntimeError("public key sorting failed")
+    return [serialize(pubkey, compressed) for pubkey in array]
+
+
 def parse(pubkey_bytes: bytes) -> CData:
     """Parse a public key into its internal libsecp256k1 representation."""
 

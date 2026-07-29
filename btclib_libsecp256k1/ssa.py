@@ -16,32 +16,59 @@ from __future__ import annotations
 
 import secrets
 
-from . import ffi, lib
+from . import CData, ffi, lib
 from ._scalar import scalar
 from .context import ctx
+
+# SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
+# survive the preprocessing of the headers into cffi definitions
+EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
 
 
 def sign(
     msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
 ) -> bytes:
-    """Create a Schnorr signature."""
+    """Create a Schnorr signature of a 32-byte message hash."""
 
-    prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
-
-    keypair = ffi.new("secp256k1_keypair *")
-    if not lib.secp256k1_keypair_create(ctx, keypair, prvkey_bytes):
-        raise ValueError("invalid private key")
+    keypair = _keypair(prvkey)
 
     sig = ffi.new("char[64]")
+    if lib.secp256k1_schnorrsig_sign32(
+        ctx, sig, msg_bytes, keypair, _aux_rand32(aux_rand32)
+    ):
+        return ffi.unpack(sig, 64)
+    raise RuntimeError("schnorr signing failed")
 
-    if not aux_rand32:
-        aux_rand32 = secrets.token_bytes(32)
-    if len(aux_rand32) > 32:
-        raise ValueError("aux_rand32 must be at most 32 bytes")
-    aux_rand32 = b"\x00" * (32 - len(aux_rand32)) + aux_rand32
-    if lib.secp256k1_schnorrsig_sign32(ctx, sig, msg_bytes, keypair, aux_rand32):
+
+def sign_custom(
+    msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
+) -> bytes:
+    """Create a Schnorr signature of a message of any length.
+
+    BIP340 signs messages of arbitrary length, while bitcoin only ever
+    signs a 32-byte hash of what it commits to: unless the protocol at
+    hand says otherwise, hash the message with a tag of its own
+    (hashes.tagged_sha256) and sign that instead, so that a signature
+    cannot be read as one of a different protocol. For a 32-byte message
+    the signature is the one sign returns.
+    """
+
+    keypair = _keypair(prvkey)
+
+    ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
+    extraparams = ffi.new("secp256k1_schnorrsig_extraparams *")
+    extraparams.magic = EXTRAPARAMS_MAGIC
+    extraparams.noncefp = ffi.NULL
+    # ndata has to stay referenced until the call is over: cffi keeps
+    # alive what a variable points to, not what a struct field does
+    extraparams.ndata = ndata
+
+    sig = ffi.new("char[64]")
+    if lib.secp256k1_schnorrsig_sign_custom(
+        ctx, sig, msg_bytes, len(msg_bytes), keypair, extraparams
+    ):
         return ffi.unpack(sig, 64)
     raise RuntimeError("schnorr signing failed")
 
@@ -70,3 +97,26 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
             ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
         )
     )
+
+
+def _keypair(prvkey: bytes | int) -> CData:
+    """Create a keypair from a private key."""
+
+    keypair = ffi.new("secp256k1_keypair *")
+    if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
+        raise ValueError("invalid private key")
+    return keypair
+
+
+def _aux_rand32(aux_rand32: bytes | None) -> bytes:
+    """Normalize the auxiliary randomness of BIP340 signing to 32 bytes.
+
+    It is freshly generated when not provided, and left padded when
+    shorter, as it is the entropy of a nonce and not a serialization.
+    """
+
+    if not aux_rand32:
+        return secrets.token_bytes(32)
+    if len(aux_rand32) > 32:
+        raise ValueError("aux_rand32 must be at most 32 bytes")
+    return b"\x00" * (32 - len(aux_rand32)) + aux_rand32

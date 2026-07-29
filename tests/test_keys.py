@@ -92,6 +92,35 @@ def test_pubkey_serialization() -> None:
     assert keys.pubkey_negate(compressed, False)[0] == 0x04
 
 
+def test_pubkey_order() -> None:
+    uncompressed = [mult.mult_(k) for k in (5, 2, 9, 1)]
+    compressed = [compress(pubkey_bytes) for pubkey_bytes in uncompressed]
+    # what libsecp256k1 orders by is the compressed serialization, so
+    # python sorting the same bytes is an independent reference
+    expected = sorted(compressed)
+
+    assert keys.pubkey_sort(compressed) == expected
+    # whichever form the keys are given and returned in
+    assert keys.pubkey_sort(uncompressed) == expected
+    assert [
+        compress(pubkey_bytes)
+        for pubkey_bytes in keys.pubkey_sort(compressed, compressed=False)
+    ] == expected
+    # sorting no key at all is no key at all, not an error
+    assert keys.pubkey_sort([]) == []
+
+    for i in range(len(expected) - 1):
+        assert keys.pubkey_cmp(expected[i], expected[i + 1]) < 0
+        assert keys.pubkey_cmp(expected[i + 1], expected[i]) > 0
+    # one key equals itself, in either form
+    assert keys.pubkey_cmp(compressed[0], uncompressed[0]) == 0
+
+    with pytest.raises(ValueError, match="public key"):
+        keys.pubkey_sort([compressed[0], b"\x02" + b"\x00" * 32])
+    with pytest.raises(ValueError, match="public key"):
+        keys.pubkey_cmp(compressed[0], b"")
+
+
 def test_keys_invalid_inputs() -> None:
     pubkey_bytes = mult.mult_(7)
 
