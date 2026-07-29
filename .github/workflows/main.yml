@@ -214,33 +214,21 @@ jobs:
   # the PATH preprocesses the headers for cffi, and what the sdist has to
   # carry for it is not what a POSIX build reads
   test-sdist:
-    name: "Test sdist install on ${{ matrix.python-version }}, ${{ matrix.os }}"
+    name: "Test sdist install on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
-    # as in test-dynamic: a beta reports, it does not veto
-    continue-on-error: ${{ startsWith(matrix.python-version, '3.15') }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # 3.14 is the reference interpreter, the one .python-version
-        # pins for a developer. 3.15 is here because this is the only
-        # job that compiles the extension against a beta's headers:
-        # cibuildwheel will not build a cp315 wheel until 3.15 is ABI
-        # stable, so an API this package uses that 3.15 removed would
-        # otherwise surface on the day the release candidate lands,
-        # against a deadline, instead of now
-        python-version: ["3.14", "3.15"]
     needs: build-sdist
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-          # 3.15 has no general availability release to ask for
-          allow-prereleases: true
+          python-version: "3.14"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -325,9 +313,6 @@ jobs:
   test-dynamic:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
-    # 3.15 is a beta: it is in the matrix to see a break coming, not to
-    # hold up a merge over an interpreter nobody runs in production yet
-    continue-on-error: ${{ startsWith(matrix.python-version, '3.15') }}
     strategy:
       fail-fast: false
       matrix:
@@ -348,8 +333,6 @@ jobs:
             "3.13",
             "3.14",
             "3.14t",
-            "3.15",
-            "3.15t",
             "pypy-3.10",
             "pypy-3.11",
           ]
@@ -357,11 +340,7 @@ jobs:
         # the dynamic wheel is tagged py3-none, so it is what a
         # free-threaded interpreter installs, and unlike the static wheels
         # nothing else exercises it (cibuildwheel tests every wheel it
-        # builds, including cp314t; this job has no such counterpart).
-        # 3.15 is tested here and nowhere else for the same reason: no
-        # cp315 wheel exists to test, so py3-none is precisely what pip
-        # gives an interpreter that new, and what breaks under it breaks
-        # in the python wrapper rather than in the extension
+        # builds, including cp314t; this job has no such counterpart)
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
@@ -374,10 +353,6 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-          # 3.15 has no general availability release to ask for. This
-          # changes nothing for the rest of the matrix: a version range
-          # falls back to a prerelease only when no GA one exists
-          allow-prereleases: true
 
       - name: Upgrade Python packaging tools
         run: python -m pip install -U pip pytest
