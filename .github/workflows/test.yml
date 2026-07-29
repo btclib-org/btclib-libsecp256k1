@@ -74,6 +74,13 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # as for the test matrices, and here it costs more: with the
+      # default, one platform failing (or one flaky runner) cancels the
+      # five builds in flight beside it, so a rerun is the only way to
+      # learn whether they would have succeeded. On the release path the
+      # cancelled jobs are artifacts the publish job then has to do
+      # without
+      fail-fast: false
       matrix:
         # ubuntu-latest/macos-26-intel are x86_64,
         # ubuntu-24.04-arm/macos-latest are arm64; windows-latest and
@@ -126,6 +133,8 @@ jobs:
     name: Build dynamic wheel on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # see build-cibuildwheel
+      fail-fast: false
       matrix:
         # ubuntu-latest/macos-26-intel are x86_64,
         # ubuntu-24.04-arm/macos-latest are arm64
@@ -339,6 +348,27 @@ jobs:
 
       - name: Check wheel contents
         run: uvx check-wheel-contents dist/*.whl
+
+      # the wheel test jobs install cffi by hand and then the wheel with
+      # --no-index, which resolves nothing: what the metadata declares is
+      # only ever checked against a cffi that is already installed, so a
+      # requirement dropped from it would go unnoticed by all of them.
+      # Here one wheel is installed by path into an environment holding
+      # nothing, its dependencies resolved from PyPI, and imported from an
+      # empty directory, where nothing can resolve to the source tree. The
+      # dynamic wheel is the subject because it is the one that needs cffi
+      # at run time, a static extension carrying its own
+      - name: Install a wheel with its dependencies resolved from PyPI
+        run: |
+          wheel=$(ls "$PWD"/dist/*py3-none-manylinux*x86_64.whl | head -1)
+          if [ -z "$wheel" ]; then
+            echo "::error::dist holds no dynamic linux x86_64 wheel"
+            exit 1
+          fi
+          echo "installing $wheel"
+          cd "$RUNNER_TEMP"
+          uv run --isolated --no-project --python 3.14 --with "$wheel" \
+            python -c "import btclib_libsecp256k1 as m; print(m.__version__, m.lib)"
 
       # what twine cannot see: metadata that is valid but poor, a missing
       # classifier or url, a version PyPI would sort in a way nobody

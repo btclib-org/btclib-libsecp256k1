@@ -326,6 +326,10 @@ installs it as a managed one, and `uv sync` then prefers it to a system
 3.14, so `uv python install 3.14` is what makes the default environment
 reproducible again.
 
+What a change is expected to satisfy, which branch a pull request targets,
+and which of the three btclib repositories an issue belongs in, are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Release process
 
 Releases are published to PyPI by the `release` GitHub workflow using
