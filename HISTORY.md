@@ -117,6 +117,13 @@ Major changes include:
   covered, the `fail_under` ratchet is at 100%, and the unreachable
   `RuntimeError` paths are excluded from the measure instead of being
   counted as a gap that could never be closed
+- New invariant tests, over inputs derived from a SHA256 chain rather
+  than chosen: round trips, the scalar operations agreeing with the
+  point ones, and the two sides of ECDH and of BIP324 agreeing. They
+  reach what a fixed key cannot, such as a public key whose x
+  coordinate starts with a zero byte or a signature whose DER encoding
+  is 69 bytes, both pinned as well; no test dependency is added, the
+  suite running inside every wheel test environment too
 - Bindings now validate inputs and check libsecp256k1 return codes,
   raising `ValueError` with a clear message; malformed keys and
   signatures were previously verified against uninitialized memory
