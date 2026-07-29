@@ -13,7 +13,12 @@ Major changes include:
   libsecp256k1 version; binding-only releases append a fourth number
   (0.7.1.1, 0.7.1.2, etc.)
 - Added support for Python 3.13 and 3.14
-- Dropped support for Python 3.7 and 3.8 (minimum is now 3.9)
+- Dropped support for Python 3.7 and 3.8 (minimum is now 3.9):
+  both are end-of-life (3.7 since June 2023, 3.8 since October 2024)
+  and the current build/test infrastructure cannot support them anymore,
+  as cibuildwheel 4.x does not build cp37/cp38 wheels and GitHub-hosted
+  runners no longer provide those interpreters
+- Added macOS arm64 and Linux aarch64 wheels
 - Updated CI to current GitHub Actions runners and actions,
   cibuildwheel 4.x (static wheels now cp39-cp314, PyPy opt-in)
 - Updated all pre-commit hooks to their latest versions
