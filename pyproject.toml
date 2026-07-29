@@ -45,7 +45,17 @@ issues = "https://github.com/btclib-org/btclib_libsecp256k1/issues"
 pull_requests = "https://github.com/btclib-org/btclib_libsecp256k1/pulls"
 
 [build-system]
-requires = ["hatchling", "cffi>=1.0.0", 'setuptools; python_version>="3.12"']
+# cmake builds the vendored library: it is a build requirement, not a
+# system one, so that installing the sdist needs no package manager
+# step (a C toolchain is still required, and cannot be provisioned this
+# way); a system cmake >= 3.22 works just as well, with
+# --no-build-isolation
+requires = [
+    "hatchling",
+    "cffi>=1.0.0",
+    'setuptools; python_version>="3.12"',
+    "cmake>=3.22",
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel.hooks.custom]
@@ -54,7 +64,9 @@ cffi_modules = ["scripts/cffi_build.py:ffi_ext"]
 
 [tool.hatch.build.targets.sdist]
 # ship pristine vendored sources only: build artifacts from a local build
-# would be stale (or plain wrong) on the machine installing the sdist
+# would be stale (or plain wrong) on the machine installing the sdist.
+# The CMake build writes nothing inside the vendored tree, so most of
+# what follows can only be left over in a tree that predates it
 exclude = [
     "/build",
     "/dist",

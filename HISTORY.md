@@ -37,6 +37,21 @@ Major changes include:
   time (`recovery`, in particular, is disabled by default upstream):
   upstream defaults are not part of its API, and the autotools and
   CMake build paths were enabling different module sets
+- The vendored library is now built with CMake on every platform, in a
+  single build path: autotools (on POSIX) and mingw cross-compilation
+  (through `--host`) are gone, and with them the need for automake,
+  libtool, pkg-config and autoconf. CMake is declared as a build
+  requirement, so that installing the sdist provisions it instead of
+  demanding a package manager step: only a C toolchain is needed
+- The build no longer writes inside the vendored tree: the callback
+  stubs are added to the library target from the CMake binary
+  directory, which is outside the submodule, so `git reset --hard` and
+  `git clean -fxd` on the submodule (which used to discard any local
+  change to it) are gone, and a wheel built on Windows can no longer
+  ship the CMake build tree in an sdist
+- Fixed the shared object lookup of a dynamic build giving up on the
+  first candidate directory, which the CMake layout (POSIX libraries in
+  `lib`, Windows DLLs in `bin`) would have hit
 - New versioning scheme: release numbers now track the wrapped
   libsecp256k1 version; binding-only releases append a fourth number
   (0.7.1.1, 0.7.1.2, etc.)

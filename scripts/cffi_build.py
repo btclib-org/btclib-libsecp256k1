@@ -39,19 +39,31 @@ void secp256k1_default_error_callback_fn(const char* str, void* data) {
 }
 """
 
-# build the callback stubs into the library (static archive and shared
-# object alike); -no-undefined is required by libtool to build a DLL
-MAKEFILE_AM_EXTRA = """
-# btclib additions
-LDFLAGS = -no-undefined
-libsecp256k1_la_SOURCES += src/btclib_default_callbacks.c
+# add the callback stubs to the vendored library target, so that the
+# static archive and the shared object alike define the symbols that
+# SECP256K1_USE_EXTERNAL_DEFAULT_CALLBACKS leaves undefined.
+#
+# CMake includes this file at the end of every project() call, when the
+# target does not exist yet: hence the deferred call, which runs at the
+# end of the top level directory, once add_subdirectory(src) has created
+# the target, and still before generation. cmake_language(DEFER) needs
+# CMake 3.19; the vendored library already requires 3.22.
+#
+# Nothing of this is written inside the vendored tree: the stubs and this
+# file live in the CMake binary directory, which is outside the submodule
+PROJECT_INCLUDE = """
+if(NOT DEFINED BTCLIB_CALLBACKS_ADDED)
+  set(BTCLIB_CALLBACKS_ADDED ON)
+  cmake_language(DEFER DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                 CALL target_sources secp256k1 PRIVATE "${BTCLIB_CALLBACKS}")
+endif()
 """
 
 
-# every subprocess call below drives the vendored autotools/make build
-# with argument lists assembled here: no shell, no untrusted input. The
-# executables (git, make, bash, cc) are looked up on PATH, as a build
-# from source has to do
+# every subprocess call below drives the vendored CMake build with
+# argument lists assembled here: no shell, no untrusted input. The
+# executables (cmake, cc) are looked up on PATH, as a build from source
+# has to do
 class FFIExtension:
     # the contract a subclass has to fulfil before calling __init__
     name: str
@@ -105,13 +117,11 @@ class FFIExtension:
     ) -> list[pathlib.Path]:
         # native Windows: compile the extension with the standard
         # setuptools/MSVC toolchain instead of the manual Unix one;
-        # the callback stubs are compiled into the extension itself,
-        # as the CMake-built static library leaves them undefined;
         # SECP256K1_STATIC selects the static-consumer declarations
         # in the header
         ffi.set_source(
             self.name,
-            ffi_header + CALLBACK_STUBS,
+            ffi_header,
             library_dirs=[str(d) for d in self.library_dirs],
             libraries=self.libraries,
             define_macros=[("SECP256K1_STATIC", "1")],
@@ -159,22 +169,27 @@ class FFIExtension:
         ffi.emit_python_code(str(py_path))
         artifacts = [py_path]
         for lib in self.libraries:
-            found = False
+            # every candidate directory is searched before giving up: the
+            # shared library is in lib on POSIX and in bin on Windows, and
+            # which of them exists is not known here
+            found: pathlib.Path | None = None
             for libs_dir in self.library_dirs:
                 pattern = f"lib{lib}*{self.shared_library_extension}"
-                for file in pathlib.Path(libs_dir).glob(pattern):
+                for file in libs_dir.glob(pattern):
                     if not file.is_file():
                         continue
+                    # skip the versioned names of the symlink chain, as in
+                    # libsecp256k1.2.dylib or libsecp256k1.so.2
                     if len(file.suffixes) > 1:
                         continue
-                    if found:
+                    if found is not None:
                         msg = f"multiple shared objects found for library: {lib}"
                         raise RuntimeError(msg)
-                    shutil.copy(file, build_dir / file.name)
-                    artifacts.append(build_dir / file.name)
-                    found = True
-                if not found:
-                    raise RuntimeError(f"no shared object found for library: {lib}")
+                    found = file
+            if found is None:
+                raise RuntimeError(f"no shared object found for library: {lib}")
+            shutil.copy(found, build_dir / found.name)
+            artifacts.append(build_dir / found.name)
 
         return artifacts
 
@@ -202,43 +217,48 @@ class Secp256k1CFFIExtension(FFIExtension):
             "secp256k1_musig.h",
             "secp256k1_ellswift.h",
         ]
-        self.library_dirs = [self.wd / ".libs"]
+        # the library is built out of tree, so that the vendored sources
+        # are never written to: build/ is where a wheel build puts its
+        # own artifacts too, and is removed wholesale before each of them
+        self.cmake_dir = self.wd.parent / "build" / "secp256k1"
+        self.library_dirs = [self.cmake_dir / "lib"]
         self.libraries = ["secp256k1"]
         super().__init__()
 
     def clean(self) -> None:
-        # in an sdist there is no .git: skip the git cleanup
-        if (self.wd / ".git").exists():
-            subprocess.run(["git", "reset", "--hard"], cwd=self.wd, check=True)
-            subprocess.run(["git", "clean", "-fxd"], cwd=self.wd, check=True)
-        clean_libs = any(libs_dir.exists() for libs_dir in self.library_dirs)
-        if clean_libs and (self.wd / "Makefile").exists():
-            subprocess.run(["make", "clean"], cwd=self.wd, check=True)
+        # a stale CMake cache remembers the previous configuration
+        # (static or shared, host or cross): reconfigure from scratch
+        if self.cmake_dir.exists():
+            shutil.rmtree(self.cmake_dir)
         for pattern in self.clean_patterns:
             for file in pathlib.Path().glob(pattern):
                 file.unlink()
 
     def build_c(self) -> None:
-        # cross-compilation (CFFI_PLATFORM=Windows on a POSIX host) keeps
-        # using autotools/mingw: dispatch on the actual system
-        if platform.system() == "Windows":
-            self.build_c_cmake()
-        else:
-            self.build_c_autotools()
+        """Build the vendored library with CMake, on every platform."""
+        self.cmake_dir.mkdir(parents=True, exist_ok=True)
+        callbacks = self.cmake_dir / "btclib_default_callbacks.c"
+        callbacks.write_text(CALLBACK_STUBS)
+        project_include = self.cmake_dir / "btclib_callbacks.cmake"
+        project_include.write_text(PROJECT_INCLUDE)
 
-    def build_c_cmake(self) -> None:
-        """Build the vendored library natively on Windows (CMake, MSVC)."""
-        build_dir = "build_cmake"
         configure = [
             "cmake",
             "-S",
-            ".",
+            str(self.wd),
             "-B",
-            build_dir,
-            "-DBUILD_SHARED_LIBS=OFF",
+            str(self.cmake_dir),
+            # single configuration generators need it at configure time
+            "-DCMAKE_BUILD_TYPE=Release",
+            f"-DBUILD_SHARED_LIBS={'OFF' if self.static else 'ON'}",
+            # the static archive is linked into a shared extension
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
             "-DSECP256K1_USE_EXTERNAL_DEFAULT_CALLBACKS=ON",
+            f"-DCMAKE_PROJECT_INCLUDE={project_include}",
+            f"-DBTCLIB_CALLBACKS={callbacks}",
             # all the modules wrapped by the bindings are requested
             # explicitly: upstream defaults are not part of its API
+            # (recovery, in particular, is disabled by default)
             "-DSECP256K1_ENABLE_MODULE_ECDH=ON",
             "-DSECP256K1_ENABLE_MODULE_RECOVERY=ON",
             "-DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON",
@@ -250,63 +270,31 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_BUILD_EXHAUSTIVE_TESTS=OFF",
             "-DSECP256K1_BUILD_CTIME_TESTS=OFF",
             "-DSECP256K1_BUILD_EXAMPLES=OFF",
-        ]
-        subprocess.run(configure, cwd=self.wd, check=True)
-        subprocess.run(
-            ["cmake", "--build", build_dir, "--config", "Release"],
-            cwd=self.wd,
-            check=True,
-        )
-        # multi-config generators (MSVC) append the configuration name
-        self.library_dirs = [
-            self.wd / build_dir / "lib" / "Release",
-            self.wd / build_dir / "lib",
-        ]
-        # the MSVC static archive is named libsecp256k1.lib
-        self.libraries = ["libsecp256k1"]
-
-    def build_c_autotools(self) -> None:
-        # the callback stubs live in their own compilation unit: overwriting
-        # is idempotent, so repeated build passes of a PEP 517 frontend on
-        # the same tree (where the git cleanup is unavailable, e.g. in an
-        # sdist) are safe
-        (self.wd / "src" / "btclib_default_callbacks.c").write_text(CALLBACK_STUBS)
-
-        # idempotent guard for the same reason as above
-        makefile_am = self.wd / "Makefile.am"
-        if MAKEFILE_AM_EXTRA not in makefile_am.read_text():
-            with makefile_am.open("a") as f:
-                f.write(MAKEFILE_AM_EXTRA)
-
-        subprocess.run(["bash", "autogen.sh"], cwd=self.wd, check=True)
-        command = [
-            "bash",
-            "configure",
-            "--disable-tests",
-            "--disable-exhaustive-tests",
-            "--disable-benchmark",
-            "--enable-experimental",
-            # all the modules wrapped by the bindings are requested
-            # explicitly: upstream defaults are not part of its API
-            # (recovery, in particular, is disabled by default)
-            "--enable-module-ecdh",
-            "--enable-module-recovery",
-            "--enable-module-extrakeys",
-            "--enable-module-schnorrsig",
-            "--enable-module-musig",
-            "--enable-module-ellswift",
-            "--enable-external-default-callbacks",
-            "--with-pic",
+            "-DSECP256K1_INSTALL=OFF",
         ]
         if cross_compile:
-            command.append("--host=x86_64-w64-mingw32")
-        elif static:
-            command.append("--disable-shared")
-        subprocess.run(command, cwd=self.wd, check=True)
+            # the toolchain file is the vendored one, upstream tested
+            toolchain = self.wd / "cmake" / "x86_64-w64-mingw32.toolchain.cmake"
+            configure.append(f"-DCMAKE_TOOLCHAIN_FILE={toolchain}")
+        subprocess.run(configure, check=True)
+        subprocess.run(
+            ["cmake", "--build", str(self.cmake_dir), "--config", "Release"],
+            check=True,
+        )
 
-        subprocess.run(["make"], cwd=self.wd, check=True)
-        if (self.wd / ".git").exists():
-            subprocess.run(["git", "reset", "--hard"], cwd=self.wd, check=True)
+        # multi configuration generators (MSVC) append the configuration
+        # name; the shared library goes to lib on POSIX, being a DLL, to
+        # bin on Windows
+        candidates = ("lib/Release", "lib", "bin/Release", "bin")
+        self.library_dirs = [
+            directory
+            for directory in (self.cmake_dir / c for c in candidates)
+            if directory.is_dir()
+        ]
+        # the MSVC static archive is named libsecp256k1.lib, while the
+        # MSVC DLL and every mingw and POSIX artifact keeps the plain name
+        if self.static and platform.system() == "Windows":
+            self.libraries = ["libsecp256k1"]
 
     def generate_def(self) -> tuple[str, str]:
         ffi_header = ""

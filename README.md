@@ -119,17 +119,22 @@ One-time setup (already done, documented for reference):
 
 ## Build, test, develop, and contribute
 
-On POSIX systems the vendored libsecp256k1 is built with autotools
-(automake, libtool, and a C toolchain must be available).
-On Windows it is built natively with CMake/MSVC and the cffi extension
-with the standard setuptools toolchain; a `gcc` in the PATH is still
-required, as it preprocesses the library headers for cffi. Both
-architectures are built this way: CMake and MSVC target the host, so
-`win_amd64` and `win_arm64` wheels need no configuration of their own.
-The `win_arm64` wheels start at CPython 3.11, the first version with a
-Windows arm64 build.
-The dynamic (ABI mode) Windows wheel is instead cross-compiled
-on Linux with mingw-w64, and is x86_64 only.
+The vendored libsecp256k1 is built with CMake on every platform, out of
+tree: the submodule is only ever read from. CMake is declared as a build
+requirement, so a PEP 517 frontend provisions it and only a C toolchain
+has to be there already; a system CMake 3.22 or newer serves just as
+well, with `--no-build-isolation`.
+
+The cffi extension itself is compiled with the interpreter's own
+toolchain, which on Windows is the standard setuptools/MSVC one; a `gcc`
+in the PATH is still required there, as it preprocesses the library
+headers for cffi. Both Windows architectures are built this way: CMake
+and MSVC target the host, so `win_amd64` and `win_arm64` wheels need no
+configuration of their own. The `win_arm64` wheels start at CPython
+3.11, the first version with a Windows arm64 build.
+The dynamic (ABI mode) Windows wheel is instead cross-compiled on Linux
+with mingw-w64, through the vendored CMake toolchain file, and is
+x86_64 only.
 
 The btclib_libsecp256k1 project includes
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
@@ -157,7 +162,7 @@ PEP 735 groups declared in `pyproject.toml`.
     uv sync
 
 This also builds and installs the extension in editable mode, so the
-autotools toolchain listed above must be available.
+C toolchain listed above must be available.
 
 To build:
 
