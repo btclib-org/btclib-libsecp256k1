@@ -1,9 +1,24 @@
 # Skip execution of one or more hooks using the SKIP environment variable:
-# $ SKIP=pylint git commit -m "foo"
-# $ SKIP=mypy,pylint pre-commit run --all-files
+# $ SKIP=mypy git commit -m "foo"
+# $ SKIP=mypy,ruff-check pre-commit run --all-files
 #
 # If want to disable all hooks while committing, use the --no-verify/-n option:
 # $ git commit -n -m "foo"
+
+# pre-commit.ci is enabled on this repository, and since the main
+# workflow grew a lint job the hooks are checked in two places. The gate
+# is the lint job, in the same run as the build and test matrices; what
+# pre-commit.ci alone provides, and what it is kept for, is the periodic
+# pull request bumping the revisions pinned below.
+ci:
+  # a bot committing to a branch is at odds with the rest of this setup,
+  # where the workflow token cannot write and every action is pinned to
+  # a commit SHA: a failing hook has to be fixed by its author
+  autofix_prs: false
+  # onto dev, as Dependabot does: master only receives merges from it
+  autoupdate_branch: dev
+  autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
+  autoupdate_schedule: weekly
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

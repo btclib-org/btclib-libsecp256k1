@@ -88,8 +88,12 @@ def test_recovery_invalid_inputs() -> None:
         recovery.sign(msg, 0)
     with pytest.raises(ValueError, match="32 bytes"):
         recovery.sign(msg[1:], 7)
+    with pytest.raises(ValueError, match="message hash"):
+        recovery.recover(msg[1:], signature_bytes, recid)
     with pytest.raises(ValueError, match="64 bytes"):
         recovery.recover(msg, signature_bytes[1:], recid)
+    with pytest.raises(ValueError, match="64 bytes"):
+        recovery.to_der(signature_bytes[1:], recid)
     with pytest.raises(ValueError, match="recovery id"):
         recovery.recover(msg, signature_bytes, 4)
     with pytest.raises(ValueError, match="recovery id"):
@@ -97,6 +101,9 @@ def test_recovery_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="compact signature"):
         # an out of range r (and s) cannot be parsed
         recovery.recover(msg, b"\xff" * 64, 0)
+    with pytest.raises(ValueError, match="recovery failed"):
+        # a zero r parses, but no point can be recovered from it
+        recovery.recover(msg, b"\x00" * 64, 0)
     with pytest.raises(ValueError, match="at most 32 bytes"):
         recovery.sign(msg, 7, b"\x01" * 33)
 

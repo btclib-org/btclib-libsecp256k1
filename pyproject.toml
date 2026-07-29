@@ -35,7 +35,9 @@ dependencies = ['cffi>=1.0.0']
 
 [project.urls]
 homepage = "https://btclib.org"
-documentation = "https://btclib.readthedocs.io/"
+# btclib.readthedocs.io documents btclib, not these bindings: the README
+# is their documentation
+documentation = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/README.md"
 repository = "https://github.com/btclib-org/btclib_libsecp256k1"
 download = "https://github.com/btclib-org/btclib_libsecp256k1/releases"
 changelog = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/HISTORY.md"
@@ -218,11 +220,12 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# a ratchet at the level the suite currently reaches, not a target: the
-# gap is made of error paths that need libsecp256k1 itself to fail, plus
-# the dlopen fallback of __init__.py, which is unreachable code in a
-# static build and the only covered branch in a dynamic one
-fail_under = 85
+# a ratchet at the level the suite currently reaches, not a target: what
+# is left uncovered is the RuntimeError paths, which need libsecp256k1
+# itself to fail and cannot be reached with valid inputs, plus the dlopen
+# fallback of __init__.py, which is unreachable code in a static build
+# and the only covered branch in a dynamic one
+fail_under = 89
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]

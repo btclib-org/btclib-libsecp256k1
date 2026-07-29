@@ -133,6 +133,16 @@ def test_xonly_tweak_add() -> None:
     lifted = keys.pubkey_tweak_add(b"\x02" + xonly_bytes, tweak)
     assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)
 
+    # a full public key is accepted as well, and it is its even y point
+    # that gets tweaked: the public key of 11 has odd y, so this only
+    # holds because the key is lifted before tweaking
+    assert mult.mult_(prvkey)[64] & 1
+    assert xonly.tweak_add(mult.mult_(prvkey), tweak) == (tweaked_bytes, parity)
+    assert xonly.tweak_add(compress(mult.mult_(prvkey)), tweak) == (
+        tweaked_bytes,
+        parity,
+    )
+
     # the commitment can be checked without recomputing it
     assert xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, tweak)
     # a different tweak, key, or parity does not check out
@@ -176,6 +186,14 @@ def test_xonly_invalid_inputs() -> None:
         xonly.tweak_add_check(xonly_bytes, 2, xonly_bytes, b"\x01" * 32)
     with pytest.raises(ValueError, match="private key"):
         xonly.prvkey_tweak_add(0, b"\x01" * 32)
+    with pytest.raises(ValueError, match="public key"):
+        xonly.from_pubkey(b"\x02" + b"\x00" * 32)
+    # tweaking by the negation of the private key of the even y point
+    # lands on the point at infinity, which has no x-only form
+    with pytest.raises(ValueError, match="tweak or resulting public key"):
+        xonly.tweak_add(xonly.from_pubkey(mult.mult_(1))[0], N - 1)
+    with pytest.raises(ValueError, match="tweak or resulting private key"):
+        xonly.prvkey_tweak_add(1, N - 1)
 
 
 def test_dsa_signature_forms() -> None:

@@ -29,6 +29,15 @@ def test_sign_and_verify() -> None:
     assert dsa.verify(msg, pubkey_bytes, dsa_sig)
     assert dsa_sig == dsa.sign(msg, prvkey.to_bytes(32, "big"))
 
+    # a nonce contribution changes the deterministic signature, which
+    # still verifies, and a shorter one is left padded to 32 bytes
+    custom_sig = dsa.sign(msg, prvkey, b"\x01" * 32)
+    assert custom_sig != dsa_sig
+    assert dsa.verify(msg, pubkey_bytes, custom_sig)
+    assert dsa.sign(msg, prvkey, b"\x01") == dsa.sign(
+        msg, prvkey, b"\x00" * 31 + b"\x01"
+    )
+
     ssa_sig = ssa.sign(msg, prvkey)
     assert ssa.verify(msg, pubkey_bytes, ssa_sig)
     assert ssa.verify(msg, pubkey_bytes[1:], ssa_sig)
@@ -61,6 +70,10 @@ def test_invalid_inputs() -> None:
         dsa.sign(msg, 0)
     with pytest.raises(ValueError, match="32 bytes"):
         dsa.sign(msg[1:], prvkey)
+    with pytest.raises(ValueError, match="at most 32 bytes"):
+        dsa.sign(msg, prvkey, b"\x01" * 33)
+    with pytest.raises(ValueError, match="message hash"):
+        dsa.verify(msg[1:], pubkey_bytes, dsa_sig)
     with pytest.raises(ValueError, match="DER"):
         dsa.verify(msg, pubkey_bytes, b"\x00" * 10)
     with pytest.raises(ValueError, match="public key"):
@@ -69,6 +82,10 @@ def test_invalid_inputs() -> None:
     ssa_sig = ssa.sign(msg, prvkey)
     with pytest.raises(ValueError, match="private key"):
         ssa.sign(msg, 0)
+    with pytest.raises(ValueError, match="message hash"):
+        ssa.sign(msg[1:], prvkey)
+    with pytest.raises(ValueError, match="aux_rand32"):
+        ssa.sign(msg, prvkey, b"\x01" * 33)
     with pytest.raises(ValueError, match="64 bytes"):
         ssa.verify(msg, pubkey_bytes, ssa_sig[1:])
     with pytest.raises(ValueError, match="public key"):
@@ -77,6 +94,14 @@ def test_invalid_inputs() -> None:
     # a tampered signature does not raise: it just does not verify
     tampered = bytes([ssa_sig[0] ^ 1]) + ssa_sig[1:]
     assert not ssa.verify(msg, pubkey_bytes, tampered)
+
+    # an int scalar out of the 32-byte range is an invalid argument like
+    # any other, on both sides of the range: it must not surface as the
+    # OverflowError of int.to_bytes
+    with pytest.raises(ValueError, match="fit in 32 bytes"):
+        dsa.sign(msg, 2**256)
+    with pytest.raises(ValueError, match="fit in 32 bytes"):
+        mult.mult(-1)
 
     with pytest.raises(ValueError, match="scalar"):
         mult.mult(0)
