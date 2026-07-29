@@ -340,10 +340,14 @@ jobs:
           python --version
           pip --version
 
+      # only the wheel built for this platform: downloading all of them
+      # meant every job in the matrix listing and fetching four
+      # artifacts to install one, and the artifact service answers a
+      # fan-out that wide with the occasional 403. The x86_64 Windows
+      # wheel is the mingw cross-compiled one, hence its artifact name
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: dynamic-wheels-*
-          merge-multiple: true
+          name: dynamic-wheels-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os }}
           path: dist
 
       - name: Install lib
@@ -403,10 +407,10 @@ jobs:
           python --version
           pip --version
 
+      # only the wheels built for this platform, as above
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: static-wheels-*
-          merge-multiple: true
+          name: static-wheels-${{ matrix.os }}
           path: dist
 
       - name: Install lib
