@@ -27,6 +27,52 @@ To install (and/or upgrade):
 
     python -m pip install --upgrade btclib_libsecp256k1
 
+## Design
+
+These bindings are a boundary, not a library: every function is one
+libsecp256k1 call, with its arguments validated first and its return
+code checked. The cryptography — the algorithms, the constant-time
+implementation, the side-channel hardening — is upstream's, and none of
+it is reimplemented, extended or second-guessed here. Wrappers of the
+same C library cannot honestly differ in what it computes, nor in how
+fast; where they can differ is the boundary, and that is where the work
+went:
+
+- what runs is known: the version number names the libsecp256k1 being
+  wrapped (see Versioning), pinned as a submodule and compiled from
+  source with every optional module requested explicitly, upstream
+  defaults not being part of its API. `__version__` describes the C
+  code underneath, not the wrapper around it
+- the surface is complete: every optional module is compiled in and
+  reachable, through a validated binding where a function suffices and
+  through the raw `lib` where only an object would do (see Wrapped
+  modules). What is absent — a MuSig2 session, the ECDH hash callback,
+  linking a system library — is absent by recorded decision, not by
+  omission
+- no input can take the process down: the bindings validate before
+  calling, so a malformed key or signature raises `ValueError` naming
+  the check that failed, before the C call could meet it; and the
+  vendored build replaces the abort()ing libsecp256k1 default
+  callbacks, so even an illegal argument handed to `lib` directly is
+  survived, `context.check()` reporting it verbatim
+- side channels are the context's problem, and it is handled: the one
+  shared context is randomized at import time, before any thread
+  exists; concurrent use is documented and tested, free-threaded
+  interpreter included (see Thread safety)
+- the boundary is typed: `py.typed` ships, mypy runs in strict mode,
+  and the cffi extension itself is described by a hand-written stub, so
+  what downstream type-checks against is the real signatures rather
+  than `Any`
+- validation is independent: the tests are published vectors (BIP340,
+  RFC6979, third-party fixtures) and invariants over derived inputs,
+  never the downstream library these bindings exist to serve; branch
+  coverage is ratcheted at 100%, with only the unreachable excluded
+  from the measure
+- provenance is checkable: every wheel and the sdist are built and
+  tested in public CI from the pinned source, and published by the
+  workflow itself through Trusted Publishing with PEP 740 attestations
+  — no long-lived token, and no maintainer laptop in the path
+
 ## Versioning
 
 btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
