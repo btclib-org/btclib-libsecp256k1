@@ -300,9 +300,16 @@ jobs:
             "3.12",
             "3.13",
             "3.14",
+            "3.14t",
             "pypy-3.10",
             "pypy-3.11",
           ]
+        # 3.14t, the free-threaded interpreter, matters here in particular:
+        # the dynamic wheel is tagged py3-none, so it is what a
+        # free-threaded interpreter installs, and unlike the static wheels
+        # nothing else exercises it (cibuildwheel tests every wheel it
+        # builds, including cp314t; this job has no such counterpart)
+        #
         # macos-13 (the last Intel macOS runner) has long queue times:
         # run it only on master and on PRs targeting master
         exclude: ${{ (github.ref == 'refs/heads/master' || github.base_ref == 'master' || startsWith(github.ref, 'refs/tags/')) && fromJSON('[]') || fromJSON('[{"os":"macos-13"}]') }}
@@ -357,7 +364,11 @@ jobs:
             windows-11-arm,
           ]
         python-version:
-          ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "pypy-3.11"]
+          ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
+        # cibuildwheel already runs the suite against every wheel it
+        # builds, cp314t included: what this job adds is that pip, given a
+        # directory holding all of them, selects the right one, which for
+        # the free-threaded interpreter nothing checked.
         # PyPy wheels are not built on Windows, on either architecture.
         # CPython has no Windows arm64 build before 3.11, so there is no
         # interpreter to test a win_arm64 wheel against and cibuildwheel
