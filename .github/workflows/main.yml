@@ -2,6 +2,11 @@ name: main
 
 on: [push, pull_request]
 
+# cancel superseded runs on the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CIBW_BEFORE_BUILD_MACOS: "bash {project}/.github/scripts/install-macos-deps.sh"
 
@@ -23,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Build wheels
         run: |
@@ -52,7 +57,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -92,7 +97,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Build source
         run: |
@@ -116,7 +121,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: sudo apt install -y mingw-w64
