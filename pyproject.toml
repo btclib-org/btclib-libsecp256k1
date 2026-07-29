@@ -71,7 +71,12 @@ exclude = [
     "/build",
     "/dist",
     "/wheelhouse",
-    "_btclib_libsecp256k1.*",
+    # anchored, or it would also match stubs/_btclib_libsecp256k1.pyi:
+    # hatchling appends these patterns after the .gitignore lines in one
+    # GitIgnoreSpec, so an unanchored pattern here overrides the
+    # !stubs/_btclib_libsecp256k1.pyi negation there and drops the stub
+    # the strict mypy gate needs from the sdist
+    "/_btclib_libsecp256k1.*",
     "**/.libs",
     "**/.deps",
     "**/*.o",
