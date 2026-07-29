@@ -105,6 +105,8 @@ dev = [
     { name = "build", version = "1.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "cibuildwheel", version = "2.23.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "cibuildwheel", version = "4.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "hatchling", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "hatchling", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "mypy", version = "1.19.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "mypy", version = "2.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pre-commit", version = "4.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -113,13 +115,19 @@ dev = [
     { name = "pytest", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "types-cffi", version = "1.17.0.20250915", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "types-cffi", version = "2.0.0.20260518", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
 lint = [
+    { name = "hatchling", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "hatchling", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "mypy", version = "1.19.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "mypy", version = "2.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pre-commit", version = "4.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pre-commit", version = "4.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "ruff" },
+    { name = "types-cffi", version = "1.17.0.20250915", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "types-cffi", version = "2.0.0.20260518", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
 test = [
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -138,16 +146,20 @@ build = [
 dev = [
     { name = "build" },
     { name = "cibuildwheel" },
+    { name = "hatchling" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "types-cffi" },
 ]
 lint = [
+    { name = "hatchling" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "ruff" },
+    { name = "types-cffi" },
 ]
 test = [
     { name = "pytest" },
@@ -786,6 +798,46 @@ resolution-markers = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/80/8232b582c4b318b817cf1274ba74976b07b34d35ef439b3eb948f98645a1/filelock-3.32.0.tar.gz", hash = "sha256:7be2ad23a14607ccc71808e68fe30848aeace7058ace17852f68e2a68e310402", size = 213757, upload-time = "2026-07-21T13:17:42.898Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/06/79/b4c714bef36bc4ec2beeae1e0c124f0223888cd8c6feb1cdc56038116920/filelock-3.32.0-py3-none-any.whl", hash = "sha256:d396bea984af47333ef05e50eae7eff88c84256de6112aea0ec48a233c064fe3", size = 97732, upload-time = "2026-07-21T13:17:41.55Z" },
+]
+
+[[package]]
+name = "hatchling"
+version = "1.27.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.10'",
+]
+dependencies = [
+    { name = "packaging" },
+    { name = "pathspec" },
+    { name = "pluggy" },
+    { name = "tomli" },
+    { name = "trove-classifiers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/8a/cc1debe3514da292094f1c3a700e4ca25442489731ef7c0814358816bb03/hatchling-1.27.0.tar.gz", hash = "sha256:971c296d9819abb3811112fc52c7a9751c8d381898f36533bb16f9791e941fd6", size = 54983, upload-time = "2024-12-15T17:08:11.894Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/e7/ae38d7a6dfba0533684e0b2136817d667588ae3ec984c1a4e5df5eb88482/hatchling-1.27.0-py3-none-any.whl", hash = "sha256:d3a2f3567c4f926ea39849cdf924c7e99e6686c9c8e288ae1037c8fa2a5d937b", size = 75794, upload-time = "2024-12-15T17:08:10.364Z" },
+]
+
+[[package]]
+name = "hatchling"
+version = "1.31.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.11' and python_full_version < '3.15'",
+    "python_full_version == '3.10.*'",
+]
+dependencies = [
+    { name = "packaging" },
+    { name = "pathspec" },
+    { name = "pluggy" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "trove-classifiers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/e2/dfa73fe78f773018dcaebc6d09b819bc10d328ff5a6b4a66efa1e3d71f52/hatchling-1.31.0.tar.gz", hash = "sha256:6b48ad4068a482ed7239b3a8215bc55b47aad3345d58dfc94e553c5d2d46211b", size = 57208, upload-time = "2026-07-08T01:48:32.237Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/e2/2c0af0a52d16be74a4f194564fcdc417521ed863e9b65e4bc9052dacba6f/hatchling-1.31.0-py3-none-any.whl", hash = "sha256:aac80bec8b6fe35e8480f1c335be8910fa210a0e6f735a139be205dadcacb544", size = 77747, upload-time = "2026-07-08T01:48:31.024Z" },
 ]
 
 [[package]]
@@ -1478,6 +1530,73 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/12/64/da524626d3b9cc40c168a13da8335fe1c51be12c0a63685cc6db7308daae/tomli-2.4.1-cp314-cp314t-win_amd64.whl", hash = "sha256:2c1c351919aca02858f740c6d33adea0c5deea37f9ecca1cc1ef9e884a619d26", size = 121196, upload-time = "2026-03-25T20:22:01.169Z" },
     { url = "https://files.pythonhosted.org/packages/5a/cd/e80b62269fc78fc36c9af5a6b89c835baa8af28ff5ad28c7028d60860320/tomli-2.4.1-cp314-cp314t-win_arm64.whl", hash = "sha256:eab21f45c7f66c13f2a9e0e1535309cee140182a9cdae1e041d02e47291e8396", size = 100393, upload-time = "2026-03-25T20:22:02.137Z" },
     { url = "https://files.pythonhosted.org/packages/7b/61/cceae43728b7de99d9b847560c262873a1f6c98202171fd5ed62640b494b/tomli-2.4.1-py3-none-any.whl", hash = "sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe", size = 14583, upload-time = "2026-03-25T20:22:03.012Z" },
+]
+
+[[package]]
+name = "trove-classifiers"
+version = "2026.6.1.19"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/e3/7ca82ee24c82d344584abd5b8637b3bd056f2900226e8d82fc22f1184b92/trove_classifiers-2026.6.1.19.tar.gz", hash = "sha256:c5132b4b61a829d11cfbd2d72e97f20a45ed6edb95e45c5efdeb5e00836b2745", size = 17059, upload-time = "2026-06-01T19:41:34.649Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/a4/81502f486f01db95bc8320646a8a12511f5e556cb63d5e224d91816605c4/trove_classifiers-2026.6.1.19-py3-none-any.whl", hash = "sha256:ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3", size = 14211, upload-time = "2026-06-01T19:41:33.434Z" },
+]
+
+[[package]]
+name = "types-cffi"
+version = "1.17.0.20250915"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.10'",
+]
+dependencies = [
+    { name = "types-setuptools", version = "81.0.0.20260209", source = { registry = "https://pypi.org/simple" } },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/98/ea454cea03e5f351323af6a482c65924f3c26c515efd9090dede58f2b4b6/types_cffi-1.17.0.20250915.tar.gz", hash = "sha256:4362e20368f78dabd5c56bca8004752cc890e07a71605d9e0d9e069dbaac8c06", size = 17229, upload-time = "2025-09-15T03:01:25.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/ec/092f2b74b49ec4855cdb53050deb9699f7105b8fda6fe034c0781b8687f3/types_cffi-1.17.0.20250915-py3-none-any.whl", hash = "sha256:cef4af1116c83359c11bb4269283c50f0688e9fc1d7f0eeb390f3661546da52c", size = 20112, upload-time = "2025-09-15T03:01:24.187Z" },
+]
+
+[[package]]
+name = "types-cffi"
+version = "2.0.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.11' and python_full_version < '3.15'",
+    "python_full_version == '3.10.*'",
+]
+dependencies = [
+    { name = "types-setuptools", version = "83.0.0.20260724", source = { registry = "https://pypi.org/simple" } },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bd/0b/b352742758a6054d1053783887bf8cfb739deda1102fda8722294bdc01f7/types_cffi-2.0.0.20260518.tar.gz", hash = "sha256:f9707e66c13454789a58f8843d1ded4a66f1e9c8b10bd24d5eb5e0f25c0c5472", size = 17790, upload-time = "2026-05-18T06:06:50.672Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/44/d3b4aafa20a3f76384ba19a513d39272add13746dcfe0409d8d4974fd464/types_cffi-2.0.0.20260518-py3-none-any.whl", hash = "sha256:5b68a215a95d0eac4203b58e766ff7fe40c2e091b1fa1a9e54111f04cc560084", size = 20198, upload-time = "2026-05-18T06:06:49.83Z" },
+]
+
+[[package]]
+name = "types-setuptools"
+version = "81.0.0.20260209"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.10'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/57/f1f7992d6d7bded78d1f14dc23d59e87601920852bf10ece2325e49bacae/types_setuptools-81.0.0.20260209.tar.gz", hash = "sha256:2c2eb64499b41b672c387f6f45678a28d20a143a81b45a5c77acbfd4da0df3e1", size = 43201, upload-time = "2026-02-09T04:14:15.505Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/87/90c9143af95850bdaf7eb0d47c59e5c3a8b55fc5a49aca0eb7f98cb964d5/types_setuptools-81.0.0.20260209-py3-none-any.whl", hash = "sha256:4facf71e3f953f8f5ac0020cd6c1b5e493aaff0183e85830bc34870b6abf8475", size = 64194, upload-time = "2026-02-09T04:14:14.278Z" },
+]
+
+[[package]]
+name = "types-setuptools"
+version = "83.0.0.20260724"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.11' and python_full_version < '3.15'",
+    "python_full_version == '3.10.*'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/8c/e069673eb23a7a8242f6e28184ef6911849b2667a61b3bf298d86b807f33/types_setuptools-83.0.0.20260724.tar.gz", hash = "sha256:fe2801176b667f1e8209f8571b0839ca6c34318d743825aeacf3f29970c8d46f", size = 45746, upload-time = "2026-07-24T04:57:55.054Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/5d/5c32313e6eb7298944ca0fad6486157e8ed549760a25598cddb8ac7e08c6/types_setuptools-83.0.0.20260724-py3-none-any.whl", hash = "sha256:eed1a91e1ed9d8ec9f3e71908e5bb17272e41e0852d37d1485ecd9cd33165e1a", size = 68758, upload-time = "2026-07-24T04:57:53.976Z" },
 ]
 
 [[package]]

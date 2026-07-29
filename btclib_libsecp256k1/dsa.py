@@ -25,7 +25,12 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
     sig = ffi.new("secp256k1_ecdsa_signature *")
 
     noncefc = ffi.NULL
-    ndata = b"\x00" * (32 - len(ndata)) + ndata if ndata else ffi.NULL
+    if ndata:
+        if len(ndata) > 32:
+            raise ValueError("ndata must be at most 32 bytes")
+        ndata = b"\x00" * (32 - len(ndata)) + ndata
+    else:
+        ndata = ffi.NULL
     if not lib.secp256k1_ecdsa_sign(ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata):
         raise ValueError("invalid private key")
     return _serialize_der(sig)

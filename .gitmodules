@@ -1,3 +1,8 @@
 [submodule "secp256k1"]
 	path = secp256k1
 	url = https://github.com/bitcoin-core/secp256k1.git
+	# the build writes src/btclib_default_callbacks.c into the submodule
+	# tree, as automake resolves the sources it is added to relative to
+	# it: an untracked file there is expected, and reporting the
+	# submodule as modified for it only hides a real change
+	ignore = untracked

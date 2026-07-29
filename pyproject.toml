@@ -104,7 +104,11 @@ ignore = ["W003", "W009"]
 # are for editor integration and ad hoc runs
 [dependency-groups]
 test = ["pytest", "pytest-cov"]
-lint = ["pre-commit", "ruff", "mypy"]
+# the mypy hook of .pre-commit-config.yaml declares what the checked
+# files import, because it runs in its own isolated environment; running
+# mypy from this environment has to find the same things, or it reports
+# errors the gate does not (and passes what the gate would reject)
+lint = ["pre-commit", "ruff", "mypy", "types-cffi", "hatchling"]
 build = ["build", "cibuildwheel"]
 dev = [
     { include-group = "test" },

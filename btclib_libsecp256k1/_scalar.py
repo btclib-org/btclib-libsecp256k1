@@ -19,7 +19,16 @@ def scalar(num: bytes | int, name: str) -> bytes:
     takes a bare pointer and would read past the end of a shorter one.
     """
 
-    num_bytes = num.to_bytes(32, "big") if isinstance(num, int) else num
+    if isinstance(num, int):
+        # an int outside the 32-byte range is out of domain like any
+        # other invalid argument, and must be reported the same way:
+        # to_bytes would raise OverflowError instead. Whether the value
+        # is a valid scalar, i.e. in [1, n-1], is for libsecp256k1 to say
+        if not 0 <= num < 2**256:
+            raise ValueError(f"the {name} must fit in 32 bytes")
+        num_bytes = num.to_bytes(32, "big")
+    else:
+        num_bytes = num
     if len(num_bytes) != 32:
         raise ValueError(f"the {name} must be 32 bytes")
     return num_bytes
