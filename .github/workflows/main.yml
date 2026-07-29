@@ -202,14 +202,18 @@ jobs:
 
   # installing from sdist is the one path that has to compile the
   # vendored libsecp256k1 on the user's machine: the wheel jobs never
-  # exercise it, so a broken sdist would only be discovered on PyPI
+  # exercise it, so a broken sdist would only be discovered on PyPI.
+  # Windows is in the matrix because it is the platform where that build
+  # is least like the others: MSVC compiles the extension while a gcc on
+  # the PATH preprocesses the headers for cffi, and what the sdist has to
+  # carry for it is not what a POSIX build reads
   test-sdist:
     name: "Test sdist install on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     needs: build-sdist
 
     steps:
@@ -225,7 +229,12 @@ jobs:
           name: sdist
           path: dist
 
+      # bash on every runner, Windows included: pip does not expand the
+      # glob itself, and PowerShell does not expand it for a native
+      # command either, so the default shell there would hand pip the
+      # pattern verbatim
       - name: Install from sdist
+        shell: bash
         run: |
           python -m pip install -U pip pytest
           python -m pip install --verbose dist/*.tar.gz
