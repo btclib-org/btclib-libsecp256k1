@@ -220,12 +220,13 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# a ratchet at the level the suite currently reaches, not a target: what
-# is left uncovered is the RuntimeError paths, which need libsecp256k1
-# itself to fail and cannot be reached with valid inputs, plus the dlopen
-# fallback of __init__.py, which is unreachable code in a static build
-# and the only covered branch in a dynamic one
-fail_under = 89
+# a ratchet at the level the suite currently reaches. Every ValueError
+# the bindings raise is now exercised: what is left uncovered is only the
+# RuntimeError paths, which need libsecp256k1 itself to fail and cannot
+# be reached through the API, plus the dlopen fallback of __init__.py,
+# unreachable code in a static build and the only covered branch in a
+# dynamic one. Raising this number now means testing the untestable
+fail_under = 90
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]

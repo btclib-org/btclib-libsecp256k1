@@ -107,6 +107,13 @@ def test_keys_invalid_inputs() -> None:
         keys.pubkey_tweak_mul(pubkey_bytes, 0)
     with pytest.raises(ValueError, match="at least one public key"):
         keys.pubkey_combine([])
+    # a zero tweak makes the product zero, which is no private key
+    with pytest.raises(ValueError, match="private key or tweak"):
+        keys.prvkey_tweak_mul(7, 0)
+    # tweaking by the negation of the private key lands on the point at
+    # infinity, which has no serialization
+    with pytest.raises(ValueError, match="tweak or resulting public key"):
+        keys.pubkey_tweak_add(mult.mult_(7), N - 7)
 
 
 def test_xonly_from_pubkey() -> None:
