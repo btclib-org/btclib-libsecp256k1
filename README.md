@@ -134,6 +134,38 @@ itself (via GitHub OIDC) and hands out a short-lived upload token at
 run time. Wheels and sdist are uploaded with PEP 740 attestations, so
 their provenance can be verified on PyPI.
 
+A tag cannot be taken back: a version, once on PyPI, can only be yanked,
+never replaced. So the same workflow can be run manually, and a manual
+run publishes to TestPyPI instead. It is the same file, the same jobs and
+the same gate as the release it rehearses, which a second workflow of its
+own could not be: a trusted publisher is registered for a workflow
+*filename*, so a `release-test.yml` would only ever prove itself.
+
+To rehearse:
+
+1. set the version in `pyproject.toml` to a pre-release of the one being
+   prepared (`0.7.1rc1`) and run `uv lock`. A version is consumed by the
+   upload on TestPyPI as much as on PyPI, so a second attempt needs
+   `rc2`; a local version (`0.7.1+test1`) is refused by both
+2. run the `release` workflow from the Actions tab, on the branch
+   holding it: a manual run builds the full matrix, Intel macOS
+   included, and stops at the `testpypi` environment
+3. approve it, then check that what was published installs:
+
+<!-- markdownlint-disable MD013 -->
+       pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre btclib_libsecp256k1
+<!-- markdownlint-enable MD013 -->
+
+   the extra index being needed for `cffi`, which TestPyPI does not have
+
+1. revert the version commit
+
+What the rehearsal covers is the OIDC exchange, the approval gate, the
+artifacts the publish job collects, the PEP 740 attestations, and a real
+Warehouse accepting the metadata, which is more than `twine check
+--strict` can say. What it cannot cover is the trusted publisher on PyPI
+itself, a separate registration that can be wrong on its own.
+
 To cut a release:
 
 1. update the version in `pyproject.toml` and HISTORY.md,
@@ -144,13 +176,17 @@ To cut a release:
 3. approve the `pypi` deployment when the workflow pauses for review:
    the artifacts are then published to PyPI
 
-One-time setup (already done, documented for reference):
+One-time setup, per index (the PyPI one is already done):
 
-- on PyPI, project Publishing settings: add a GitHub trusted publisher
-  for `btclib-org/btclib_libsecp256k1`, workflow `release.yml`,
-  environment `pypi`
-- on GitHub, repository Settings, Environments: create the `pypi`
-  environment and add the required reviewers who approve releases
+- on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
+  trusted publisher for `btclib-org/btclib_libsecp256k1`, workflow
+  `release.yml`, environment `pypi` and `testpypi` respectively. The two
+  indexes are separate accounts and separate registrations; owning the
+  project on one says nothing about the other
+- on GitHub, repository Settings, Environments: create the `pypi` and
+  `testpypi` environments, each with the required reviewers who approve.
+  Leaving `testpypi` without reviewers would be the one part of a
+  release that the rehearsal stops exercising
 
 ## Build, test, develop, and contribute
 
