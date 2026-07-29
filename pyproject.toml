@@ -167,3 +167,6 @@ build-frontend = "build"
 archs = "auto64"
 # PyPy wheels are opt-in since cibuildwheel 3.0
 enable = ["pypy"]
+# no PyPy wheels on Windows: the native CMake/MSVC build path targets
+# CPython only for now
+skip = "pp*-win*"

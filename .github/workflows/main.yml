@@ -17,8 +17,15 @@ jobs:
     strategy:
       matrix:
         # ubuntu-latest/macos-13 are x86_64, ubuntu-24.04-arm/macos-latest
-        # are arm64
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-13, macos-latest]
+        # are arm64; windows-latest builds natively with CMake/MSVC
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-13,
+            macos-latest,
+            windows-latest,
+          ]
 
     steps:
       - uses: actions/checkout@v7
@@ -202,9 +209,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-13, macos-latest]
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-13,
+            macos-latest,
+            windows-latest,
+          ]
         python-version:
           ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "pypy-3.11"]
+        exclude:
+          # PyPy wheels are not built on Windows
+          - os: windows-latest
+            python-version: pypy-3.11
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}

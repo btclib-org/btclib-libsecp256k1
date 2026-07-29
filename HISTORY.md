@@ -19,6 +19,9 @@ Major changes include:
   as cibuildwheel 4.x does not build cp37/cp38 wheels and GitHub-hosted
   runners no longer provide those interpreters
 - Added macOS arm64 and Linux aarch64 wheels
+- Added native Windows wheels for CPython, built with CMake/MSVC via
+  cibuildwheel; the mingw cross-compiled dynamic wheel is still
+  provided
 - Dynamic wheels now carry the platform tag of the machine they are
   built on (it was hardcoded to x86_64, with a fake macOS 10.16
   minimum version)
