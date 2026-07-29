@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # keep the GitHub Actions used in workflows up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "dev"
+    groups:
+      # one PR for all action bumps instead of one PR each
+      github-actions:
+        patterns: ["*"]
+
+  # signal upstream movement of the vendored secp256k1 submodule;
+  # note: Dependabot tracks the upstream default branch, so releases
+  # still need a manual bump to the tagged commit
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    target-branch: "dev"
