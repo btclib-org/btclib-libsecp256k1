@@ -20,6 +20,14 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
 
     The result is the SHA256 of the compressed shared point, i.e. the
     libsecp256k1 default hash function; it is computed in constant time.
+
+    The hash function is not configurable, by decision. libsecp256k1
+    takes it as a C callback, so exposing it would mean calling back into
+    python from the middle of the computation, with the shared point
+    passing through python objects; and it would buy nothing, the point
+    being available as keys.pubkey_tweak_mul(pubkey_bytes, prvkey),
+    itself constant time. A protocol needing another derivation applies
+    it to that: SHA256 of it is what this function returns.
     """
 
     prvkey_bytes = scalar(prvkey, "private key")

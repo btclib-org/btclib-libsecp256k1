@@ -54,6 +54,12 @@ separation the taproot tags are built on.
 signs a message of any length, which BIP340 allows and which a protocol
 of its own may define.
 
+`ecdh.shared_secret` returns the SHA256 of the compressed shared point,
+the libsecp256k1 default. The hash function is not exposed: libsecp256k1
+takes it as a C callback, and a protocol needing another derivation has
+the shared point itself as `keys.pubkey_tweak_mul(pubkey, prvkey)`,
+constant time like the ECDH call and without python in the middle of it.
+
 MuSig2 has no dedicated binding module yet: its two-round protocol
 needs an interface that makes secret nonce reuse hard, which is still
 to be designed. `tests/test_modules.py` shows a complete 2-of-2

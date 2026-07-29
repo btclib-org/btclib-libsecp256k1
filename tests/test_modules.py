@@ -24,7 +24,7 @@ import hashlib
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, ecdh, ellswift, ffi, lib, mult, recovery, ssa
+from btclib_libsecp256k1 import dsa, ecdh, ellswift, ffi, keys, lib, mult, recovery, ssa
 from btclib_libsecp256k1.context import ctx
 
 msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
@@ -48,6 +48,11 @@ def test_ecdh() -> None:
     assert secret == hashlib.sha256(compress(shared_point)).digest()
     # bytes and int private keys are interchangeable
     assert secret == ecdh.shared_secret(pubkey_b, prvkey_a.to_bytes(32, "big"))
+
+    # the same point is what keys returns for an arbitrary private key,
+    # which is why the hash function of the ecdh call is not exposed: a
+    # protocol needing another derivation applies it to this
+    assert secret == hashlib.sha256(keys.pubkey_tweak_mul(pubkey_b, prvkey_a)).digest()
 
 
 def test_ecdh_invalid_inputs() -> None:
