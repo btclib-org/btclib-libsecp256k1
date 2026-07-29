@@ -14,8 +14,10 @@ ECDH secret is recomputed from the shared point, the recoverable
 signature is compared with the deterministic ECDSA one, and the
 MuSig2 aggregate signature is verified as a plain BIP340 signature.
 
-MuSig2 has no dedicated wrapper module yet, so it is exercised through
-the raw cffi bindings; this test doubles as a usage example.
+MuSig2 has no wrapper module, by decision, its two-round protocol
+belonging where the signing state lives: it is exercised through the raw
+cffi bindings, and this test doubles as the usage example the README
+points at.
 """
 
 from __future__ import annotations
