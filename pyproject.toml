@@ -227,6 +227,8 @@ build-frontend = "build"
 archs = "auto64"
 # PyPy wheels are opt-in since cibuildwheel 3.0
 enable = ["pypy"]
-# no PyPy wheels on Windows: the native CMake/MSVC build path targets
-# CPython only for now
+# no static PyPy wheels on Windows, by design: PyPy is best served by
+# the ABI-mode dynamic wheel (py3-none-win_amd64), the cffi mode
+# recommended on PyPy, which pip falls back to; a static pp3 wheel
+# would take precedence over it and perform worse
 skip = "pp*-win*"
