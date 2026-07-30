@@ -107,6 +107,12 @@ repos:
     rev: v1.7.12.24
     hooks:
       - id: actionlint
+        # actionlint runs shellcheck over every run: script, but only if
+        # it finds one: the ubuntu runner has shellcheck installed and a
+        # developer's machine generally does not, so without this the hook
+        # is weaker locally than in CI, and says so only after a push.
+        # shellcheck-py puts the binary in the hook's own environment
+        additional_dependencies: [shellcheck-py]
 
   # the server-side net GitHub does not give this repository: its secret
   # scanning covers the tokens of partner providers, while the generic

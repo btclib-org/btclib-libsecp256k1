@@ -396,11 +396,16 @@ jobs:
       # at run time, a static extension carrying its own
       - name: Install a wheel with its dependencies resolved from PyPI
         run: |
-          wheel=$(ls "$PWD"/dist/*py3-none-manylinux*x86_64.whl | head -1)
-          if [ -z "$wheel" ]; then
+          # the glob itself, not ls parsed by a pipeline: nullglob is what
+          # makes an unmatched pattern an empty array rather than the
+          # pattern read as a filename
+          shopt -s nullglob
+          wheels=("$PWD"/dist/*py3-none-manylinux*x86_64.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
             echo "::error::dist holds no dynamic linux x86_64 wheel"
             exit 1
           fi
+          wheel=${wheels[0]}
           echo "installing $wheel"
           cd "$RUNNER_TEMP"
           uv run --isolated --no-project --python 3.14 --with "$wheel" \
