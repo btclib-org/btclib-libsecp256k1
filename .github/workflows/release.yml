@@ -101,12 +101,12 @@ jobs:
   # against some other environment, publishing with no gate in front of
   # it. Nothing here is computed, so nothing can go that way.
   #
-  # Neither carries a timeout-minutes, unlike every other job here and in
-  # the workflows they call: a job held by an environment approval reports
-  # as waiting rather than running, and whether that time counts against
-  # the timer is nowhere documented. Cancelling a release that is waiting
-  # for its reviewer would cost more than the runner minutes a stuck
-  # upload can
+  # Both cap their runtime like every other job, the approval they wait
+  # for notwithstanding: what timeout-minutes bounds is execution time,
+  # which is also what the six-hour default bounds, while a run waiting
+  # for an environment approval has a limit of its own, thirty days. The
+  # reviewer can therefore take as long as they like, and a stuck upload
+  # still cannot hold a runner for an afternoon
   publish-testpypi:
     name: Publish to TestPyPI
     # the repository condition keeps a fork from attempting an upload it
@@ -115,6 +115,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.repository == 'btclib-org/btclib_libsecp256k1'
     needs: [lint, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: testpypi
       url: https://test.pypi.org/p/btclib_libsecp256k1
@@ -148,6 +149,7 @@ jobs:
     if: github.event_name == 'push' && github.repository == 'btclib-org/btclib_libsecp256k1'
     needs: [lint, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # deployment gate: configure required reviewers on the "pypi"
     # environment to require a manual approval before publishing
     environment:

@@ -71,12 +71,15 @@ jobs:
 
       # a static build, i.e. the worst case for coverage: the dlopen
       # fallback of __init__.py stays unreachable. The interpreter comes
-      # from .python-version, as it does for a developer
-      - name: Install lib and test tools
-        run: uv sync --no-default-groups --group test
-
+      # from .python-version, as it does for a developer.
+      # One command, not a sync followed by a run: uv run syncs the
+      # environment itself, and with the flags left off it did so against
+      # the default groups, installing the twenty-nine packages of dev
+      # right after the sync had deliberately installed ten.
+      # --locked asserts that uv.lock matches pyproject.toml, which a
+      # plain sync would quietly fix by re-locking instead
       - name: Test with coverage
-        run: uv run pytest --cov
+        run: uv run --locked --no-default-groups --group test pytest --cov
 
   build-cibuildwheel:
     name: Build wheels on ${{ matrix.os }}
@@ -236,6 +239,19 @@ jobs:
   # installing from sdist is the one path that has to compile the
   # vendored libsecp256k1 on the user's machine: the wheel jobs never
   # exercise it, so a broken sdist would only be discovered on PyPI.
+  # Nothing upstream of here makes this job redundant, and it is worth
+  # saying why, because for a pure python package it would be: `uv build`
+  # builds the sdist and then the wheel *from* it, so whatever the wheel
+  # contains proves the sdist carried it. No wheel of this package is
+  # built that way — cibuildwheel and `python -m build -w` both build from
+  # the source tree, per platform and per interpreter, because a wheel
+  # here is a compiled artifact and the sdist is not its input. What the
+  # sdist has to carry is therefore checked nowhere else: the whole
+  # vendored submodule tree, the CMake toolchain file, the build scripts
+  # named in cffi_modules, and the headers the cdef is preprocessed from,
+  # every one of them listed by hand in the sdist include of
+  # pyproject.toml. An omission there is invisible until something
+  # compiles from it, which is what this job does.
   # Windows is in the matrix because it is the platform where that build
   # is least like the others: MSVC compiles the extension while a gcc on
   # the PATH preprocesses the headers for cffi, and what the sdist has to
@@ -357,11 +373,17 @@ jobs:
       - name: Show distributions
         run: ls -l dist
 
+      # the three tools below come from the check group of
+      # pyproject.toml, pinned by uv.lock, rather than from uvx, which
+      # fetches whatever the index holds at run time: pyroma is run with a
+      # --min ratchet, and a release of it adding a test would otherwise
+      # fail a release that changed nothing. --only-group omits the
+      # project, so none of this compiles an extension
       - name: Check metadata and long description
-        run: uvx twine check --strict dist/*
+        run: uv run --locked --only-group check twine check --strict dist/*
 
       - name: Check wheel contents
-        run: uvx check-wheel-contents dist/*.whl
+        run: uv run --locked --only-group check check-wheel-contents dist/*.whl
 
       # the wheel test jobs install cffi by hand and then the wheel with
       # --no-index, which resolves nothing: what the metadata declares is
@@ -390,7 +412,7 @@ jobs:
       # rates the metadata that was actually built and shipped; --min 10
       # is a ratchet, the score being 10 today
       - name: Rate the packaging metadata
-        run: uvx pyroma --min 10 dist/*.tar.gz
+        run: uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
 
   test-dynamic:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"

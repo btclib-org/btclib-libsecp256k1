@@ -132,6 +132,13 @@ test = ["pytest", "pytest-cov"]
 # errors the gate does not (and passes what the gate would reject)
 lint = ["pre-commit", "ruff", "mypy", "types-cffi", "hatchling"]
 build = ["build", "cibuildwheel"]
+# what the check-dist job validates the distribution files with. A group,
+# rather than uvx fetching each tool at run time, so that the versions are
+# the ones uv.lock pins and dependabot moves: pyroma is run with --min 10,
+# and a release of pyroma adding a test is otherwise enough to fail a
+# release that changed nothing. `uv run --only-group check` omits the
+# project itself, so asking for these compiles no extension
+check = ["twine", "check-wheel-contents", "pyroma"]
 # what scripts/benchmark.py times these bindings against, deliberately
 # left out of dev: btclib depends on this package, so it cannot be a
 # dependency of developing it. Here it is harmless, the lock resolving

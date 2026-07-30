@@ -95,3 +95,12 @@ repos:
           - types-cffi
           - hatchling
           - pytest
+  # keep uv.lock in sync with pyproject.toml. The release workflow asserts
+  # the same thing with uv lock --check, and every uv command in CI passes
+  # --locked, but all of those are downstream: this is the hook that keeps
+  # a dependency added to pyproject.toml from reaching a branch without
+  # the lock entry that pins it
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.0
+    hooks:
+      - id: uv-lock
