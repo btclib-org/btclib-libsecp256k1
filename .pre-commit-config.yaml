@@ -95,6 +95,33 @@ repos:
           - types-cffi
           - hatchling
           - pytest
+  # the server-side net GitHub does not give this repository: its secret
+  # scanning covers the tokens of partner providers, while the generic
+  # patterns (PEM keys, connection strings, authentication headers) are a
+  # Secret Protection feature the free plan accepts and ignores. Run from
+  # the lint workflow, which is also what a fork's pull request runs, this
+  # covers the pushes detect-private-key above cannot see: a commit made
+  # with --no-verify, an edit from the web interface, a fork.
+  #
+  # The two entropy plugins are disabled and the two json vector files
+  # excluded, both for one reason: the test data of a signing library is
+  # private keys by the hundred, published upstream and vendored here to
+  # be compared against, and every one of them is a finding. With them
+  # off the tree is clean, and what is still detected is exactly the class
+  # worth detecting: a credential of some other system, committed by
+  # mistake. Verified by handing the hook a PEM key, which it stops
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets (credentials of other systems)
+        args:
+          - --disable-plugin
+          - HexHighEntropyString
+          - --disable-plugin
+          - Base64HighEntropyString
+        exclude: ^tests/ecdsa(_custom_nonce)?_sig\.json$
+
   # keep uv.lock in sync with pyproject.toml. The release workflow asserts
   # the same thing with uv lock --check, and every uv command in CI passes
   # --locked, but all of those are downstream: this is the hook that keeps
