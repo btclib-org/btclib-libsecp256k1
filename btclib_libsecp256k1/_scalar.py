@@ -17,12 +17,19 @@ def scalar(num: bytes | int, name: str) -> bytes:
     An int is serialized big endian, as libsecp256k1 expects; bytes are
     passed through. The length is checked here because libsecp256k1
     takes a bare pointer and would read past the end of a shorter one.
+    A short bytes is not padded to that length while an int is
+    serialized to it, and the asymmetry is not a leniency: bytes state a
+    value and a width, one of which would have to be disbelieved,
+    whereas an int states only a value and the width is the curve's.
 
-    A secret is better passed as bytes: a python int is a variable-length
-    object whose serialization, and whatever arithmetic produced it, take
-    a time that depends on the magnitude of the value. That is outside
-    what the constant-time implementation underneath can cover, and no
-    check here or elsewhere in python can restore it.
+    A secret is better passed as bytes, for a narrow reason. Not the
+    serialization, which is a loop over nine CPython digits and measures
+    as noise, but the python arithmetic that produced the int, variable
+    in time with the magnitude of its operands and leaving unzeroized
+    copies of every intermediate on the heap — all of it before this
+    call. bytes are not zeroized either, so what they buy is only that
+    no arithmetic on the secret happened here; scalar arithmetic that
+    must not leak belongs where that can be promised.
     """
 
     if isinstance(num, int):
