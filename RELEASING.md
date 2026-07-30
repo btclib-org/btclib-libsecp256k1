@@ -42,7 +42,12 @@ submodule is pinned to.
 
        python -m pip install --upgrade btclib_libsecp256k1
 
-7. check the GitHub release the workflow created once PyPI had accepted
+7. run the `published` workflow from the Actions tab, and expect it green:
+   it installs from PyPI what was just uploaded, on every platform and at
+   both ends of the supported interpreter range, and verifies BIP340
+   vector 0 with it. From then on it runs weekly on its own, and a failure
+   means the outside world moved, not this repository
+8. check the GitHub release the workflow created once PyPI had accepted
    the upload: its notes are the tag's section of `HISTORY.md`, and the
    sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
    generated the notes from the merged pull requests instead, and they

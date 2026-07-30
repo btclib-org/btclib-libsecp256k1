@@ -1,0 +1,135 @@
+name: published
+
+# the sentinel on what users actually install. Every other workflow here
+# tests artifacts built in the same run, from the tree that triggered it:
+# nothing tells us whether the wheels already on PyPI still install and
+# still work. What breaks them is not a change in this repository — it is a
+# new runner image, a new interpreter, a yanked dependency, a cffi ABI
+# change — so nothing here has to move for this to start failing, which is
+# exactly why it runs on a schedule rather than on a pull request.
+#
+# The check is deliberately version-independent: it uses only what this
+# package has exposed since 0.4.0 (dsa.sign, dsa.verify, ssa.verify), so
+# the sentinel keeps working across releases instead of needing an edit
+# after each one. It verifies BIP340 test vector 0, whose values are fixed
+# forever, and round trips a signature this build makes.
+#
+# It will be red until 0.7.1 is published, and not for a reason to shrug
+# at. PyPI carries 0.4.0, whose wheels are x86_64 only and stop at CPython
+# 3.12, so on every arm64 runner and on 3.13 or later pip falls back to
+# that sdist — which builds the vendored library with autotools
+# (scripts/cffi_build.py of 0.4.0 runs autogen.sh), not with the CMake path
+# of today. Measured by hand on 30 July 2026, on Apple Silicon with 3.13,
+# that install fails: hatchling's force-include cannot find the extension
+# the build was supposed to produce. In other words a user on a current Mac
+# cannot install this package at all today, which is a fact worth a red
+# mark rather than one worth hiding until the matrix is narrowed to the
+# cells that pass. 0.7.1 ships arm64 wheels and CPython 3.14 support, so
+# checking that this workflow went green is a step of the release: see
+# RELEASING.md
+
+on:
+  schedule:
+    # weekly, on a minute that is not the hour: what everyone schedules on
+    # the hour queues together, and a run that waits is a failure noticed
+    # later. Only the default branch schedules workflows, so on any other
+    # branch this is reachable through the dispatch below alone
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, pip dependencies) can read the token, so it must not be able to
+# write to the repository
+permissions:
+  contents: read
+
+concurrency:
+  group: published-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-published:
+    name: "${{ matrix.no-binary && 'Build' || 'Install' }} ${{ matrix.python-version }} from PyPI on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    # the sdist entry below compiles libsecp256k1 from source, which the
+    # others do not; one timeout covers both
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # narrower than the build matrices, and for a different reason:
+        # nothing is compiled here (except in the one entry that is), and
+        # what varies is which published wheel a platform and an
+        # interpreter select. The two ends of the supported range, plus the
+        # free-threaded interpreter, which is what installs the py3-none
+        # dynamic wheel
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-26-intel,
+            macos-latest,
+            windows-latest,
+            windows-11-arm,
+          ]
+        python-version: ["3.9", "3.14", "3.14t"]
+        exclude:
+          # CPython has no Windows arm64 build before 3.11
+          - os: windows-11-arm
+            python-version: "3.9"
+        include:
+          # the path a platform with no wheel takes: compile the published
+          # sdist. Only this package is forced from source, not its
+          # dependencies, which would drag cffi's own build in. The
+          # interpreter is one the base matrix does not use, so that this
+          # adds a job rather than a property to an existing one
+          - os: ubuntu-latest
+            python-version: "3.13"
+            no-binary: true
+
+    steps:
+      # no checkout on purpose: nothing from this repository takes part,
+      # which is also what guarantees that the import below resolves to
+      # what pip installed and not to a source tree
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the published package
+        shell: bash
+        run: |
+          python -m pip install -U pip
+          python -m pip install --verbose \
+            ${{ matrix.no-binary && '--no-binary btclib_libsecp256k1' || '' }} \
+            btclib_libsecp256k1
+
+      - name: Report what was installed
+        shell: bash
+        run: |
+          python -m pip show btclib_libsecp256k1
+          python -c "import _btclib_libsecp256k1 as m; print(m.__file__, 'static' if hasattr(m, 'lib') else 'dynamic')"
+
+      - name: Verify BIP340 vector 0, and round trip a signature
+        shell: bash
+        run: |
+          python - <<'PY'
+          from btclib_libsecp256k1 import __version__, dsa, ssa
+
+          SECKEY = bytes.fromhex("00" * 31 + "03")
+          XONLY = bytes.fromhex(
+              "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9"
+          )
+          MSG = bytes(32)
+          SIG340 = bytes.fromhex(
+              "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215"
+              "25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0"
+          )
+
+          print("installed version:", __version__)
+          if not ssa.verify(MSG, XONLY, SIG340):
+              raise SystemExit("BIP340 test vector 0 does not verify")
+          if not dsa.verify(MSG, b"\x02" + XONLY, dsa.sign(MSG, SECKEY)):
+              raise SystemExit("a signature this build made does not verify")
+          print("ok")
+          PY

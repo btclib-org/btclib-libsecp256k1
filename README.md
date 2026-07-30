@@ -330,6 +330,52 @@ What a change is expected to satisfy, which branch a pull request targets,
 and which of the three btclib repositories an issue belongs in, are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Running what CI runs
+
+Each job of the `lint` and `test` workflows, and the local command that
+reproduces it. Two of them cannot be reproduced on a machine that is not
+the runner, and that is worth knowing before trying.
+
+- `Lint and type-check`
+
+      uvx pre-commit run --all-files
+
+- `Coverage`
+
+      uv run --locked --no-default-groups --group test pytest --cov
+
+- `Test <version> on <os>`, one row of the matrix
+
+      uv run --python 3.9 --no-cache pytest
+
+- `Build wheels on <os>`, for this platform only
+
+      uv run --only-group build cibuildwheel
+
+  the Linux wheels of that job are built in a manylinux container, so
+  reproducing them needs a container runtime (`colima` on macOS)
+
+- `Build dynamic wheel on <os>`
+
+      BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
+
+- `Build sdist`, and `Test sdist install on <os>` after it
+
+      uv build --sdist
+      python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
+
+- `Validate distributions`
+
+      uv run --locked --only-group check twine check --strict dist/*
+      uv run --locked --only-group check check-wheel-contents dist/*.whl
+      uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+
+- `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
+  faithful: the cross-compilation CI does is from ubuntu, not from macOS
+
+The `published` workflow has no local equivalent by design: what it
+installs is what PyPI serves.
+
 ## Release process
 
 Releases are published to PyPI by the `release` GitHub workflow using
