@@ -37,10 +37,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          enable-cache: true
+          # off, unlike everywhere else, and not by omission: a cache is
+          # written by the jobs of a pull request and restored by this one,
+          # which runs on a tag and decides whether a release proceeds.
+          # There is nothing to gain here anyway — the two commands below
+          # install nothing — and the default of this action is to cache
+          enable-cache: false
 
       # uv.lock carries the project version too, so a bump that was not
       # followed by uv lock leaves the two disagreeing, and the sdist
@@ -192,6 +199,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # the sdist alone: the wheels are on PyPI, with their attestations,
       # and thirty assets mirroring an index nobody would install from by

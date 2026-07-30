@@ -114,6 +114,24 @@ repos:
         # shellcheck-py puts the binary in the hook's own environment
         additional_dependencies: [shellcheck-py]
 
+  # what actionlint does not look at: the security of a workflow rather
+  # than its validity. Template injection through an interpolated ${{ }},
+  # a checkout leaving its credential in .git/config where an artifact
+  # upload can carry it away, a cache written by a pull request and
+  # restored by the job that publishes a release.
+  # --offline on purpose: some audits can query GitHub, which would make
+  # the hook need a token and behave differently on a machine that has
+  # none. Compared here with a token and without: on these files the two
+  # report the same findings
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: zizmor (workflow security)
+        entry: zizmor --offline
+        language: python
+        additional_dependencies: [zizmor==1.28.0]
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+
   # the server-side net GitHub does not give this repository: its secret
   # scanning covers the tokens of partner providers, while the generic
   # patterns (PEM keys, connection strings, authentication headers) are a
