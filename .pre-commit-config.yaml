@@ -111,8 +111,13 @@ repos:
         # it finds one: the ubuntu runner has shellcheck installed and a
         # developer's machine generally does not, so without this the hook
         # is weaker locally than in CI, and says so only after a push.
-        # shellcheck-py puts the binary in the hook's own environment
-        additional_dependencies: [shellcheck-py]
+        # shellcheck-py puts the binary in the hook's own environment.
+        # Pinned, because nothing moves an additional dependency: unpinned
+        # it is whatever version existed the day each environment was
+        # built, so two machines can disagree and a shellcheck release
+        # adding a check turns a pull request red that changed nothing.
+        # Pinned and stale is the lesser evil, and it is visible here
+        additional_dependencies: [shellcheck-py==0.11.0.1]
 
   # what actionlint does not look at: the security of a workflow rather
   # than its validity. Template injection through an interpolated ${{ }},
@@ -123,14 +128,18 @@ repos:
   # the hook need a token and behave differently on a machine that has
   # none. Compared here with a token and without: on these files the two
   # report the same findings
-  - repo: local
+  # the upstream hook rather than a local one pinning zizmor by hand: its
+  # own file filter covers dependabot.yml and action.yml besides the
+  # workflows, which a hand-written pattern got wrong (and hid the audit
+  # that had findings), and its rev is something pre-commit.ci moves,
+  # where an additional_dependencies pin is moved by nothing.
+  # The args replace the hook's own, so --no-progress has to be repeated
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.28.0
     hooks:
       - id: zizmor
         name: zizmor (workflow security)
-        entry: zizmor --offline
-        language: python
-        additional_dependencies: [zizmor==1.28.0]
-        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+        args: [--offline, --no-progress]
 
   # the server-side net GitHub does not give this repository: its secret
   # scanning covers the tokens of partner providers, while the generic
