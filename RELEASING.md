@@ -77,7 +77,8 @@ release that only bumps versions and notes does not need one.
    Never tag a rehearsal: the trigger is what picks the index, so a
    `v0.7.1rc1` tag would take the pre-release to PyPI itself and burn it
    there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
-   installs
+   installs. The `version-check` job refuses a tag whose version is not
+   digits and dots, so the mistake stops before anything is built
 2. approve it, then check that what was published installs:
 
    <!-- markdownlint-disable MD013 -->
