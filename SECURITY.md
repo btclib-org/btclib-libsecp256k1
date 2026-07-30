@@ -52,6 +52,13 @@ These are known and inherent, not vulnerabilities:
     until garbage collection, and may be copied by the interpreter. The
     constant-time properties of libsecp256k1 apply to the C side of the
     boundary, not to what the caller does before and after it
+- a scalar passed as an `int` leaks its magnitude. A Python integer is a
+    variable-length object, so serializing one — and any arithmetic that
+    produced it — takes a time that depends on the value; the argument
+    checks in front of the call add no leak of their own, branching on a
+    type, a length or a magnitude and never on the content of a secret.
+    Everywhere an `int` is accepted `bytes` is too, and for a secret that
+    is the form to use
 - randomness comes from `secrets.token_bytes`, i.e. from the operating
     system, both for the context randomization and for the auxiliary
     randomness of BIP340 signing and of ElligatorSwift encoding

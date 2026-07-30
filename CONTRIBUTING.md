@@ -73,6 +73,12 @@ release.
   `tests/test_vectors.py` documents where each vendored vector file comes
   from — BIP340, RFC6979, trezor-firmware — and a new wrapper should
   reach for something published elsewhere in the same way
+- **a new wrapper checks sizes and delegates the rest.** What the
+  boundary is for is stopping a short buffer from reaching a bare
+  pointer; whether the bytes are a valid key, point or signature is
+  libsecp256k1's answer to give, and an argument of the wrong size or
+  form raises rather than being padded or reinterpreted into a valid one.
+  The reasoning is in the README, under What the boundary checks
 - **the comments say why, not what.** The workflows, the build scripts
   and the configuration files in this repository carry the reasoning
   behind their choices, because that is the part a reader cannot recover.

@@ -37,6 +37,19 @@ Major changes include:
   (`normalize`, `is_low_s`) and the conversions between the DER and the
   64-byte compact encodings (`to_compact`, `to_der`)
 - `dsa.verify` and `ssa.verify` return `bool` instead of `int`
+- `ssa.verify` takes the 32-byte x-only public key BIP340 verifies
+  against, and so do `xonly.tweak_add` and `xonly.tweak_add_check`: a
+  full public key used to be accepted and reinterpreted as its even y
+  point, which is a different key from the one passed whenever y is odd.
+  `xonly.from_pubkey` is that conversion, and making it is the caller's
+  decision
+- the 32 bytes of nonce entropy are 32 bytes or omitted: `ndata`
+  (`dsa.sign`, `recovery.sign`), `aux_rand32` (`ssa.sign`,
+  `ssa.sign_custom`, `ellswift.create`) and `rnd32` (`ellswift.encode`)
+  used to be left padded when shorter, turning a caller mistake into a
+  valid argument; a wrong length now raises `ValueError`. The boundary
+  checks what C cannot see and normalizes nothing else, which the README
+  states as such under What the boundary checks
 - All the wrapped modules are now requested explicitly at configure
   time (`recovery`, in particular, is disabled by default upstream):
   upstream defaults are not part of its API, and the autotools and

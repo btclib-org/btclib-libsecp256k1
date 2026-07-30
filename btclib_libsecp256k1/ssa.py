@@ -74,23 +74,23 @@ def sign_custom(
 
 
 def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> bool:
-    """Verify a Schnorr signature."""
+    """Verify a Schnorr signature against a 32-byte x-only public key.
+
+    The public key is the x-only one BIP340 verifies against, and only
+    that: dropping the y coordinate of a full public key is a decision
+    of the caller, `xonly.from_pubkey` being the conversion, because a
+    key with odd y verifies as the point that is not the one passed.
+    """
 
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")
-
-    if len(pubkey_bytes) == 32:
-        pubkey_bytes = b"\x02" + pubkey_bytes
-
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError("invalid public key")
+    # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
+    if len(pubkey_bytes) != 32:
+        raise ValueError("the x-only public key must be 32 bytes")
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    if not lib.secp256k1_xonly_pubkey_from_pubkey(
-        ctx, xonly_pubkey, ffi.new("int *"), pubkey
-    ):
-        raise RuntimeError("x-only public key conversion failed")
+    if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
+        raise ValueError("invalid x-only public key")
 
     return bool(
         lib.secp256k1_schnorrsig_verify(
@@ -109,14 +109,17 @@ def _keypair(prvkey: bytes | int) -> CData:
 
 
 def _aux_rand32(aux_rand32: bytes | None) -> bytes:
-    """Normalize the auxiliary randomness of BIP340 signing to 32 bytes.
+    """Check the auxiliary randomness of BIP340 signing.
 
-    It is freshly generated when not provided, and left padded when
-    shorter, as it is the entropy of a nonce and not a serialization.
+    It is freshly generated when not provided, BIP340 recommending fresh
+    randomness at every signature; given, it is exactly 32 bytes, being
+    the entropy of a nonce and not a serialization: a shorter value is a
+    caller mistake rather than a small number, and padding it here would
+    turn one into a valid argument.
     """
 
-    if not aux_rand32:
+    if aux_rand32 is None:
         return secrets.token_bytes(32)
-    if len(aux_rand32) > 32:
-        raise ValueError("aux_rand32 must be at most 32 bytes")
-    return b"\x00" * (32 - len(aux_rand32)) + aux_rand32
+    if len(aux_rand32) != 32:
+        raise ValueError("aux_rand32 must be 32 bytes")
+    return aux_rand32

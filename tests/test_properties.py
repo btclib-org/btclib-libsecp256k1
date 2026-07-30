@@ -169,8 +169,8 @@ def test_schnorr_and_taproot_tweaking() -> None:
         sig = ssa.sign(msg, prvkey, aux_rand32)
         # BIP340 signing is deterministic given the auxiliary randomness
         assert sig == ssa.sign(msg, prvkey, aux_rand32)
-        # and verifies against either form of the public key
-        assert ssa.verify(msg, pubkey, sig)
+        # and verifies against the x-only public key, whatever the
+        # parity of the y coordinate the compressed form carries
         assert ssa.verify(msg, pubkey[1:], sig)
         # the same signature for a 32-byte message
         assert ssa.sign_custom(msg, prvkey, aux_rand32) == sig
@@ -240,7 +240,7 @@ def test_scalar_range_ends() -> None:
         assert keys.prvkey_verify(scalar)
         pubkey = compress(mult.mult_(scalar))
         assert dsa.verify(msg, pubkey, dsa.sign(msg, scalar))
-        assert ssa.verify(msg, pubkey, ssa.sign(msg, scalar))
+        assert ssa.verify(msg, pubkey[1:], ssa.sign(msg, scalar))
     # and they are each other's negation
     assert keys.prvkey_negate(1) == (N - 1).to_bytes(32, "big")
 

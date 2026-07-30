@@ -14,6 +14,11 @@ https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
 An x-only public key is the 32-byte x coordinate of the point with even
 y; the parity returned along a tweaked key is the one of the tweaked
 point, to be committed to by the taproot output.
+
+`from_pubkey` is the conversion from a full public key, and the only
+function here taking one: everything else takes the 32-byte form, so
+that discarding a y coordinate happens where the caller can see it and
+not inside an argument check.
 """
 
 from __future__ import annotations
@@ -35,9 +40,7 @@ def from_pubkey(pubkey_bytes: bytes) -> tuple[bytes, int]:
 def tweak_add(pubkey_bytes: bytes, tweak: bytes | int) -> tuple[bytes, int]:
     """Add the generator multiplied by the tweak to an x-only public key.
 
-    Return the tweaked x-only public key and its y parity. The input is
-    either an x-only public key or a public key, whose even y point is
-    then the tweaked one.
+    Return the tweaked x-only public key and its y parity.
     """
 
     internal_pubkey = _parse(pubkey_bytes)
@@ -99,21 +102,15 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
 
 
 def _parse(pubkey_bytes: bytes) -> CData:
-    """Parse an x-only public key, or the even y point of a public key."""
+    """Parse a 32-byte x-only public key."""
+
+    # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
+    if len(pubkey_bytes) != 32:
+        raise ValueError("the x-only public key must be 32 bytes")
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    if len(pubkey_bytes) == 32:
-        if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
-            raise ValueError("invalid x-only public key")
-        return xonly_pubkey
-
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError("invalid public key")
-    if not lib.secp256k1_xonly_pubkey_from_pubkey(
-        ctx, xonly_pubkey, ffi.new("int *"), pubkey
-    ):
-        raise RuntimeError("x-only public key conversion failed")
+    if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
+        raise ValueError("invalid x-only public key")
     return xonly_pubkey
 
 

@@ -17,6 +17,12 @@ def scalar(num: bytes | int, name: str) -> bytes:
     An int is serialized big endian, as libsecp256k1 expects; bytes are
     passed through. The length is checked here because libsecp256k1
     takes a bare pointer and would read past the end of a shorter one.
+
+    A secret is better passed as bytes: a python int is a variable-length
+    object whose serialization, and whatever arithmetic produced it, take
+    a time that depends on the magnitude of the value. That is outside
+    what the constant-time implementation underneath can cover, and no
+    check here or elsewhere in python can restore it.
     """
 
     if isinstance(num, int):

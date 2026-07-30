@@ -64,7 +64,9 @@ went:
   the check that failed, before the C call could meet it; and the
   vendored build replaces the abort()ing libsecp256k1 default
   callbacks, so even an illegal argument handed to `lib` directly is
-  survived, `context.check()` reporting it verbatim
+  survived, `context.check()` reporting it verbatim. What that
+  validation is, and what it deliberately is not, is What the boundary
+  checks below
 - side channels are the context's problem, and it is handled: the one
   shared context is randomized at import time, before any thread
   exists; concurrent use is documented and tested, free-threaded
@@ -82,6 +84,59 @@ went:
   tested in public CI from the pinned source, and published by the
   workflow itself through Trusted Publishing with PEP 740 attestations
   — no long-lived token, and no maintainer laptop in the path
+
+## What the boundary checks
+
+Every wrapper validates its arguments before calling, and what it
+validates is deliberately narrow: the boundary checks what C cannot see,
+and decides nothing else.
+
+- **sizes are checked here, because nothing else can.** libsecp256k1
+  takes bare pointers whose length is in the parameter name — `msg32`,
+  `input32`, `seckey` — and reads a fixed number of bytes from them. Hand
+  a 32-byte parameter 20 bytes and it reads past the end, and no return
+  code or callback of the library can report it: the length never reached
+  C to be checked. This is memory safety rather than cryptography, and it
+  is the one part that cannot be left to the caller — a binding that
+  reads adjacent heap into a signature when handed a short `bytes` would
+  be safe only for the single caller who remembers to check first
+- **validity is libsecp256k1's to decide, and it does.** Whether 32 bytes
+  are a scalar in `[1, n-1]` is answered by
+  `secp256k1_ec_seckey_verify`, and `keys.prvkey_verify` is that call, not
+  a reimplementation of it. A public key becomes one by passing
+  `secp256k1_ec_pubkey_parse`, a signature by
+  `secp256k1_ecdsa_signature_parse_der`, a tweak by the return value of
+  the function applying it; the `ValueError` names what the library
+  refused. No wrapper here knows the curve order
+- **nothing is normalized into validity.** An argument of the wrong size
+  raises, and is never padded: the 32 bytes of nonce entropy (`ndata`,
+  `aux_rand32`, `rnd32`) are 32 bytes or omitted, a shorter value being a
+  caller mistake rather than a small number. BIP340 verification
+  (`ssa.verify`) and taproot tweaking (`xonly.tweak_add`,
+  `xonly.tweak_add_check`) take the 32-byte x-only key and only it: a
+  full public key with odd y would be verified or tweaked as a point the
+  caller did not pass, so `xonly.from_pubkey` is where a y coordinate
+  gets dropped, in the caller's own code. A leniency is a guess at what
+  the caller meant, and that decision is theirs to make
+- **the one convenience is the int scalar,** and it is not free. A private
+  key or a tweak may be given as an `int`, serialized big endian, which
+  is what a caller computing them as numbers already has. But a python
+  `int` is a variable-length object: serializing it, and whatever
+  arithmetic produced it, take a time that depends on the magnitude of
+  the value. Pass secrets as `bytes`
+
+None of these checks branches on the content of a secret — they look at a
+type, a length, or a magnitude, all of which the caller knows already —
+so the constant-time guarantee is the C call's, and it is intact. What
+python cannot give back is what happens on either side of that call:
+`bytes` is not zeroized either, and
+[SECURITY.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/SECURITY.md)
+records both limits as inherent.
+
+And there is a way past all of it: `lib` and `ffi` are exported, and a
+call made through them has no python in front of it whatsoever. That is
+how MuSig2 is reachable, and it is the path for a caller who wants the
+library and nothing added to it.
 
 ## Wrapped modules
 

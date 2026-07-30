@@ -33,11 +33,12 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
 
     prvkey_bytes = scalar(prvkey, "private key")
 
-    if not aux_rand32:
+    # entropy is not a serialization: a shorter value is a caller mistake
+    # rather than a small number, and is not padded into a valid argument
+    if aux_rand32 is None:
         aux_rand32 = secrets.token_bytes(32)
-    if len(aux_rand32) > 32:
-        raise ValueError("aux_rand32 must be at most 32 bytes")
-    aux_rand32 = b"\x00" * (32 - len(aux_rand32)) + aux_rand32
+    elif len(aux_rand32) != 32:
+        raise ValueError("aux_rand32 must be 32 bytes")
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_create(ctx, ell_bytes, prvkey_bytes, aux_rand32):
@@ -56,11 +57,11 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
 
-    if not rnd32:
+    # 32 bytes of entropy, or nothing: see the comment in create
+    if rnd32 is None:
         rnd32 = secrets.token_bytes(32)
-    if len(rnd32) > 32:
-        raise ValueError("rnd32 must be at most 32 bytes")
-    rnd32 = b"\x00" * (32 - len(rnd32)) + rnd32
+    elif len(rnd32) != 32:
+        raise ValueError("rnd32 must be 32 bytes")
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):

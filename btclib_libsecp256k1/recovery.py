@@ -34,12 +34,11 @@ def sign(
     sig = ffi.new("secp256k1_ecdsa_recoverable_signature *")
 
     noncefc = ffi.NULL
-    if ndata:
-        if len(ndata) > 32:
-            raise ValueError("ndata must be at most 32 bytes")
-        ndata = b"\x00" * (32 - len(ndata)) + ndata
-    else:
+    # 32 bytes of entropy, or nothing: see the comment in dsa.sign
+    if ndata is None:
         ndata = ffi.NULL
+    elif len(ndata) != 32:
+        raise ValueError("ndata must be 32 bytes")
     if not lib.secp256k1_ecdsa_sign_recoverable(
         ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata
     ):

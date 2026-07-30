@@ -122,7 +122,7 @@ def test_recovery_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="recovery failed"):
         # a zero r parses, but no point can be recovered from it
         recovery.recover(msg, b"\x00" * 64, 0)
-    with pytest.raises(ValueError, match="at most 32 bytes"):
+    with pytest.raises(ValueError, match="ndata must be 32 bytes"):
         recovery.sign(msg, 7, b"\x01" * 33)
 
 
@@ -136,6 +136,11 @@ def test_ellswift() -> None:
     assert ellswift.decode(ell_a) == pubkey_a
     # as does the one of an already computed public key
     assert ellswift.decode(ellswift.encode(pubkey_a)) == pubkey_a
+    # the randomness can be supplied, and then the encoding is a function
+    # of it: 32 bytes, like every other entropy argument here
+    fixed = ellswift.encode(pubkey_a, b"\x02" * 32)
+    assert fixed == ellswift.encode(pubkey_a, b"\x02" * 32)
+    assert ellswift.decode(fixed) == pubkey_a
     # the encoding is randomized: a fresh one differs
     assert ellswift.create(prvkey_a) != ell_a
 
@@ -155,12 +160,12 @@ def test_ellswift_invalid_inputs() -> None:
         ellswift.create(0)
     with pytest.raises(ValueError, match="32 bytes"):
         ellswift.create(b"\x01" * 31)
-    with pytest.raises(ValueError, match="at most 32 bytes"):
+    with pytest.raises(ValueError, match="aux_rand32 must be 32 bytes"):
         ellswift.create(11, b"\x01" * 33)
     with pytest.raises(ValueError, match="public key"):
         ellswift.encode(b"\x02" + b"\x00" * 32)
-    with pytest.raises(ValueError, match="at most 32 bytes"):
-        ellswift.encode(mult.mult_(11), b"\x01" * 33)
+    with pytest.raises(ValueError, match="rnd32 must be 32 bytes"):
+        ellswift.encode(mult.mult_(11), b"\x01" * 31)
     with pytest.raises(ValueError, match="64 bytes"):
         ellswift.decode(ell[1:])
     with pytest.raises(ValueError, match="64 bytes"):

@@ -169,15 +169,13 @@ def test_xonly_tweak_add() -> None:
     lifted = keys.pubkey_tweak_add(b"\x02" + xonly_bytes, tweak)
     assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)
 
-    # a full public key is accepted as well, and it is its even y point
-    # that gets tweaked: the public key of 11 has odd y, so this only
-    # holds because the key is lifted before tweaking
+    # a full public key is not accepted: the public key of 11 has odd y,
+    # so tweaking it would tweak a point the caller did not pass, and
+    # from_pubkey is where that lift is asked for
     assert mult.mult_(prvkey)[64] & 1
-    assert xonly.tweak_add(mult.mult_(prvkey), tweak) == (tweaked_bytes, parity)
-    assert xonly.tweak_add(compress(mult.mult_(prvkey)), tweak) == (
-        tweaked_bytes,
-        parity,
-    )
+    for form in (mult.mult_(prvkey), compress(mult.mult_(prvkey))):
+        with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
+            xonly.tweak_add(form, tweak)
 
     # the commitment can be checked without recomputing it
     assert xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, tweak)
@@ -209,10 +207,10 @@ def test_taproot_key_path() -> None:
 def test_xonly_invalid_inputs() -> None:
     xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
 
-    with pytest.raises(ValueError, match="x-only public key"):
+    with pytest.raises(ValueError, match="invalid x-only public key"):
         # 32 bytes which are not a valid x coordinate
         xonly.tweak_add(b"\xff" * 32, b"\x01" * 32)
-    with pytest.raises(ValueError, match="public key"):
+    with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
         xonly.tweak_add(b"\x02" + b"\x00" * 32, b"\x01" * 32)
     with pytest.raises(ValueError, match="tweak must be 32 bytes"):
         xonly.tweak_add(xonly_bytes, b"\x01" * 31)
