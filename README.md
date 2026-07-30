@@ -118,12 +118,23 @@ and decides nothing else.
   caller did not pass, so `xonly.from_pubkey` is where a y coordinate
   gets dropped, in the caller's own code. A leniency is a guess at what
   the caller meant, and that decision is theirs to make
-- **the one convenience is the int scalar,** and it is not free. A private
-  key or a tweak may be given as an `int`, serialized big endian, which
-  is what a caller computing them as numbers already has. But a python
-  `int` is a variable-length object: serializing it, and whatever
-  arithmetic produced it, take a time that depends on the magnitude of
-  the value. Pass secrets as `bytes`
+- **the one convenience is the int scalar,** and it widens nothing. A
+  private key or a tweak may be given as an `int`, checked against
+  `0 <= num < 2**256` and serialized big endian. This is not the padding
+  refused above: a short `bytes` states a value and a width, and accepting
+  it means choosing which of the two to disbelieve, while an `int` states
+  only a value — the 32-byte width is the curve's, not a fact the caller
+  supplied and got wrong. The set of valid scalars is unchanged; only the
+  type spelling them is. What the door is for is the caller who already
+  holds a number: `mult(3)`, a vector, a tweak just computed.
+  The cost is not in that serialization, which is a loop over nine CPython
+  digits and measures as noise. It is that an `int` holding a secret was
+  produced by python arithmetic, variable in time with the magnitude of
+  its operands and leaving unzeroized copies of every intermediate on the
+  heap — and that happened before this binding saw the value. `bytes` is
+  not zeroized either, so what passing them buys is narrow but real: no
+  arithmetic on the secret happened here. Scalar arithmetic that must not
+  leak belongs where that can be promised
 
 None of these checks branches on the content of a secret — they look at a
 type, a length, or a magnitude, all of which the caller knows already —
@@ -276,7 +287,7 @@ It stays out until a packager asks for it. The value is in opening a
 channel, and the costs above are paid from the first day, whether anyone
 walks it or not.
 
-## Build, test, develop, and contribute
+## Build
 
 The vendored libsecp256k1 is built with CMake on every platform, out of
 tree: the submodule is only ever read from. CMake is declared as a build
@@ -300,136 +311,10 @@ The dynamic (ABI mode) Windows wheel is instead cross-compiled on Linux
 with mingw-w64, through the vendored CMake toolchain file, and is
 x86_64 only.
 
-The btclib_libsecp256k1 project includes
-[libsecp256k1](https://github.com/bitcoin-core/secp256k1)
-as submodule in the secp256k1 folder.
-By default, when cloning a project you get the directories that contain
-submodules, but none of the files within them.
-You must run `git submodule init` to initialize
-your local configuration file,
-and `git submodule update` to fetch the submodule data
-and check out the appropriate commit.
-
-<!-- markdownlint-disable MD013 -->
-    $ git submodule init
-    Submodule 'secp256k1' (https://github.com/bitcoin-core/secp256k1.git) registered for path 'secp256k1'
-    $ git submodule update
-    Cloning into 'secp256k1'...
-<!-- markdownlint-enable MD013 -->
-
-The project uses [uv](https://docs.astral.sh/uv/) to manage the
-development environment. The interpreter it is built on is pinned in
-`.python-version`, and uv installs it if missing: neither pyenv nor a
-hand-made virtualenv is needed. The development dependencies are the
-PEP 735 groups declared in `pyproject.toml`.
-
-    uv sync
-
-This also builds and installs the extension in editable mode, so the
-C toolchain listed above must be available.
-
-To build:
-
-    uv build --sdist
-    uv build --wheel
-
-To test:
-
-    uv run pytest
-
-To measure the code coverage provided by tests:
-
-    uv run pytest --cov
-
-Coverage is measured in branch mode and gated by the `fail_under`
-ratchet in `pyproject.toml`; the same check runs in CI.
-
-To run everything CI checks before a PR, i.e. the formatter, the
-linters and the type checker:
-
-    uv run pre-commit run --all-files
-
-To time these bindings against the other python wrappers of
-libsecp256k1, and against the pure python implementation of btclib:
-
-    uv run --group bench scripts/benchmark.py
-
-That group is not part of `dev`, and installing it is a choice: btclib
-depends on this package, so it cannot be a dependency of developing it,
-and `coincurve` and `secp256k1` build a libsecp256k1 of their own, which
-needs `pkg-config` besides the toolchain above.
-
-To test against another supported interpreter, bypass the build cache:
-uv keys it on the sources, which do not tell it that the compiled
-extension belongs to one ABI version only.
-
-    uv run --python 3.9 --no-cache pytest
-
-On a Windows arm64 machine, mind which interpreter that request gets:
-uv installs an x86-64 one unless the architecture is named
-(`--python cpython-3.13-windows-aarch64`), reporting that support for
-the native architecture is not yet mature. Both work — the build follows
-the interpreter, as above — but only the native one exercises what the
-`win_arm64` wheels are.
-
-Beware that this replaces `.venv` with an environment built on that
-interpreter, and leaves it there. Going back is another `uv sync`, and
-`--reinstall-package btclib_libsecp256k1 --no-cache` if the extension it
-finds in the cache is the one of the ABI just left behind. Requesting a
-free-threaded interpreter (`--python 3.14t`) has a second effect: it
-installs it as a managed one, and `uv sync` then prefers it to a system
-3.14, so `uv python install 3.14` is what makes the default environment
-reproducible again.
-
-What a change is expected to satisfy, which branch a pull request targets,
-and which of the three btclib repositories an issue belongs in, are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
-### Running what CI runs
-
-Each job of the `lint` and `test` workflows, and the local command that
-reproduces it. Two of them cannot be reproduced on a machine that is not
-the runner, and that is worth knowing before trying.
-
-- `Lint and type-check`
-
-      uvx pre-commit run --all-files
-
-- `Coverage`
-
-      uv run --locked --no-default-groups --group test pytest --cov
-
-- `Test <version> on <os>`, one row of the matrix
-
-      uv run --python 3.9 --no-cache pytest
-
-- `Build wheels on <os>`, for this platform only
-
-      uv run --only-group build cibuildwheel
-
-  the Linux wheels of that job are built in a manylinux container, so
-  reproducing them needs a container runtime (`colima` on macOS)
-
-- `Build dynamic wheel on <os>`
-
-      BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
-
-- `Build sdist`, and `Test sdist install on <os>` after it
-
-      uv build --sdist
-      python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
-
-- `Validate distributions`
-
-      uv run --locked --only-group check twine check --strict dist/*
-      uv run --locked --only-group check check-wheel-contents dist/*.whl
-      uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
-
-- `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
-  faithful: the cross-compilation CI does is from ubuntu, not from macOS
-
-The `published` workflow has no local equivalent by design: what it
-installs is what PyPI serves.
+How to get the submodule, set up the development environment, run the
+suite and the benchmarks, reproduce each CI job locally, and what a
+change is expected to satisfy are in
+[CONTRIBUTING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/CONTRIBUTING.md).
 
 ## Release process
 

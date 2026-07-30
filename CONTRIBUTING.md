@@ -1,10 +1,10 @@
 # How to contribute
 
-Thank you for investing your time in this project. What follows is what
-this repository expects of a change; how to build, test and benchmark it
-is in the
-[Build, test, develop, and contribute](README.md#build-test-develop-and-contribute)
-section of the README, which is not repeated here.
+Thank you for investing your time in this project. What follows is how to
+build, test and benchmark these bindings, and what this repository
+expects of a change. What the build itself does on each platform is in
+the [Build](README.md#build) section of the README, which is not repeated
+here.
 
 Please read the [Code of Conduct](CODE_OF_CONDUCT.md) too.
 
@@ -43,6 +43,135 @@ how libsecp256k1 is linked and a bug is rarely in all three.
 
 Issues are not assigned to anyone: if one interests you, you are welcome
 to open a pull request for it.
+
+## Building and testing
+
+The btclib_libsecp256k1 project includes
+[libsecp256k1](https://github.com/bitcoin-core/secp256k1)
+as submodule in the secp256k1 folder.
+By default, when cloning a project you get the directories that contain
+submodules, but none of the files within them.
+You must run `git submodule init` to initialize
+your local configuration file,
+and `git submodule update` to fetch the submodule data
+and check out the appropriate commit.
+
+<!-- markdownlint-disable MD013 -->
+    $ git submodule init
+    Submodule 'secp256k1' (https://github.com/bitcoin-core/secp256k1.git) registered for path 'secp256k1'
+    $ git submodule update
+    Cloning into 'secp256k1'...
+<!-- markdownlint-enable MD013 -->
+
+The project uses [uv](https://docs.astral.sh/uv/) to manage the
+development environment. The interpreter it is built on is pinned in
+`.python-version`, and uv installs it if missing: neither pyenv nor a
+hand-made virtualenv is needed. The development dependencies are the
+PEP 735 groups declared in `pyproject.toml`.
+
+    uv sync
+
+This also builds and installs the extension in editable mode, so the
+C toolchain the README describes must be available.
+
+To build:
+
+    uv build --sdist
+    uv build --wheel
+
+To test:
+
+    uv run pytest
+
+To measure the code coverage provided by tests:
+
+    uv run pytest --cov
+
+Coverage is measured in branch mode and gated by the `fail_under`
+ratchet in `pyproject.toml`; the same check runs in CI.
+
+To run everything CI checks before a PR, i.e. the formatter, the
+linters and the type checker:
+
+    uv run pre-commit run --all-files
+
+To time these bindings against the other python wrappers of
+libsecp256k1, and against the pure python implementation of btclib:
+
+    uv run --group bench scripts/benchmark.py
+
+That group is not part of `dev`, and installing it is a choice: btclib
+depends on this package, so it cannot be a dependency of developing it,
+and `coincurve` and `secp256k1` build a libsecp256k1 of their own, which
+needs `pkg-config` besides the C toolchain.
+
+To test against another supported interpreter, bypass the build cache:
+uv keys it on the sources, which do not tell it that the compiled
+extension belongs to one ABI version only.
+
+    uv run --python 3.9 --no-cache pytest
+
+On a Windows arm64 machine, mind which interpreter that request gets:
+uv installs an x86-64 one unless the architecture is named
+(`--python cpython-3.13-windows-aarch64`), reporting that support for
+the native architecture is not yet mature. Both work — the build follows
+the interpreter — but only the native one exercises what the `win_arm64`
+wheels are.
+
+Beware that this replaces `.venv` with an environment built on that
+interpreter, and leaves it there. Going back is another `uv sync`, and
+`--reinstall-package btclib_libsecp256k1 --no-cache` if the extension it
+finds in the cache is the one of the ABI just left behind. Requesting a
+free-threaded interpreter (`--python 3.14t`) has a second effect: it
+installs it as a managed one, and `uv sync` then prefers it to a system
+3.14, so `uv python install 3.14` is what makes the default environment
+reproducible again.
+
+### Running what CI runs
+
+Each job of the `lint` and `test` workflows, and the local command that
+reproduces it. Two of them cannot be reproduced on a machine that is not
+the runner, and that is worth knowing before trying.
+
+- `Lint and type-check`
+
+      uvx pre-commit run --all-files
+
+- `Coverage`
+
+      uv run --locked --no-default-groups --group test pytest --cov
+
+- `Test <version> on <os>`, one row of the matrix
+
+      uv run --python 3.9 --no-cache pytest
+
+- `Build wheels on <os>`, for this platform only
+
+      uv run --only-group build cibuildwheel
+
+  the Linux wheels of that job are built in a manylinux container, so
+  reproducing them needs a container runtime (`colima` on macOS)
+
+- `Build dynamic wheel on <os>`
+
+      BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
+
+- `Build sdist`, and `Test sdist install on <os>` after it
+
+      uv build --sdist
+      python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
+
+- `Validate distributions`
+
+      uv run --locked --only-group check twine check --strict dist/*
+      uv run --locked --only-group check check-wheel-contents dist/*.whl
+      uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+
+- `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
+  faithful: the cross-compilation CI does is from ubuntu, not from macOS
+
+The `published` workflow has no local equivalent by design: what it
+installs is what PyPI serves.
 
 ## What a change has to satisfy
 
