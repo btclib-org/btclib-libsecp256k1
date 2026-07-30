@@ -92,12 +92,25 @@ repos:
         args: [--scripts-are-modules]
         # in strict mode an unresolved import is an error, and mypy runs
         # in its own isolated environment: what the checked files import
-        # has to be declared here
+        # has to be declared here.
+        # Pinned, for the reason spelled out on the shellcheck-py pin
+        # below and with more at stake: unpinned, pre-commit resolves
+        # these once, when it builds the hook environment, and then keeps
+        # that environment, so the versions are whatever the index held
+        # the day the environment was built — months ago on a developer's
+        # machine, and on a runner whenever the cache key of the lint
+        # workflow last changed. types-cffi is what describes the boundary
+        # this package is type-checked at, so two machines disagreeing on
+        # it is the gate itself disagreeing. Nothing moves an additional
+        # dependency, so these are moved by hand, with the lint and test
+        # groups of uv.lock: they are what it resolves for python 3.10 and
+        # later, which is what runs the hook (the lock reaches back to 3.9
+        # for the package, and pins older versions of these there)
         additional_dependencies:
-          - cffi
-          - types-cffi
-          - hatchling
-          - pytest
+          - cffi==2.1.0
+          - types-cffi==2.0.0.20260518
+          - hatchling==1.31.0
+          - pytest==9.1.1
   # the workflows are as much a part of this repository as the package,
   # and until now nothing checked them: an expression referring to a
   # context that does not exist, or a step reading an input a job never
