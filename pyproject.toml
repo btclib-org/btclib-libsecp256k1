@@ -131,7 +131,17 @@ test = ["pytest", "pytest-cov"]
 # mypy from this environment has to find the same things, or it reports
 # errors the gate does not (and passes what the gate would reject)
 lint = ["pre-commit", "ruff", "mypy", "types-cffi", "hatchling"]
-build = ["build", "cibuildwheel"]
+# what the wheel jobs build with, for the same reason as the check group
+# below: they used to `pip install -U` these, which gave each job whatever
+# the index held that morning, and these four decide what the artifacts
+# are. cibuildwheel picks the interpreters, the manylinux images and the
+# identifiers the skip in [tool.cibuildwheel] names, so a release of it
+# reshapes that matrix; auditwheel and delocate decide the platform tag of
+# the dynamic wheel, which is the file name pip matches against. With the
+# versions pinned by uv.lock and moved by dependabot, a release of any of
+# them is a pull request that runs the matrix, instead of a matrix that
+# breaks on a morning nothing here changed
+build = ["build", "cibuildwheel", "auditwheel", "delocate"]
 # what the check-dist job validates the distribution files with. A group,
 # rather than uvx fetching each tool at run time, so that the versions are
 # the ones uv.lock pins and dependabot moves: pyroma is run with --min 10,
@@ -152,6 +162,19 @@ dev = [
     { include-group = "lint" },
     { include-group = "build" },
 ]
+
+[tool.uv]
+# the oldest uv allowed to touch uv.lock, and it is the version the
+# uv-lock hook of .pre-commit-config.yaml pins: that hook is what
+# regenerates the file, and its rev is something pre-commit.ci moves.
+# Declared here the floor holds for every uv command rather than for the
+# hook alone, so an older uv on a developer's machine says so instead of
+# rewriting the lock in a format the runners then fail to read — uv is
+# pre-1.0 and changes that format. It also reaches CI without a second
+# pin: setup-uv, given no version input, reads this key, and a bare
+# minimum specifier makes it install the latest uv, so the runners are
+# never behind the floor and there is nothing here to go stale
+required-version = ">=0.12.0"
 
 [tool.mypy]
 # the package ships py.typed: its annotations are what btclib downstream

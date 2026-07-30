@@ -86,6 +86,15 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    # the interpreter uv runs the build tools with is the one setup-python
+    # installed below, and never one of uv's own: there is no managed
+    # CPython for windows aarch64, so on windows-11-arm what uv downloads
+    # is an emulated x86-64 build, and cibuildwheel reads the host
+    # architecture off the interpreter it is running on — this job would
+    # quietly produce win_amd64 wheels on the arm64 runner. With downloads
+    # off, an interpreter that is missing is a job that fails instead
+    env:
+      UV_PYTHON_DOWNLOADS: never
     strategy:
       # as for the test matrices, and here it costs more: with the
       # default, one platform failing (or one flaky runner) cancels the
@@ -120,10 +129,16 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      # the interpreter the dev-version action runs and the one uv runs the
+      # build tools with, which is why it stays even though cibuildwheel
+      # needs none of its own: the interpreters it builds wheels for are
+      # the ones it installs itself
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       # skipped on every trigger but a release rehearsal: the inputs
       # context is empty unless this workflow was called, and an empty
@@ -133,10 +148,23 @@ jobs:
         with:
           suffix: ${{ inputs.version-suffix }}
 
+      # cibuildwheel from the build group of pyproject.toml, pinned by
+      # uv.lock, rather than from `pip install -U`, which fetched whatever
+      # the index held that morning: what it decides — the interpreters,
+      # the manylinux images, the identifiers the skip in
+      # [tool.cibuildwheel] names — is this matrix, so a release of it
+      # belongs in a pull request that runs the matrix rather than in a
+      # push that did not touch it. --only-group omits the project, so
+      # this installs no extension of its own; the build frontend
+      # cibuildwheel then runs per interpreter comes from the same group.
+      # --frozen, not the --locked of the check-dist job: the step above
+      # rewrites the version in pyproject.toml on the rehearsal path,
+      # which is exactly the disagreement --locked refuses. That the lock
+      # is in step with pyproject.toml is asserted where it can be, by the
+      # uv-lock hook on every commit and by `uv lock --check` in the
+      # release workflow
       - name: Build wheels
-        run: |
-          python -m pip install -U pip build cibuildwheel
-          cibuildwheel
+        run: uv run --frozen --only-group build cibuildwheel
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -147,6 +175,11 @@ jobs:
     name: Build dynamic wheel on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    # see build-cibuildwheel; here the platform tag of the wheel is the
+    # interpreter's own, so substituting the interpreter substitutes the
+    # tag
+    env:
+      UV_PYTHON_DOWNLOADS: never
     strategy:
       # see build-cibuildwheel
       fail-fast: false
@@ -165,6 +198,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       # see build-cibuildwheel
       - uses: ./.github/actions/dev-version
@@ -186,22 +221,20 @@ jobs:
         run: |
           echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-26-intel' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
 
+      # the build group and --frozen: see build-cibuildwheel
       - name: Build wheel
-        run: |
-          python -m pip install -U pip build
-          BTCLIB_LIBSECP256K1_DYNAMIC=true python -m build -w
+        run: BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --frozen --only-group build python -m build -w
 
+      # auditwheel and delocate decide the platform tag this wheel ends up
+      # carrying, which is what pip matches against, so they are pinned
+      # with the rest of the build group rather than installed with -U
       - name: Repair wheel (Linux)
         if: runner.os == 'Linux'
-        run: |
-          python -m pip install -U auditwheel
-          auditwheel repair dist/*
+        run: uv run --frozen --only-group build auditwheel repair dist/*
 
       - name: Repair wheel (macOS)
         if: runner.os == 'macOS'
-        run: |
-          python -m pip install -U delocate
-          delocate-wheel -w wheelhouse dist/*
+        run: uv run --frozen --only-group build delocate-wheel -w wheelhouse dist/*
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -212,6 +245,9 @@ jobs:
     name: Build sdist
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # see build-cibuildwheel
+    env:
+      UV_PYTHON_DOWNLOADS: never
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -224,16 +260,17 @@ jobs:
         with:
           python-version: "3.14"
 
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
       # see build-cibuildwheel
       - uses: ./.github/actions/dev-version
         if: inputs.version-suffix != ''
         with:
           suffix: ${{ inputs.version-suffix }}
 
+      # the build group and --frozen: see build-cibuildwheel
       - name: Build source
-        run: |
-          python -m pip install -U pip build
-          python -m build -s
+        run: uv run --frozen --only-group build python -m build -s
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -316,6 +353,9 @@ jobs:
     name: "Build on Linux for Windows"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # see build-cibuildwheel
+    env:
+      UV_PYTHON_DOWNLOADS: never
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -328,6 +368,8 @@ jobs:
         with:
           python-version: "3.14"
 
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
       # see build-cibuildwheel
       - uses: ./.github/actions/dev-version
         if: inputs.version-suffix != ''
@@ -337,10 +379,14 @@ jobs:
       - name: Install dependencies
         run: sudo apt install -y mingw-w64
 
+      # the build group and --frozen: see build-cibuildwheel. The `wheel`
+      # this used to install with it is a setuptools-era requirement:
+      # hatchling writes the wheel itself, and nothing here invokes that
+      # package
       - name: Build Windows wheel
         run: |
-          python -m pip install -U pip build wheel
-          BTCLIB_LIBSECP256K1_CROSS_COMPILE=true CFFI_PLATFORM=Windows python -m build -w
+          BTCLIB_LIBSECP256K1_CROSS_COMPILE=true CFFI_PLATFORM=Windows \
+            uv run --frozen --only-group build python -m build -w
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
