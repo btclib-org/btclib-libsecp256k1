@@ -12,12 +12,22 @@ name: published
 # package has exposed since 0.4.0 (dsa.sign, dsa.verify, ssa.verify), so
 # the sentinel keeps working across releases instead of needing an edit
 # after each one. It verifies BIP340 test vector 0, whose values are fixed
-# forever, and round trips a signature this build makes.
+# forever, and round trips a signature this build makes. What is pinned
+# per cell instead is the kind of artifact pip must select: the wheel
+# layout — a static cpNN wheel for every CPython, free-threaded included,
+# and the one py3-none dynamic wheel that PyPy on Windows falls back to —
+# is the packaging strategy of this repository rather than a property of
+# one release, and which artifact a platform and an interpreter select is
+# exactly what this matrix samples. That is also why every wheel cell
+# installs with --only-binary: without it a yanked or missing wheel
+# demotes the cell to a second sdist test, and the loss it exists to
+# notice keeps the run green.
 #
 # It will be red until 0.7.1 is published, and not for a reason to shrug
 # at. PyPI carries 0.4.0, whose wheels are x86_64 only and stop at CPython
-# 3.12, so on every arm64 runner and on 3.13 or later pip falls back to
-# that sdist — which builds the vendored library with autotools
+# 3.12, so on every arm64 runner and on 3.13 or later the wheel cells fail
+# to resolve at all, while a user's unconstrained pip falls back to that
+# sdist — which builds the vendored library with autotools
 # (scripts/cffi_build.py of 0.4.0 runs autogen.sh), not with the CMake path
 # of today. Measured by hand on 30 July 2026, on Apple Silicon with 3.13,
 # that install fails: hatchling's force-include cannot find the extension
@@ -33,7 +43,12 @@ on:
     # weekly, on a minute that is not the hour: what everyone schedules on
     # the hour queues together, and a run that waits is a failure noticed
     # later. Only the default branch schedules workflows, so on any other
-    # branch this is reachable through the dispatch below alone
+    # branch this is reachable through the dispatch below alone.
+    # One caveat has no fix inside this file: GitHub suspends a schedule
+    # after sixty days without repository activity, which is precisely the
+    # quiet period a sentinel exists to cover, and announces it only by
+    # email. A silence from this workflow is worth a look at the Actions
+    # tab before it is read as green
     - cron: "23 6 * * 1"
   workflow_dispatch:
 
@@ -43,9 +58,13 @@ on:
 permissions:
   contents: read
 
+# never cancel a sentinel, unlike every other workflow here: the manual
+# run RELEASING.md dispatches right after a release and the weekly one
+# share this group, each is a sample worth keeping, and neither is
+# superseded by the other. A concurrent run queues instead
 concurrency:
   group: published-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test-published:
@@ -61,8 +80,8 @@ jobs:
         # nothing is compiled here (except in the one entry that is), and
         # what varies is which published wheel a platform and an
         # interpreter select. The two ends of the supported range, plus the
-        # free-threaded interpreter, which is what installs the py3-none
-        # dynamic wheel
+        # free-threaded interpreter, which must select the cp314t static
+        # wheel and not fall through to the py3-none dynamic one
         os:
           [
             ubuntu-latest,
@@ -86,6 +105,14 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.13"
             no-binary: true
+          # the one artifact PyPI serves as a dynamic wheel: PyPy on
+          # Windows, where no static pp3 wheel exists by design (see the
+          # skip in [tool.cibuildwheel]) and pip falls back to py3-none.
+          # PyPy anywhere else selects a static pp3 wheel of its own, so
+          # without this cell no published dynamic wheel is ever watched
+          - os: windows-latest
+            python-version: "pypy-3.11"
+            kind: dynamic
 
     steps:
       # no checkout on purpose: nothing from this repository takes part,
@@ -96,19 +123,45 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # --only-binary on every cell but the sdist one: see the header. In
+      # both directions only this package is constrained, never its
+      # dependencies. An environment variable and a shell conditional
+      # rather than a ${{ }} expression inside run, as everywhere else in
+      # these workflows: matrix values are not attacker-controlled, but
+      # the pattern is worth keeping uniform
       - name: Install the published package
         shell: bash
+        env:
+          NO_BINARY: ${{ matrix.no-binary || false }}
         run: |
           python -m pip install -U pip
-          python -m pip install --verbose \
-            ${{ matrix.no-binary && '--no-binary btclib_libsecp256k1' || '' }} \
-            btclib_libsecp256k1
+          if [ "$NO_BINARY" = "true" ]; then
+            python -m pip install --verbose --no-binary btclib_libsecp256k1 btclib_libsecp256k1
+          else
+            python -m pip install --verbose --only-binary btclib_libsecp256k1 btclib_libsecp256k1
+          fi
 
-      - name: Report what was installed
+      # asserted rather than printed: which kind of artifact pip selected
+      # is the property this matrix samples. Cells expect static unless
+      # they say otherwise — the sdist build included, a source build
+      # being cffi API mode by default
+      - name: Check that pip selected the expected kind of artifact
         shell: bash
+        env:
+          KIND: ${{ matrix.kind || 'static' }}
         run: |
           python -m pip show btclib_libsecp256k1
-          python -c "import _btclib_libsecp256k1 as m; print(m.__file__, 'static' if hasattr(m, 'lib') else 'dynamic')"
+          python - <<'PY'
+          import os
+          import sys
+
+          import _btclib_libsecp256k1 as m
+
+          actual = "static" if hasattr(m, "lib") else "dynamic"
+          print(m.__file__, actual)
+          if actual != os.environ["KIND"]:
+              sys.exit(f"expected a {os.environ['KIND']} install, got a {actual} one")
+          PY
 
       - name: Verify BIP340 vector 0, and round trip a signature
         shell: bash
