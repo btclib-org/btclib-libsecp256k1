@@ -17,6 +17,36 @@ and stays, in:
 - the comments in `.github/workflows/*.yml` and `pyproject.toml`, which
   carry the reasoning behind their choices
 
+## Architecture
+
+One thing decides how this package behaves, and it is decided at import
+time by `btclib_libsecp256k1/__init__.py`: `_load_lib` returns
+`module.lib` when the extension has libsecp256k1 linked into it (a static
+build) and otherwise `ffi.dlopen`s the shared object shipped beside it (a
+dynamic, cffi ABI mode build). Only one of those two branches exists in a
+given wheel, which is why `_load_lib` takes the module as an argument
+rather than reading it from the enclosing scope: the branch this build
+does not have is testable only with a stand-in, and that is how coverage
+still reaches every line. Every question of the form "why does this differ
+between platforms" comes back here.
+
+Above it, one module per libsecp256k1 module wrapped: `dsa`, `ssa`,
+`mult`, `ecdh`, `recovery`, `ellswift`, plus `keys`, `xonly`, `hashes`,
+`context` and `_scalar` for what crosses the boundary. MuSig2 is
+deliberately *not* wrapped: its two-round protocol needs a session whose
+secret nonce cannot be reused, which belongs where the signing state
+lives, in btclib; it is reachable through the raw `ffi` and `lib` this
+package exposes. See the Design section of the README before adding a
+module.
+
+Below it, `scripts/cffi_build.py` builds the vendored library with CMake
+and then compiles the extension by one of three paths — static with
+MSVC, static with the interpreter's own toolchain, or dynamic with no C
+compiled at all — chosen by `BTCLIB_LIBSECP256K1_DYNAMIC`,
+`BTCLIB_LIBSECP256K1_CROSS_COMPILE` and `CFFI_PLATFORM`.
+`stubs/_btclib_libsecp256k1.pyi` is what lets strict mypy typecheck a
+module that only exists after a build.
+
 ## The gate is one file
 
 `.pre-commit-config.yaml` is the single definition of what "clean" means.
@@ -76,6 +106,57 @@ wrong place.
 - development happens on `dev`; a pull request targets `dev`, and `master`
   only ever receives merges from it
 
+## Conventions the workflows hold to
+
+Each of these was arrived at by something going wrong, and `actionlint`
+and `zizmor` are hooks precisely so they stay true. Both must report zero
+findings.
+
+- every action pinned to a commit SHA, with the tag in a trailing comment
+- every workflow declares `permissions: contents: read`, and a job that
+  needs more declares it itself
+- every job declares `timeout-minutes`
+- `concurrency` groups are named literally (`test-${{ github.ref }}`),
+  never through `github.workflow`: in a called workflow what that resolves
+  to is undocumented, and if it is the caller's name the two workflows a
+  release calls would cancel each other
+- `actions/checkout` passes `persist-credentials: false`, so the token
+  does not stay in `.git/config` where an artifact upload could carry it
+- uv commands pass `--locked`, never `--frozen`: the second takes
+  `uv.lock` as it finds it and never checks it
+- the packaging tools come from the pinned `check` group, not from `uvx`,
+  which would fetch whatever the index holds when the job runs
+- a hook that needs a tool carries it in `additional_dependencies`, with
+  a version: unpinned it is whatever existed when each environment was
+  built, and nothing ever moves it
+
+## Facts that would otherwise cost a session
+
+- **`uv run --python 3.9 …` replaces `.venv`** with an environment built
+  on that interpreter, and leaves it there. Going back is another
+  `uv sync`, plus `--reinstall-package btclib_libsecp256k1 --no-cache` if
+  the extension in the cache belongs to the ABI just left. The README
+  says so, at the end of a long section
+- **`uv run` syncs the environment itself.** Without
+  `--no-default-groups --group test` it installs the whole dev set, which
+  is how the coverage job came to install twenty-nine packages after
+  deliberately installing ten
+- **the two secret-scanning extensions cannot be enabled.** Non-provider
+  patterns and validity checks need paid Secret Protection; the API
+  answers a PATCH with 200 and leaves them `disabled`, and the toggles
+  are absent from the UI on this plan. The `detect-secrets` hook is the
+  compensating control. Do not spend a session rediscovering this
+- **`release.yml` and `published.yml` are inert until they are on
+  `master`**: `schedule` and `workflow_dispatch` only run from the default
+  branch, so a rehearsal cannot be dispatched from `dev`
+- **adding to the json vector files fails the `detect-secrets` hook**
+  until `.secrets.baseline` is regenerated; the command is in
+  CONTRIBUTING.md, and reading its diff is the point of the baseline
+- **the `published` workflow is red until 0.7.1 is on PyPI**, for a
+  documented reason: 0.4.0 has no arm64 wheel and its sdist no longer
+  builds. That red is a fact about what users can install, not a broken
+  workflow
+
 ## Verifying, rather than reasoning about, a change
 
 The build matrix is expensive — tens of jobs compiling C — and this
@@ -87,3 +168,7 @@ worth a command:
 - when adding a check, hand it something bad and watch it fail. Every hook
   here was verified that way
 - prefer reading a log to predicting one: `gh run view <id> --log-failed`
+- read exit codes, not filtered output: `… | grep -v Passed` is a habit
+  that eventually reports a failure as a success
+- a claim about another repository, or about what a published version
+  does, is measurable too: install it in an isolated environment and look
