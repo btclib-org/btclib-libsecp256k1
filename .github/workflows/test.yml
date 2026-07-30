@@ -35,9 +35,10 @@ on:
 permissions:
   contents: read
 
-# cancel superseded runs on the same branch/PR
+# cancel superseded runs on the same branch/PR; named literally rather
+# than through github.workflow, for the reason given in lint.yml
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -60,7 +61,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           # the wheels of the test group, not the extension: the root
           # project is installed editable, so its build hook (and the
@@ -337,7 +338,7 @@ jobs:
       # for the check-wheel-contents configuration in pyproject.toml
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           # the three tools below are fetched by uvx on every run
           enable-cache: true

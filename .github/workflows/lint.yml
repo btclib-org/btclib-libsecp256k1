@@ -32,9 +32,17 @@ on:
 permissions:
   contents: read
 
-# cancel superseded runs on the same branch/PR
+# cancel superseded runs on the same branch/PR. The group is named
+# literally, not through github.workflow: concurrency groups are
+# per-repository, and what that context resolves to inside a called
+# workflow is not documented (the explicit note covers job.workflow_ref
+# only). Were it the caller's name, this workflow and the test one would
+# compute the same group when the release workflow calls both, and
+# cancel-in-progress would have the second cancel the first: a release
+# losing either its lint gate or its whole build matrix, on a path that
+# runs once per release and where nobody is watching for a cancellation
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: lint-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -58,7 +66,7 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           # pre-commit itself, which uvx fetches on every run; the hook
           # environments are the cache step above
