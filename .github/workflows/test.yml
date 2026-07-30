@@ -339,7 +339,17 @@ jobs:
       # bash on every runner, Windows included: pip does not expand the
       # glob itself, and PowerShell does not expand it for a native
       # command either, so the default shell there would hand pip the
-      # pattern verbatim
+      # pattern verbatim.
+      #
+      # pip and pytest unpinned, unlike every tool that comes from a group
+      # of pyproject.toml, and deliberately: this job and the two wheel
+      # test jobs hold no uv and no lock, because their subject is pip
+      # resolving and building a published artifact the way a user does,
+      # and pinning pytest would reintroduce the resolution they exist to
+      # exclude. The price is that filterwarnings = error makes a pytest
+      # release able to fail these jobs on a day nothing here changed;
+      # that is the same signal the published workflow carries, a fact
+      # about what a user hits, and it surfaces in a pull request
       - name: Install from sdist
         shell: bash
         run: |
@@ -411,7 +421,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          # the three tools below are fetched by uvx on every run
+          # the wheels of the check group, the three tools below among
+          # them, keyed on uv.lock
           enable-cache: true
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -521,6 +532,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # unpinned, and for the reason spelled out in test-sdist: a user's
+      # environment rather than the locked one
       - name: Upgrade Python packaging tools
         run: python -m pip install -U pip pytest
 
@@ -597,6 +610,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # unpinned, as in test-dynamic
       - name: Upgrade Python packaging tools
         run: python -m pip install -U pip pytest
 
