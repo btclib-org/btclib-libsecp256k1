@@ -197,6 +197,15 @@ select = [
     "D",     # pydocstyle
     "PL",    # pylint
     "RUF",   # ruff-specific
+    # ISC earns its place here: a test vector too long for one line is
+    # written as adjacent string literals, which is what a list of vectors
+    # missing a comma also looks like
+    "ISC",   # flake8-implicit-str-concat
+    "PT",    # flake8-pytest-style
+    "PGH",   # pygrep-hooks: a blanket noqa or type: ignore
+    "TRY",   # tryceratops
+    "FURB",  # refurb
+    "PIE",   # flake8-pie
 ]
 ignore = [
     # the blank line between a docstring and the body is the established
@@ -205,7 +214,22 @@ ignore = [
     # comparing against a key, signature or hash length (32, 33, 64, 65)
     # is not a magic value: it is the domain
     "PLR2004",
+    # the message of an exception belongs where it is raised, not in a
+    # class defined to carry it: these wrappers raise ValueError and
+    # RuntimeError, which is what a caller catches
+    "TRY003",
+    # what a wrapper rejects is an argument out of the domain, and the
+    # message says which: pytest.raises(ValueError) is the assertion, and
+    # narrowing every one of them to a match= pattern would test the
+    # wording of the message rather than the behaviour
+    "PT011",
 ]
+
+[tool.ruff.lint.flake8-pytest-style]
+# the names of a parametrize are a signature, and the comma-separated
+# string is how pytest itself writes one: with five of them the tuple form
+# wraps the decorator over three lines to say the same thing
+parametrize-names-type = "csv"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

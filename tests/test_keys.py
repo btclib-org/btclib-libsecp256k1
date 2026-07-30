@@ -244,7 +244,9 @@ def test_dsa_signature_forms() -> None:
         int.from_bytes(compact_bytes[:32], "big"),
         int.from_bytes(compact_bytes[32:], "big"),
     )
-    assert 0 < r < N and 0 < s < N
+    # two assertions, not one conjunction: a failure then says which half
+    assert 0 < r < N
+    assert 0 < s < N
     # and the conversion round trips
     assert dsa.to_der(compact_bytes) == der_bytes
 

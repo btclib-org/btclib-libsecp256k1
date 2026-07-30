@@ -44,6 +44,9 @@ repos:
       # - id: fix-byte-order-marker
       # - id: fix-encoding-pragma
       - id: check-yaml
+      # the vector files are json: a malformed one is worth a red hook
+      # rather than a test error that reads like a failing assertion
+      - id: check-json
       # - id: pretty-format-json
       - id: check-merge-conflict
       - id: check-vcs-permalinks
@@ -95,6 +98,16 @@ repos:
           - types-cffi
           - hatchling
           - pytest
+  # the workflows are as much a part of this repository as the package,
+  # and until now nothing checked them: an expression referring to a
+  # context that does not exist, or a step reading an input a job never
+  # declares, was found by running the workflow. The python packaging of
+  # actionlint, rather than the upstream hook, which is a go one
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: v1.7.12.24
+    hooks:
+      - id: actionlint
+
   # the server-side net GitHub does not give this repository: its secret
   # scanning covers the tokens of partner providers, while the generic
   # patterns (PEM keys, connection strings, authentication headers) are a

@@ -123,24 +123,30 @@ RFC6979_ECDSA_VECTORS = [
     ),
     (
         "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
-        "Equations are more important to me, because politics is for the "
-        "present, but an equation is something for eternity.",
+        (
+            "Equations are more important to me, because politics is for the "
+            "present, but an equation is something for eternity."
+        ),
         "9dc74cbfd383980fb4ae5d2680acddac9dac956dca65a28c80ac9c847c2374e4",
         "54c4a33c6423d689378f160a7ff8b61330444abb58fb470f96ea16d99d4a2fed",
         "07082304410efa6b2943111b6a4e0aaa7b7db55a07e9861d1fb3cb1f421044a5",
     ),
     (
         "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
-        "Not only is the Universe stranger than we think, it is stranger "
-        "than we can think.",
+        (
+            "Not only is the Universe stranger than we think, it is stranger "
+            "than we can think."
+        ),
         "fd27071f01648ebbdd3e1cfbae48facc9fa97edc43bbbc9a7fdc28eae13296f5",
         "ff466a9f1b7b273e2f4c3ffe032eb2e814121ed18ef84665d0f515360dab3dd0",
         "6fc95f5132e5ecfdc8e5e6e616cc77151455d46ed48f5589b7db7771a332b283",
     ),
     (
         "69ec59eaa1f4f2e36b639716b7c30ca86d9a5375c7b38d8918bd9c0ebc80ba64",
-        "Computer science is no more about computers than astronomy is "
-        "about telescopes.",
+        (
+            "Computer science is no more about computers than astronomy is "
+            "about telescopes."
+        ),
         "6bb4a594ad57c1aa22dbe991a9d8501daf4688bf50a4892ef21bd7c711afda97",
         "7186363571d65e084e7f02b0b77c3ec44fb1b257dee26274c38c928986fea45d",
         "0de0b38e06807e46bda1f1e293f4f6323e854c86d58abdd00c46c16441085df6",
@@ -176,14 +182,18 @@ TREZOR_ECDSA_VECTORS = [
     (
         "312155017c70a204106e034520e0cdf17b3e54516e2ece38e38e38e38e38e38e",
         "ffffffffffffffffffffffffffffffff20202020202020202020202020202020",
-        "e3d70248ea2fc771fc8d5e62d76b9cfd5402c96990333549eaadce1ae9f737eb"
-        "5cfbdc7d1e0ec18cc9b57bbb18f0a57dc929ec3c4dfac9073c581705015f6a8a",
+        (
+            "e3d70248ea2fc771fc8d5e62d76b9cfd5402c96990333549eaadce1ae9f737eb"
+            "5cfbdc7d1e0ec18cc9b57bbb18f0a57dc929ec3c4dfac9073c581705015f6a8a"
+        ),
     ),
     (
         "312155017c70a204106e034520e0cdf17b3e54516e2ece38e38e38e38e38e38e",
         "2020202020202020202020202020202020202020202020202020202020202020",
-        "40666188895430715552a7e4c6b53851f37a93030fb94e043850921242db78e8"
-        "75aa2ac9fd7e5a19402973e60e64382cdc29a09ebf6cb37e92f23be5b9251aee",
+        (
+            "40666188895430715552a7e4c6b53851f37a93030fb94e043850921242db78e8"
+            "75aa2ac9fd7e5a19402973e60e64382cdc29a09ebf6cb37e92f23be5b9251aee"
+        ),
     ),
 ]
 
@@ -208,29 +218,41 @@ def test_trezor_ecdsa_vector(seckey_hex: str, digest_hex: str, sig_hex: str) -> 
 # read as unsigned, and out-of-range values are zeroed instead of
 # rejected
 PARSED_DER = [
-    "30450221009a0b7be0d4ed3146ee262b42202841834698bb3ee39c24e7437df208b8"
-    "b7077102202b79ab1e7736219387dffe8d615bbdba87e11477104b867ef47afed1a5"
-    "ede781",
-    "30440220666666666666666666666666666666666666666666666666666666666666"
-    "66660220777777777777777777777777777777777777777777777777777777777777"
-    "7777",
-    "30450220666666666666666666666666666666666666666666666666666666666666"
-    "6666022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    "eeeeee",
-    "3045022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    "eeeeee02207777777777777777777777777777777777777777777777777777777777"
-    "777777",
+    (
+        "30450221009a0b7be0d4ed3146ee262b42202841834698bb3ee39c24e7437df208b8"
+        "b7077102202b79ab1e7736219387dffe8d615bbdba87e11477104b867ef47afed1a5"
+        "ede781"
+    ),
+    (
+        "30440220666666666666666666666666666666666666666666666666666666666666"
+        "66660220777777777777777777777777777777777777777777777777777777777777"
+        "7777"
+    ),
+    (
+        "30450220666666666666666666666666666666666666666666666666666666666666"
+        "6666022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "eeeeee"
+    ),
+    (
+        "3045022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "eeeeee02207777777777777777777777777777777777777777777777777777777777"
+        "777777"
+    ),
     "3006020166020177",
     "3007020166020200ee",
     "3007020200ee020177",
     "3008020200ee020200ff",
     # r with the high bit set, read as a large unsigned integer
-    "304402207f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1"
-    "f0220800102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    (
+        "304402207f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1"
+        "f0220800102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    ),
     # s not below the group order, zeroed by the parser
-    "3046022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    "eeeeee022100ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    "ffffffff",
+    (
+        "3046022100eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "eeeeee022100ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "ffffffff"
+    ),
 ]
 
 # rejected by secp256k1_ecdsa_signature_parse_der
@@ -238,8 +260,10 @@ REJECTED_DER = [
     "",
     "3008020200ee020200ff00",  # trailing garbage
     # non-minimal zero padding
-    "30440220007f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1"
-    "e022000800102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e",
+    (
+        "30440220007f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1"
+        "e022000800102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e"
+    ),
 ]
 
 
