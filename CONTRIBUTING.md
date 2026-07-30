@@ -57,6 +57,17 @@ release.
 - **the tests pass with full coverage.** `uv run pytest --cov`; the
   `fail_under` ratchet in `pyproject.toml` is what makes the number mean
   something, so new code arrives with the tests that cover its branches
+- **the secret-scanning baseline follows the vectors.** The test data is
+  private keys, so `detect-secrets` would report all of it; the known
+  findings live in `.secrets.baseline`, reviewed once. Adding to
+  `tests/ecdsa_sig.json` or `tests/ecdsa_custom_nonce_sig.json` therefore
+  fails that hook until the baseline is regenerated:
+
+      uvx --from detect-secrets detect-secrets scan \
+          --baseline .secrets.baseline
+
+  read the diff before committing it, which is the whole point of the
+  baseline: what appears there is what nobody has looked at yet
 - **new wrapped functionality is validated against external vectors.**
   A test that compares these bindings against themselves proves nothing.
   `tests/test_vectors.py` documents where each vendored vector file comes

@@ -116,24 +116,28 @@ repos:
   # covers the pushes detect-private-key above cannot see: a commit made
   # with --no-verify, an edit from the web interface, a fork.
   #
-  # The two entropy plugins are disabled and the two json vector files
-  # excluded, both for one reason: the test data of a signing library is
-  # private keys by the hundred, published upstream and vendored here to
-  # be compared against, and every one of them is a finding. With them
-  # off the tree is clean, and what is still detected is exactly the class
-  # worth detecting: a credential of some other system, committed by
-  # mistake. Verified by handing the hook a PEM key, which it stops
+  # The test data of a signing library is private keys by the hundred,
+  # published upstream and vendored here to be compared against, so the
+  # two json vector files are 398 findings on their own. They are recorded
+  # in .secrets.baseline as already reviewed rather than excluded from the
+  # scan: an exclusion would have made those files blind for good, and the
+  # difference is not theoretical — an AWS key planted in one of them was
+  # not seen while they were excluded, and is seen now.
+  # The baseline was generated with the two entropy plugins off, and it is
+  # the baseline that governs which plugins run. That is a deliberate
+  # limit: with them on, the baseline grows from 398 entries in 2 files to
+  # 1829 in 5, and every new hex constant in any test fails the hook until
+  # someone regenerates it — in files made of nothing but 64-character hex
+  # strings, a new one is what a legitimate vector looks like, so the
+  # check would report the work rather than the risk.
+  # Adding a vector to those two files does require regenerating the
+  # baseline; see CONTRIBUTING.md
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         name: detect-secrets (credentials of other systems)
-        args:
-          - --disable-plugin
-          - HexHighEntropyString
-          - --disable-plugin
-          - Base64HighEntropyString
-        exclude: ^tests/ecdsa(_custom_nonce)?_sig\.json$
+        args: [--baseline, .secrets.baseline]
 
   # keep uv.lock in sync with pyproject.toml. The release workflow asserts
   # the same thing with uv lock --check, and every uv command in CI passes
