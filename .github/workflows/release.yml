@@ -168,8 +168,6 @@ jobs:
     needs: [lint, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # deployment gate: configure required reviewers on the "pypi"
-    # environment to require a manual approval before publishing
     environment:
       name: pypi
       url: https://pypi.org/p/btclib_libsecp256k1
