@@ -55,6 +55,17 @@ repos:
       - id: check-docstring-first
       # - id: name-tests-test
       - id: check-toml
+  # common misspellings, in comments and documentation as much as in code.
+  # The default dictionaries (clear, rare) on purpose: the optional ones
+  # were tried and report only what this repository means to say — code
+  # and usage flag "keypair", which is the name of the upstream
+  # secp256k1_keypair type, and "master", which is a branch this
+  # repository actually has. The vendored secp256k1 tree is not seen
+  # because pre-commit only passes files tracked here, not the submodule's
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.23.2
     hooks:
