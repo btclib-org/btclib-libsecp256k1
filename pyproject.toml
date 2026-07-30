@@ -31,7 +31,18 @@ classifiers=[
         "Topic :: Scientific/Engineering",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ]
-dependencies = ['cffi>=1.0.0']
+# the wrappers call ffi.unpack on every path, which cffi grew in 1.6;
+# below 3.13 any cffi new enough to compile for the interpreter already
+# satisfies that, so 1.6 is the honest floor there. The two newest
+# interpreters have to be asked for by name, or the resolver may pick a
+# cffi that cannot know them: 1.17 is the first release supporting
+# CPython 3.13, 2.0 the first supporting 3.14 and the free-threaded
+# build. The old '>=1.0.0' declared an installable-but-broken pair
+dependencies = [
+    'cffi>=1.6; python_version<"3.13"',
+    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version>="3.14"',
+]
 
 [project.urls]
 homepage = "https://btclib.org"
@@ -55,7 +66,11 @@ requires = [
     # license expression and license-files above outright, so the floor
     # is what the metadata of this project already requires
     "hatchling>=1.27",
-    "cffi>=1.0.0",
+    # the same floors as the runtime dependency above, and for the same
+    # reason: the build runs the cdef through the very cffi it resolves
+    'cffi>=1.6; python_version<"3.13"',
+    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version>="3.14"',
     'setuptools; python_version>="3.12"',
     "cmake>=3.22",
 ]
