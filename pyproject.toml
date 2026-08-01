@@ -40,7 +40,7 @@ classifiers=[
 # build. The old '>=1.0.0' declared an installable-but-broken pair
 dependencies = [
     'cffi>=1.6; python_version<"3.13"',
-    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version=="3.13"',
     'cffi>=2.0; python_version>="3.14"',
 ]
 
@@ -69,7 +69,7 @@ requires = [
     # the same floors as the runtime dependency above, and for the same
     # reason: the build runs the cdef through the very cffi it resolves
     'cffi>=1.6; python_version<"3.13"',
-    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version=="3.13"',
     'cffi>=2.0; python_version>="3.14"',
     'setuptools; python_version>="3.12"',
     "cmake>=3.22",
