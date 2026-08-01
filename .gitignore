@@ -80,8 +80,8 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv / uv: .python-version is tracked, it pins the interpreter the
-# development environment is built on (the newest supported one)
+# python
+.python-version
 
 # celery beat schedule file
 celerybeat-schedule
