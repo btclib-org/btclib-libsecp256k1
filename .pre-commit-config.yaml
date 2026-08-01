@@ -1,23 +1,52 @@
 # Skip execution of one or more hooks using the SKIP environment variable:
-# $ SKIP=pylint git commit -m "foo"
-# $ SKIP=mypy,pylint pre-commit run --all-files
+# $ SKIP=mypy git commit -m "foo"
+# $ SKIP=mypy,ruff-check pre-commit run --all-files
 #
 # If want to disable all hooks while committing, use the --no-verify/-n option:
 # $ git commit -n -m "foo"
 
+# pre-commit.ci is enabled on this repository, so the hooks below are
+# checked in two places. The gate is the lint workflow, which runs this
+# very file: what CI enforces is therefore exactly what the hook does on
+# a developer's machine, with no second list of tools and versions to
+# keep in step. What pre-commit.ci alone provides, and what it is kept
+# for, is the periodic pull request bumping the revisions pinned below.
+ci:
+  # a bot committing to a branch is at odds with the rest of this setup,
+  # where the workflow token cannot write and every action is pinned to
+  # a commit SHA: a failing hook has to be fixed by its author
+  autofix_prs: false
+  # onto dev, as Dependabot does: master only receives merges from it
+  autoupdate_branch: dev
+  autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
+  autoupdate_schedule: weekly
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: mixed-line-ending
+        # not the default --fix=auto, which normalizes a file to its own
+        # most frequent ending: a file entirely in CRLF is consistent by
+        # that measure, so it stays, and the LF lines added to it are
+        # converted the wrong way. This repository is LF throughout
+        args: [--fix=lf]
+        # except for the BIP340 vectors, vendored from bitcoin/bips byte
+        # for byte, CRLF included: what makes them worth trusting is
+        # being the upstream file, which anyone can fetch and diff, and
+        # the csv module reads them either way
+        exclude: ^tests/bip340_test_vectors\.csv$
       - id: check-case-conflict
       # - id: check-executables-have-shebangs
       # - id: check-shebang-scripts-are-executable
       # - id: fix-byte-order-marker
       # - id: fix-encoding-pragma
       - id: check-yaml
+      # the vector files are json: a malformed one is worth a red hook
+      # rather than a test error that reads like a failing assertion
+      - id: check-json
       # - id: pretty-format-json
       - id: check-merge-conflict
       - id: check-vcs-permalinks
@@ -26,72 +55,153 @@ repos:
       - id: check-docstring-first
       # - id: name-tests-test
       - id: check-toml
-  - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.11.0
+  # common misspellings, in comments and documentation as much as in code.
+  # The default dictionaries (clear, rare) on purpose: the optional ones
+  # were tried and report only what this repository means to say — code
+  # and usage flag "keypair", which is the name of the upstream
+  # secp256k1_keypair type, and "master", which is a branch this
+  # repository actually has. The vendored secp256k1 tree is not seen
+  # because pre-commit only passes files tracked here, not the submodule's
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
     hooks:
-      - id: markdownlint-cli2-fix
-        name: markdownlint-cli2-fix (in place fixes)
+      - id: codespell
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.2
+    hooks:
+      - id: markdownlint-cli2
+        name: markdownlint-cli2 (in place fixes)
+        args: [--fix]
   - repo: https://github.com/leoll2/copyright_notice_precommit
     rev: 0.1.1
     hooks:
       - id: copyright-notice
         args: [--notice=COPYRIGHT]
-        files: python
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.15.0
+        # "python" as a filename pattern never matched anything: the
+        # notice was checked on no file at all
+        files: \.py$
+  # ruff replaces black, isort, flake8, autoflake, pyupgrade, bandit,
+  # pydocstringformatter and yesqa: one tool, one config section in
+  # pyproject.toml, and a fraction of the runtime. The rule selection
+  # (and what each family stands in for) is documented there
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
     hooks:
-      - id: pyupgrade
-        args: [--py38-plus]
-        # exclude: *fixtures
-  - repo: https://github.com/PyCQA/autoflake
-    rev: v2.2.1
-    hooks:
-      - id: autoflake
-        args:
-          - --in-place
-          - --expand-star-imports
-          - --remove-all-unused-imports
-          - --ignore-init-module-imports
-          - --remove-duplicate-keys
-          - --remove-unused-variables
-          - --remove-rhs-for-unused-variables
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        name: isort (black profile, in place fixes)
-        args: ["--profile", "black", "--filter-files"]
-  - repo: https://github.com/DanielNoord/pydocstringformatter
-    rev: v0.7.3
-    hooks:
-      - id: pydocstringformatter
-  - repo: https://github.com/asottile/yesqa
-    rev: v1.5.0
-    hooks:
-      - id: yesqa
-  - repo: https://github.com/psf/black
-    rev: 23.7.0
-    hooks:
-      - id: black
-        name: black (in place fixes)
-        # args: [--diff, --check]
-        # It is recommended to specify the latest version of Python
-        # supported by your project here, or alternatively use
-        # pre-commit's default_language_version, see
-        # https://pre-commit.com/#top_level-default_language_version
-        # language_version: python3.11
-  - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
-    hooks:
-      - id: flake8
-        additional_dependencies: [Flake8-pyproject]
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.5
-    hooks:
-      - id: bandit
-        # disable B101 (Test for use of assert)
-        args: ["-s", "B101"]
+      - id: ruff-check
+        name: ruff (lint, in place fixes)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format, in place fixes)
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.1
+    rev: v2.3.0
     hooks:
       - id: mypy
+        # the mirror injects --ignore-missing-imports by default, which
+        # silently turns an unresolved (or misspelled) import into Any:
+        # that is the opposite of strict. The modules that legitimately
+        # cannot be resolved are declared in the pyproject overrides
+        args: [--scripts-are-modules]
+        # in strict mode an unresolved import is an error, and mypy runs
+        # in its own isolated environment: what the checked files import
+        # has to be declared here.
+        # Pinned, for the reason spelled out on the shellcheck-py pin
+        # below and with more at stake: unpinned, pre-commit resolves
+        # these once, when it builds the hook environment, and then keeps
+        # that environment, so the versions are whatever the index held
+        # the day the environment was built — months ago on a developer's
+        # machine, and on a runner whenever the cache key of the lint
+        # workflow last changed. types-cffi is what describes the boundary
+        # this package is type-checked at, so two machines disagreeing on
+        # it is the gate itself disagreeing. Nothing moves an additional
+        # dependency, so these are moved by hand, with the lint and test
+        # groups of uv.lock: they are what it resolves for python 3.10 and
+        # later, which is what runs the hook (the lock reaches back to 3.9
+        # for the package, and pins older versions of these there)
+        additional_dependencies:
+          - cffi==2.1.0
+          - types-cffi==2.0.0.20260518
+          - hatchling==1.31.0
+          - pytest==9.1.1
+  # the workflows are as much a part of this repository as the package,
+  # and until now nothing checked them: an expression referring to a
+  # context that does not exist, or a step reading an input a job never
+  # declares, was found by running the workflow. The python packaging of
+  # actionlint, rather than the upstream hook, which is a go one
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: v1.7.12.24
+    hooks:
+      - id: actionlint
+        # actionlint runs shellcheck over every run: script, but only if
+        # it finds one: the ubuntu runner has shellcheck installed and a
+        # developer's machine generally does not, so without this the hook
+        # is weaker locally than in CI, and says so only after a push.
+        # shellcheck-py puts the binary in the hook's own environment.
+        # Pinned, because nothing moves an additional dependency: unpinned
+        # it is whatever version existed the day each environment was
+        # built, so two machines can disagree and a shellcheck release
+        # adding a check turns a pull request red that changed nothing.
+        # Pinned and stale is the lesser evil, and it is visible here
+        additional_dependencies: [shellcheck-py==0.11.0.1]
+
+  # what actionlint does not look at: the security of a workflow rather
+  # than its validity. Template injection through an interpolated ${{ }},
+  # a checkout leaving its credential in .git/config where an artifact
+  # upload can carry it away, a cache written by a pull request and
+  # restored by the job that publishes a release.
+  # --offline on purpose: some audits can query GitHub, which would make
+  # the hook need a token and behave differently on a machine that has
+  # none. Compared here with a token and without: on these files the two
+  # report the same findings
+  # the upstream hook rather than a local one pinning zizmor by hand: its
+  # own file filter covers dependabot.yml and action.yml besides the
+  # workflows, which a hand-written pattern got wrong (and hid the audit
+  # that had findings), and its rev is something pre-commit.ci moves,
+  # where an additional_dependencies pin is moved by nothing.
+  # The args replace the hook's own, so --no-progress has to be repeated
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.28.0
+    hooks:
+      - id: zizmor
+        name: zizmor (workflow security)
+        args: [--offline, --no-progress]
+
+  # the server-side net GitHub does not give this repository: its secret
+  # scanning covers the tokens of partner providers, while the generic
+  # patterns (PEM keys, connection strings, authentication headers) are a
+  # Secret Protection feature the free plan accepts and ignores. Run from
+  # the lint workflow, which is also what a fork's pull request runs, this
+  # covers the pushes detect-private-key above cannot see: a commit made
+  # with --no-verify, an edit from the web interface, a fork.
+  #
+  # The test data of a signing library is private keys by the hundred,
+  # published upstream and vendored here to be compared against, so the
+  # two json vector files are 398 findings on their own. They are recorded
+  # in .secrets.baseline as already reviewed rather than excluded from the
+  # scan: an exclusion would have made those files blind for good, and the
+  # difference is not theoretical — an AWS key planted in one of them was
+  # not seen while they were excluded, and is seen now.
+  # The baseline was generated with the two entropy plugins off, and it is
+  # the baseline that governs which plugins run. That is a deliberate
+  # limit: with them on, the baseline grows from 398 entries in 2 files to
+  # 1829 in 5, and every new hex constant in any test fails the hook until
+  # someone regenerates it — in files made of nothing but 64-character hex
+  # strings, a new one is what a legitimate vector looks like, so the
+  # check would report the work rather than the risk.
+  # Adding a vector to those two files does require regenerating the
+  # baseline; see CONTRIBUTING.md
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets (credentials of other systems)
+        args: [--baseline, .secrets.baseline]
+
+  # keep uv.lock in sync with pyproject.toml. The release workflow asserts
+  # the same thing with uv lock --check, and every uv command in CI passes
+  # --locked, but all of those are downstream: this is the hook that keeps
+  # a dependency added to pyproject.toml from reaching a branch without
+  # the lock entry that pins it
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.0
+    hooks:
+      - id: uv-lock

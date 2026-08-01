@@ -1,0 +1,28 @@
+name: Question
+description: Ask about how these bindings work, or why they work that way
+labels: [question]
+
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Discussions are not enabled here, so a question is an issue. Check
+        the [README](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/README.md)
+        first: it is the documentation of this package, and its Design and
+        Wrapped modules sections answer most of what gets asked.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: >
+        What you are trying to do, and what you have already read or tried.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version, if it matters
+      description: >
+        `python -c "import btclib_libsecp256k1 as m; print(m.__version__)"`

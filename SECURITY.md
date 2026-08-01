@@ -1,0 +1,64 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Please do not open a GitHub issue. Provide responsible disclosure
+either privately through GitHub, from the Security tab of this
+repository ("Report a vulnerability"), or by emailing
+_security at btclib dot org_, as for every btclib project.
+
+## What belongs here, and what belongs upstream
+
+This project is a thin binding layer: the cryptography is
+[libsecp256k1](https://github.com/bitcoin-core/secp256k1), vendored as a
+submodule and built from source. A flaw in the library itself is not
+ours to fix, and it has its own
+[security policy](https://github.com/bitcoin-core/secp256k1/blob/master/SECURITY.md)
+and its own address, _secp256k1-security at bitcoincore dot org_.
+
+Report there anything affecting the C library. Report here anything
+affecting how these bindings drive it:
+
+- the validation of the arguments crossing the cffi boundary. Every
+    wrapper checks lengths and ranges before a pointer reaches C, which
+    reads a fixed number of bytes from it and cannot know it was handed
+    less
+- the libsecp256k1 default callbacks, which this project replaces with
+    do-nothing stubs so that an illegal argument does not `abort()` the
+    hosting Python process. The consequence is that nothing downstream of
+    the wrapper modules catches an illegal argument: code reaching the
+    raw `lib` bindings directly is on its own
+- the build: which optional modules are compiled in, and the commit of
+    libsecp256k1 the submodule is pinned to
+- the distributions published to PyPI and their provenance
+
+## Supported versions
+
+Only the latest release is supported. Version numbers track the wrapped
+libsecp256k1 (release M.N.P wraps libsecp256k1 vM.N.P, with a fourth
+number appended for binding-only releases); a fix is published as a new
+release, and nothing is backported.
+
+Wheels and sdist are published with PEP 740 attestations, so that a
+distribution can be traced back to the workflow run and the commit it
+was built from.
+
+## Limitations of the binding layer
+
+These are known and inherent, not vulnerabilities:
+
+- secret material handed to these bindings lives in Python objects,
+    which are immutable and not zeroized: it stays in the process memory
+    until garbage collection, and may be copied by the interpreter. The
+    constant-time properties of libsecp256k1 apply to the C side of the
+    boundary, not to what the caller does before and after it
+- a scalar passed as an `int` leaks its magnitude. A Python integer is a
+    variable-length object, so serializing one — and any arithmetic that
+    produced it — takes a time that depends on the value; the argument
+    checks in front of the call add no leak of their own, branching on a
+    type, a length or a magnitude and never on the content of a secret.
+    Everywhere an `int` is accepted `bytes` is too, and for a secret that
+    is the form to use
+- randomness comes from `secrets.token_bytes`, i.e. from the operating
+    system, both for the context randomization and for the auxiliary
+    randomness of BIP340 signing and of ElligatorSwift encoding

@@ -48,7 +48,6 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
-.nox/
 .coverage
 .coverage.*
 .cache
@@ -81,7 +80,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
+# python
 .python-version
 
 # celery beat schedule file
@@ -127,8 +126,15 @@ Gemfile.lock
 ~*.docx
 
 **/_btclib_libsecp256k1.*
+# ... but the hand-written type stub of the extension is source
+!stubs/_btclib_libsecp256k1.pyi
 *.o
 *.dll
 *.so
+*.dylib
 
 .pytest_cache/
+# ruff drops a .gitignore of its own inside .ruff_cache: that only hides
+# the cache once ruff has created it, and says nothing to a tree where
+# the directory does not exist yet
+.ruff_cache/

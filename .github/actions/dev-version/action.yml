@@ -1,0 +1,44 @@
+name: Append a dev suffix to the version
+description: >
+  Rewrites the version in pyproject.toml, appending the given suffix, so
+  that a rehearsal builds a version no index has seen. Every build job of
+  the test workflow runs this, and they must all produce the same
+  version: the suffix is decided once, by the caller.
+
+inputs:
+  suffix:
+    description: What to append, e.g. .dev42
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # python, not sed: this runs on every runner the build matrices use,
+    # and in-place editing is spelled differently by BSD sed (macOS) and
+    # GNU sed. Every caller sets up python before reaching this
+    - shell: bash
+      env:
+        SUFFIX: ${{ inputs.suffix }}
+      run: |
+        python - <<'PY'
+        import os
+        import re
+        import tomllib
+        from pathlib import Path
+
+        path = Path("pyproject.toml")
+        text = path.read_text(encoding="utf-8")
+        # the value is read with a toml parser and only then located in
+        # the text: a regex looking for a version key on its own would
+        # find whichever table came first
+        version = tomllib.loads(text)["project"]["version"]
+        match = re.search(rf'(?m)^version\s*=\s*"{re.escape(version)}"\s*$', text)
+        if match is None:
+            msg = f"pyproject.toml declares {version}, which is not a literal in it"
+            raise SystemExit(msg)
+        # the assignment is rewritten as a whole, which leaves its
+        # spelling exactly as the file had it
+        line = match.group().replace(version, version + os.environ["SUFFIX"], 1)
+        path.write_text(text[: match.start()] + line + text[match.end() :], encoding="utf-8")
+        PY
+        grep -m1 '^version' pyproject.toml

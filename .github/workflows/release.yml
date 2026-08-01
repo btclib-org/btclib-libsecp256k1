@@ -1,0 +1,242 @@
+name: release
+
+# publish to PyPI with Trusted Publishing (OIDC): no long-lived PyPI
+# token exists anywhere; PyPI trusts this very workflow (registered in
+# the PyPI project settings under "Publishing") and hands out a
+# short-lived upload token at run time.
+# See RELEASING.md.
+
+on:
+  push:
+    tags: ["v*"]
+  # rehearsal: a manual run publishes to TestPyPI, a tag to PyPI, and
+  # there is nothing to choose at dispatch time. A version cannot be
+  # reuploaded to either index, so the one thing this workflow must not
+  # do is reach PyPI when it was meant to be a trial run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # the same gate a push gets: a release is not the moment to discover
+  # that the tagged commit does not lint
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  # what a version cannot survive being wrong about, checked before
+  # anything is built and long before anything is uploaded: a version is
+  # consumed by the upload that carries it, and can then only be yanked.
+  # The rehearsal runs this too, so a mismatch cannot wait for release
+  # day to surface; only the tag comparison is release-only, there being
+  # no tag to compare against otherwise
+  version-check:
+    name: Check the declared versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # off, unlike everywhere else, and not by omission: a cache is
+          # written by the jobs of a pull request and restored by this one,
+          # which runs on a tag and decides whether a release proceeds.
+          # There is nothing to gain here anyway — the two commands below
+          # install nothing — and the default of this action is to cache
+          enable-cache: false
+
+      # uv.lock carries the project version too, so a bump that was not
+      # followed by uv lock leaves the two disagreeing, and the sdist
+      # ships the lock file
+      - name: Check that uv.lock is up to date
+        run: uv lock --check
+
+      - name: Check that the tag matches the declared version
+        if: github.event_name == 'push'
+        run: |
+          version=$(uv version --short)
+          echo "pyproject.toml declares $version"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the declared version $version"
+            exit 1
+          fi
+          # the trigger picks the index, so a tagged pre-release goes to
+          # PyPI itself: a v0.7.1rc1 tag on a tree declaring 0.7.1rc1
+          # passes the comparison above and burns a version that --pre
+          # installs would then resolve. RELEASING.md forbids it in words;
+          # this is the check. Digits and dots only: the versioning scheme
+          # of README.md, its fourth number included, and nothing PEP 440
+          # reads as a pre-release, a dev build or a post release
+          if ! echo "$version" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+            echo "::error::$version is not a final version; rehearse on TestPyPI via workflow_dispatch instead"
+            exit 1
+          fi
+
+      # the version of the wrapped library is a second thing this package
+      # declares twice: the tag named in README.md, and the commit the
+      # submodule is pinned to. The tag is resolved at the source rather
+      # than through the submodule checkout, whose shallow clone carries
+      # no tags
+      - name: Check that README.md names the pinned libsecp256k1
+        run: |
+          named=$(sed -n 's|.*secp256k1/releases/tag/\(v[0-9][0-9.]*\).*|\1|p' README.md | head -1)
+          pinned=$(git ls-tree HEAD secp256k1 | awk '{print $3}')
+          tagged=$(git ls-remote https://github.com/bitcoin-core/secp256k1 "refs/tags/$named^{}" | cut -f1)
+          echo "README.md names $named ($tagged); the submodule is pinned to $pinned"
+          if [ -z "$named" ] || [ -z "$tagged" ]; then
+            echo "::error::README.md names no libsecp256k1 release, or names one that does not exist"
+            exit 1
+          fi
+          if [ "$tagged" != "$pinned" ]; then
+            echo "::error::the submodule is pinned to $pinned, which is not $named"
+            exit 1
+          fi
+
+  # reuse the whole build/test pipeline: every artifact the release ships
+  # is built and tested here, by the very matrices that run on a push
+  build:
+    # a minute of checking, ahead of an hour of building: a tag that does
+    # not match the tree is worth discovering before the matrices start
+    needs: version-check
+    uses: ./.github/workflows/test.yml
+    with:
+      # a release ships the version the tree declares; a rehearsal cannot,
+      # because TestPyPI refuses a version it has already seen, so it
+      # appends .dev<run number>: unique per dispatch, and sorted before
+      # the release it rehearses (PEP 440). Re-running a finished
+      # rehearsal reuses its run number and would collide, so dispatch a
+      # fresh run instead
+      version-suffix: ${{ github.event_name == 'workflow_dispatch' && format('.dev{0}', github.run_number) || '' }}
+
+  # the two publish jobs differ only in where they upload to, and are two
+  # jobs rather than one parameterized by an expression on purpose. The
+  # environment name is what enforces the manual approval: were it an
+  # expression that failed to evaluate as intended, the job would run
+  # against some other environment, publishing with no gate in front of
+  # it. Nothing here is computed, so nothing can go that way.
+  #
+  # Both cap their runtime like every other job, the approval they wait
+  # for notwithstanding: what timeout-minutes bounds is execution time,
+  # which is also what the six-hour default bounds, while a run waiting
+  # for an environment approval has a limit of its own, thirty days. The
+  # reviewer can therefore take as long as they like, and a stuck upload
+  # still cannot hold a runner for an afternoon
+  publish-testpypi:
+    name: Publish to TestPyPI
+    # the repository condition keeps a fork from attempting an upload it
+    # has no publisher for: a fork that pushes a tag, or dispatches this
+    # workflow, gets the build and stops there
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'btclib-org/btclib_libsecp256k1'
+    needs: [lint, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/btclib_libsecp256k1
+    permissions:
+      # required by Trusted Publishing to request the OIDC token
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*-wheels-*"
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show distributions
+        run: ls -l dist
+
+      # generates PEP 740 attestations by default
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    # see publish-testpypi for the repository condition
+    if: github.event_name == 'push' && github.repository == 'btclib-org/btclib_libsecp256k1'
+    needs: [lint, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/btclib_libsecp256k1
+    permissions:
+      # required by Trusted Publishing to request the OIDC token
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*-wheels-*"
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show distributions
+        run: ls -l dist
+
+      # generates PEP 740 attestations by default
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # only after PyPI has accepted the upload: a GitHub release announces
+  # what can already be installed, and the download url in pyproject.toml
+  # points at the page this creates
+  github-release:
+    name: Create the GitHub release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # the one job that writes to the repository, and what it writes is a
+      # release
+      contents: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # the sdist alone: the wheels are on PyPI, with their attestations,
+      # and thirty assets mirroring an index nobody would install from by
+      # hand are noise. What belongs here is the source of the tag
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      - name: Create the release, with HISTORY.md as its notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # the notes are the tag's own section of HISTORY.md; a missing
+        # section is a warning rather than a failure, the upload having
+        # already happened, and the notes then come from the merged pull
+        # requests instead
+        run: |
+          awk -v tag="$GITHUB_REF_NAME" '
+            $0 ~ "^## " tag "( |$)" {found=1; next}
+            /^## / && found {exit}
+            found {print}
+          ' HISTORY.md > "$RUNNER_TEMP/notes.md"
+          if [ -s "$RUNNER_TEMP/notes.md" ]; then
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            echo "::warning::HISTORY.md has no $GITHUB_REF_NAME section"
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi

@@ -1,0 +1,634 @@
+name: test
+
+on:
+  push:
+    # master only: a push to a branch that has an open pull request would
+    # run this workflow twice, once per event, and the two runs land in
+    # different concurrency groups (refs/heads/dev against
+    # refs/pull/N/merge) so neither cancels the other. The pull_request
+    # run is the one worth keeping, because it tests the merge commit and
+    # is the only run a fork's pull request produces at all.
+    # master keeps a trigger of its own because a merge creates a commit
+    # that is not the one the pull request tested, and nothing else would
+    # ever test it. Tag pushes are covered by the release workflow
+    branches: [master]
+  pull_request:
+  # allows the release workflow to reuse the whole build/test pipeline
+  workflow_call:
+    inputs:
+      version-suffix:
+        description: >
+          Appended to the version in pyproject.toml before anything is
+          built, by every build job. A release passes nothing and ships
+          the version the tree declares; the rehearsal passes a .dev
+          suffix, which is how it reaches TestPyPI with a version that
+          index has not already consumed.
+        type: string
+        default: ""
+  # the escape hatch: the matrix on demand for a branch whose pull
+  # request is not open yet
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, pip dependencies, build scripts) can read the token, so it
+# must not be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs on the same branch/PR; named literally rather
+# than through github.workflow, for the reason given in lint.yml
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # coverage is a property of the python wrapper layer, not of the
+  # platform: measuring it once is enough, and the fail_under ratchet in
+  # pyproject.toml is what makes the number mean something
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    # every job below caps its own runtime, this one included: the default
+    # is six hours, and with tens of jobs compiling C a single hang is
+    # measured in runner days rather than minutes. The values sit well
+    # above what these jobs are observed to take — nine minutes for a
+    # wheel build, under three for everything else — so a slow runner is
+    # not a failure, while a hung one is
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # the wheels of the test group, not the extension: the root
+          # project is installed editable, so its build hook (and the
+          # CMake build of the vendored library) runs on every job either
+          # way. What this saves is the download, keyed on uv.lock
+          enable-cache: true
+
+      # a static build, i.e. the worst case for coverage: the dlopen
+      # fallback of __init__.py stays unreachable. The interpreter comes
+      # from .python-version, as it does for a developer.
+      # One command, not a sync followed by a run: uv run syncs the
+      # environment itself, and with the flags left off it did so against
+      # the default groups, installing the twenty-nine packages of dev
+      # right after the sync had deliberately installed ten.
+      # --locked asserts that uv.lock matches pyproject.toml, which a
+      # plain sync would quietly fix by re-locking instead
+      - name: Test with coverage
+        run: uv run --locked --no-default-groups --group test pytest --cov
+
+  build-cibuildwheel:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    # the interpreter uv runs the build tools with is the one setup-python
+    # installed below, and never one of uv's own: there is no managed
+    # CPython for windows aarch64, so on windows-11-arm what uv downloads
+    # is an emulated x86-64 build, and cibuildwheel reads the host
+    # architecture off the interpreter it is running on — this job would
+    # quietly produce win_amd64 wheels on the arm64 runner. With downloads
+    # off, an interpreter that is missing is a job that fails instead
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    strategy:
+      # as for the test matrices, and here it costs more: with the
+      # default, one platform failing (or one flaky runner) cancels the
+      # five builds in flight beside it, so a rerun is the only way to
+      # learn whether they would have succeeded. On the release path the
+      # cancelled jobs are artifacts the publish job then has to do
+      # without
+      fail-fast: false
+      matrix:
+        # ubuntu-latest/macos-26-intel are x86_64,
+        # ubuntu-24.04-arm/macos-latest are arm64; windows-latest and
+        # windows-11-arm build natively with MSVC, which picks its target
+        # from the host, so win_amd64 and win_arm64 need no configuration
+        # of their own. The vendored library is built with CMake
+        # everywhere, provisioned as a build requirement: no runner needs
+        # a toolchain installed by hand.
+        # Actions drops x86_64 macOS in August 2027, after which no runner
+        # can build a macosx x86_64 wheel at all
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-26-intel,
+            macos-latest,
+            windows-latest,
+            windows-11-arm,
+          ]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # the interpreter the dev-version action runs and the one uv runs the
+      # build tools with, which is why it stays even though cibuildwheel
+      # needs none of its own: the interpreters it builds wheels for are
+      # the ones it installs itself
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # skipped on every trigger but a release rehearsal: the inputs
+      # context is empty unless this workflow was called, and an empty
+      # string is what the release passes for a tag push
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
+      # cibuildwheel from the build group of pyproject.toml, pinned by
+      # uv.lock, rather than from `pip install -U`, which fetched whatever
+      # the index held that morning: what it decides — the interpreters,
+      # the manylinux images, the identifiers the skip in
+      # [tool.cibuildwheel] names — is this matrix, so a release of it
+      # belongs in a pull request that runs the matrix rather than in a
+      # push that did not touch it. --only-group omits the project, so
+      # this installs no extension of its own; the build frontend
+      # cibuildwheel then runs per interpreter comes from the same group.
+      # --frozen, not the --locked of the check-dist job: the step above
+      # rewrites the version in pyproject.toml on the rehearsal path,
+      # which is exactly the disagreement --locked refuses. That the lock
+      # is in step with pyproject.toml is asserted where it can be, by the
+      # uv-lock hook on every commit and by `uv lock --check` in the
+      # release workflow
+      - name: Build wheels
+        run: uv run --frozen --only-group build cibuildwheel
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: static-wheels-${{ matrix.os }}
+          path: ./wheelhouse/*
+
+  build-dynamic:
+    name: Build dynamic wheel on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    # see build-cibuildwheel; here the platform tag of the wheel is the
+    # interpreter's own, so substituting the interpreter substitutes the
+    # tag
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    strategy:
+      # see build-cibuildwheel
+      fail-fast: false
+      matrix:
+        # ubuntu-latest/macos-26-intel are x86_64,
+        # ubuntu-24.04-arm/macos-latest are arm64
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
+      # a dynamic wheel compiles no extension, so nothing derives its
+      # platform tag from a toolchain: without this the macOS version in
+      # the tag is the runner's own, and pip on any older macOS refuses a
+      # wheel that would have loaded there. CMake reads the same variable
+      # (CMAKE_OSX_DEPLOYMENT_TARGET defaults to it), so the vendored
+      # library is built for the floor its tag then claims. 11.0 is where
+      # arm64 macOS starts; 10.13 is what cibuildwheel gives the static
+      # x86_64 wheels of CPython 3.12 and later, and the Xcode of the
+      # macOS 26 image still compiles for it
+      - name: Set the macOS deployment target
+        if: runner.os == 'macOS'
+        run: |
+          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-26-intel' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
+
+      # the build group and --frozen: see build-cibuildwheel
+      - name: Build wheel
+        run: BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --frozen --only-group build python -m build -w
+
+      # auditwheel and delocate decide the platform tag this wheel ends up
+      # carrying, which is what pip matches against, so they are pinned
+      # with the rest of the build group rather than installed with -U
+      - name: Repair wheel (Linux)
+        if: runner.os == 'Linux'
+        run: uv run --frozen --only-group build auditwheel repair dist/*
+
+      - name: Repair wheel (macOS)
+        if: runner.os == 'macOS'
+        run: uv run --frozen --only-group build delocate-wheel -w wheelhouse dist/*
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dynamic-wheels-${{ matrix.os }}
+          path: ./wheelhouse/*
+
+  build-sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # see build-cibuildwheel
+    env:
+      UV_PYTHON_DOWNLOADS: never
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
+      # the build group and --frozen: see build-cibuildwheel
+      - name: Build source
+        run: uv run --frozen --only-group build python -m build -s
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # installing from sdist is the one path that has to compile the
+  # vendored libsecp256k1 on the user's machine: the wheel jobs never
+  # exercise it, so a broken sdist would only be discovered on PyPI.
+  # Nothing upstream of here makes this job redundant, and it is worth
+  # saying why, because for a pure python package it would be: `uv build`
+  # builds the sdist and then the wheel *from* it, so whatever the wheel
+  # contains proves the sdist carried it. No wheel of this package is
+  # built that way — cibuildwheel and `python -m build -w` both build from
+  # the source tree, per platform and per interpreter, because a wheel
+  # here is a compiled artifact and the sdist is not its input. What the
+  # sdist has to carry is therefore checked nowhere else: the whole
+  # vendored submodule tree, the CMake toolchain file, the build scripts
+  # named in cffi_modules, and the headers the cdef is preprocessed from,
+  # every one of them listed by hand in the sdist include of
+  # pyproject.toml. An omission there is invisible until something
+  # compiles from it, which is what this job does.
+  # Windows is in the matrix because it is the platform where that build
+  # is least like the others: MSVC compiles the extension while a gcc on
+  # the PATH preprocesses the headers for cffi, and what the sdist has to
+  # carry for it is not what a POSIX build reads
+  test-sdist:
+    name: "Test sdist install on ${{ matrix.os }}${{ matrix.architecture && format(' ({0})', matrix.architecture) }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # the wheel jobs all build with an interpreter of the runner's own
+        # architecture, so nothing else exercises a build whose target is
+        # not the host: an emulated x86-64 interpreter on Windows arm64,
+        # which is what uv installs there by default, and where CMake
+        # taking the host architecture left every libsecp256k1 symbol
+        # unresolved at link time. This is the platform where an
+        # architecture can be requested that is not the runner's, and the
+        # sdist is the path that compiles on the user's machine
+        include:
+          - os: windows-11-arm
+            architecture: x64
+    needs: build-sdist
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          # empty for every other entry, which leaves setup-python its
+          # default, the architecture of the runner
+          architecture: ${{ matrix.architecture }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      # bash on every runner, Windows included: pip does not expand the
+      # glob itself, and PowerShell does not expand it for a native
+      # command either, so the default shell there would hand pip the
+      # pattern verbatim.
+      #
+      # pip and pytest unpinned, unlike every tool that comes from a group
+      # of pyproject.toml, and deliberately: this job and the two wheel
+      # test jobs hold no uv and no lock, because their subject is pip
+      # resolving and building a published artifact the way a user does,
+      # and pinning pytest would reintroduce the resolution they exist to
+      # exclude. The price is that filterwarnings = error makes a pytest
+      # release able to fail these jobs on a day nothing here changed;
+      # that is the same signal the published workflow carries, a fact
+      # about what a user hits, and it surfaces in a pull request
+      - name: Install from sdist
+        shell: bash
+        run: |
+          python -m pip install -U pip pytest
+          python -m pip install --verbose dist/*.tar.gz
+
+      - name: Test
+        run: pytest
+
+  build-windows:
+    name: "Build on Linux for Windows"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # see build-cibuildwheel
+    env:
+      UV_PYTHON_DOWNLOADS: never
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # see build-cibuildwheel
+      - uses: ./.github/actions/dev-version
+        if: inputs.version-suffix != ''
+        with:
+          suffix: ${{ inputs.version-suffix }}
+
+      - name: Install dependencies
+        run: sudo apt install -y mingw-w64
+
+      # the build group and --frozen: see build-cibuildwheel. The `wheel`
+      # this used to install with it is a setuptools-era requirement:
+      # hatchling writes the wheel itself, and nothing here invokes that
+      # package
+      - name: Build Windows wheel
+        run: |
+          BTCLIB_LIBSECP256K1_CROSS_COMPILE=true CFFI_PLATFORM=Windows \
+            uv run --frozen --only-group build python -m build -w
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dynamic-wheels-windows
+          path: dist/*
+
+  # the same validation PyPI applies on upload, run before the release
+  # workflow reaches the point of no return: broken metadata or a README
+  # that does not render cannot be fixed by reuploading, a version can
+  # only be yanked and burnt
+  check-dist:
+    name: Validate distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-cibuildwheel, build-dynamic, build-sdist, build-windows]
+
+    steps:
+      # for the check-wheel-contents configuration in pyproject.toml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # the wheels of the check group, the three tools below among
+          # them, keyed on uv.lock
+          enable-cache: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*-wheels-*"
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show distributions
+        run: ls -l dist
+
+      # the three tools below come from the check group of
+      # pyproject.toml, pinned by uv.lock, rather than from uvx, which
+      # fetches whatever the index holds at run time: pyroma is run with a
+      # --min ratchet, and a release of it adding a test would otherwise
+      # fail a release that changed nothing. --only-group omits the
+      # project, so none of this compiles an extension
+      - name: Check metadata and long description
+        run: uv run --locked --only-group check twine check --strict dist/*
+
+      - name: Check wheel contents
+        run: uv run --locked --only-group check check-wheel-contents dist/*.whl
+
+      # the wheel test jobs install cffi by hand and then the wheel with
+      # --no-index, which resolves nothing: what the metadata declares is
+      # only ever checked against a cffi that is already installed, so a
+      # requirement dropped from it would go unnoticed by all of them.
+      # Here one wheel is installed by path into an environment holding
+      # nothing, its dependencies resolved from PyPI, and imported from an
+      # empty directory, where nothing can resolve to the source tree. The
+      # dynamic wheel is the subject because it is the one that needs cffi
+      # at run time, a static extension carrying its own
+      - name: Install a wheel with its dependencies resolved from PyPI
+        run: |
+          # the glob itself, not ls parsed by a pipeline: nullglob is what
+          # makes an unmatched pattern an empty array rather than the
+          # pattern read as a filename
+          shopt -s nullglob
+          wheels=("$PWD"/dist/*py3-none-manylinux*x86_64.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
+            echo "::error::dist holds no dynamic linux x86_64 wheel"
+            exit 1
+          fi
+          wheel=${wheels[0]}
+          echo "installing $wheel"
+          cd "$RUNNER_TEMP"
+          uv run --isolated --no-project --python 3.14 --with "$wheel" \
+            python -c "import btclib_libsecp256k1 as m; print(m.__version__, m.lib)"
+
+      # what twine cannot see: metadata that is valid but poor, a missing
+      # classifier or url, a version PyPI would sort in a way nobody
+      # meant. Run on the sdist rather than on the source tree, so it
+      # rates the metadata that was actually built and shipped; --min 10
+      # is a ratchet, the score being 10 today
+      - name: Rate the packaging metadata
+        run: uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+
+  test-dynamic:
+    name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-26-intel,
+            macos-latest,
+            windows-latest,
+          ]
+        python-version:
+          [
+            "3.9",
+            "3.10",
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.14",
+            "3.14t",
+            "pypy-3.10",
+            "pypy-3.11",
+          ]
+        # 3.14t, the free-threaded interpreter, matters here in particular:
+        # the dynamic wheel is tagged py3-none, so it is what a
+        # free-threaded interpreter installs, and unlike the static wheels
+        # nothing else exercises it (cibuildwheel tests every wheel it
+        # builds, including cp314t; this job has no such counterpart)
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+      OS_NAME: ${{ matrix.os }}
+    needs: [build-windows, build-dynamic]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # unpinned, and for the reason spelled out in test-sdist: a user's
+      # environment rather than the locked one
+      - name: Upgrade Python packaging tools
+        run: python -m pip install -U pip pytest
+
+      - name: Show runner information
+        run: |
+          python --version
+          pip --version
+
+      # only the wheel built for this platform: downloading all of them
+      # meant every job in the matrix listing and fetching four
+      # artifacts to install one, and the artifact service answers a
+      # fan-out that wide with the occasional 403. The x86_64 Windows
+      # wheel is the mingw cross-compiled one, hence its artifact name
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dynamic-wheels-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os }}
+          path: dist
+
+      - name: Install lib
+        run: |
+          python -m pip install cffi
+          python -m pip install --verbose --no-index --find-links dist/ btclib_libsecp256k1
+
+      - name: Test
+        run: pytest
+
+  test-static:
+    name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            macos-26-intel,
+            macos-latest,
+            windows-latest,
+            windows-11-arm,
+          ]
+        python-version:
+          ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
+        # cibuildwheel already runs the suite against every wheel it
+        # builds, cp314t included: what this job adds is that pip, given a
+        # directory holding all of them, selects the right one, which for
+        # the free-threaded interpreter nothing checked.
+        # PyPy wheels are not built on Windows, on either architecture.
+        # CPython has no Windows arm64 build before 3.11, so there is no
+        # interpreter to test a win_arm64 wheel against and cibuildwheel
+        # does not produce one
+        exclude:
+          - os: windows-latest
+            python-version: "pypy-3.11"
+          - os: windows-11-arm
+            python-version: "pypy-3.11"
+          - os: windows-11-arm
+            python-version: "3.9"
+          - os: windows-11-arm
+            python-version: "3.10"
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+      OS_NAME: ${{ matrix.os }}
+    needs: build-cibuildwheel
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # unpinned, as in test-dynamic
+      - name: Upgrade Python packaging tools
+        run: python -m pip install -U pip pytest
+
+      - name: Show runner information
+        run: |
+          python --version
+          pip --version
+
+      # only the wheels built for this platform, as above
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: static-wheels-${{ matrix.os }}
+          path: dist
+
+      - name: Install lib
+        run: |
+          python -m pip install cffi
+          python -m pip install --verbose --no-index --find-links dist/ btclib_libsecp256k1
+
+      - name: Test
+        run: pytest

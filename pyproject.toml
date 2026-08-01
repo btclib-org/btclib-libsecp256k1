@@ -1,127 +1,345 @@
 [project]
 name="btclib_libsecp256k1"
-version="0.4.0"
+version="0.7.1"
 description="Simple python bindings to libsecp256k1"
 readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.7"
+# PEP 639: a SPDX expression and the files it refers to, replacing the
+# deprecated license table and the License :: classifier
+license = "MIT"
+license-files = ["LICENSE", "COPYRIGHT"]
+requires-python = ">=3.9"
 authors = [
     {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
 ]
 keywords=["bitcoin", "libsecp256k1"]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
-        "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
         "Operating System :: OS Independent",
         "Topic :: Security :: Cryptography",
         "Topic :: Scientific/Engineering",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ]
-dependencies = ['cffi>=1.0.0']
+# the wrappers call ffi.unpack on every path, which cffi grew in 1.6;
+# below 3.13 any cffi new enough to compile for the interpreter already
+# satisfies that, so 1.6 is the honest floor there. The two newest
+# interpreters have to be asked for by name, or the resolver may pick a
+# cffi that cannot know them: 1.17 is the first release supporting
+# CPython 3.13, 2.0 the first supporting 3.14 and the free-threaded
+# build. The old '>=1.0.0' declared an installable-but-broken pair
+dependencies = [
+    'cffi>=1.6; python_version<"3.13"',
+    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version>="3.14"',
+]
 
 [project.urls]
 homepage = "https://btclib.org"
-documentation = "https://btclib.readthedocs.io/"
+# btclib.readthedocs.io documents btclib, not these bindings: the README
+# is their documentation
+documentation = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/README.md"
 repository = "https://github.com/btclib-org/btclib_libsecp256k1"
 download = "https://github.com/btclib-org/btclib_libsecp256k1/releases"
-changelog = "https://github.com/btclib-org/btclib_libsecp256k1/HISTORY.md"
+changelog = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/HISTORY.md"
 issues = "https://github.com/btclib-org/btclib_libsecp256k1/issues"
 pull_requests = "https://github.com/btclib-org/btclib_libsecp256k1/pulls"
 
 [build-system]
-requires = ["hatchling", "cffi>=1.0.0", 'setuptools; python_version>="3.12"']
+# cmake builds the vendored library: it is a build requirement, not a
+# system one, so that installing the sdist needs no package manager
+# step (a C toolchain is still required, and cannot be provisioned this
+# way); a system cmake >= 3.22 works just as well, with
+# --no-build-isolation
+requires = [
+    # 1.27 is where hatchling learned PEP 639: an older one rejects the
+    # license expression and license-files above outright, so the floor
+    # is what the metadata of this project already requires
+    "hatchling>=1.27",
+    # the same floors as the runtime dependency above, and for the same
+    # reason: the build runs the cdef through the very cffi it resolves
+    'cffi>=1.6; python_version<"3.13"',
+    'cffi>=1.17; python_version=="3.13"',
+    'cffi>=2.0; python_version>="3.14"',
+    'setuptools; python_version>="3.12"',
+    "cmake>=3.22",
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel.hooks.custom]
 path = "scripts/hatch_build.py"
 cffi_modules = ["scripts/cffi_build.py:ffi_ext"]
 
-[tool.hatch.envs.dev]
-detached = true
-dependencies = [
-  "isort",
-  "black",
-  "pre-commit",
-  "nox",
-  "cibuildwheel"
+[tool.hatch.build.targets.sdist]
+# ship pristine vendored sources only: build artifacts from a local build
+# would be stale (or plain wrong) on the machine installing the sdist.
+# The CMake build writes nothing inside the vendored tree, so most of
+# what follows can only be left over in a tree that predates it
+exclude = [
+    "/build",
+    "/dist",
+    "/wheelhouse",
+    # anchored, or it would also match stubs/_btclib_libsecp256k1.pyi:
+    # hatchling appends these patterns after the .gitignore lines in one
+    # GitIgnoreSpec, so an unanchored pattern here overrides the
+    # !stubs/_btclib_libsecp256k1.pyi negation there and drops the stub
+    # the strict mypy gate needs from the sdist
+    "/_btclib_libsecp256k1.*",
+    "**/.libs",
+    "**/.deps",
+    "**/*.o",
+    "**/*.lo",
+    "**/*.la",
+    "**/*~",
+    "secp256k1/src/btclib_default_callbacks.c",
+    "secp256k1/autom4te.cache",
+    "secp256k1/aclocal.m4",
+    "secp256k1/configure",
+    "secp256k1/Makefile",
+    "secp256k1/Makefile.in",
+    "secp256k1/config.log",
+    "secp256k1/config.status",
+    "secp256k1/libtool",
+    "secp256k1/libsecp256k1.pc",
+    "secp256k1/build-aux/ar-lib",
+    "secp256k1/build-aux/compile",
+    "secp256k1/build-aux/config.guess",
+    "secp256k1/build-aux/config.sub",
+    "secp256k1/build-aux/depcomp",
+    "secp256k1/build-aux/install-sh",
+    "secp256k1/build-aux/ltmain.sh",
+    "secp256k1/build-aux/missing",
+    "secp256k1/build-aux/test-driver",
+    "secp256k1/build-aux/m4/libtool.m4",
+    "secp256k1/build-aux/m4/ltoptions.m4",
+    "secp256k1/build-aux/m4/ltsugar.m4",
+    "secp256k1/build-aux/m4/ltversion.m4",
+    "secp256k1/build-aux/m4/lt~obsolete.m4",
 ]
 
-[tool.hatch.envs.dev.scripts]
-format = [
-    "isort .",
-    "black ."
-]
-pre_commit = [
-  "pre-commit run --all-files"
+[tool.check-wheel-contents]
+# a dynamic (cffi ABI mode) wheel ships the shared libsecp256k1 next to
+# the package, and __init__.py dlopen()s it from there: a non-module at
+# the top level (W003), and therefore a second top-level entry (W009),
+# are exactly what that wheel is supposed to contain
+ignore = ["W003", "W009"]
+
+# PEP 735 groups, resolved by uv (or by pip --group): they replace the
+# hatch environments, which duplicated what nox and pre-commit already
+# did. The authoritative versions of the linters remain the revisions
+# pinned in .pre-commit-config.yaml, which is the gate; the ones here
+# are for editor integration and ad hoc runs
+[dependency-groups]
+test = ["pytest", "pytest-cov"]
+# the mypy hook of .pre-commit-config.yaml declares what the checked
+# files import, because it runs in its own isolated environment; running
+# mypy from this environment has to find the same things, or it reports
+# errors the gate does not (and passes what the gate would reject)
+lint = ["pre-commit", "ruff", "mypy", "types-cffi", "hatchling"]
+# what the wheel jobs build with, for the same reason as the check group
+# below: they used to `pip install -U` these, which gave each job whatever
+# the index held that morning, and these four decide what the artifacts
+# are. cibuildwheel picks the interpreters, the manylinux images and the
+# identifiers the skip in [tool.cibuildwheel] names, so a release of it
+# reshapes that matrix; auditwheel and delocate decide the platform tag of
+# the dynamic wheel, which is the file name pip matches against. With the
+# versions pinned by uv.lock and moved by dependabot, a release of any of
+# them is a pull request that runs the matrix, instead of a matrix that
+# breaks on a morning nothing here changed
+build = ["build", "cibuildwheel", "auditwheel", "delocate"]
+# what the check-dist job validates the distribution files with. A group,
+# rather than uvx fetching each tool at run time, so that the versions are
+# the ones uv.lock pins and dependabot moves: pyroma is run with --min 10,
+# and a release of pyroma adding a test is otherwise enough to fail a
+# release that changed nothing. `uv run --only-group check` omits the
+# project itself, so asking for these compiles no extension
+check = ["twine", "check-wheel-contents", "pyroma"]
+# what scripts/benchmark.py times these bindings against, deliberately
+# left out of dev: btclib depends on this package, so it cannot be a
+# dependency of developing it. Here it is harmless, the lock resolving
+# its own btclib_libsecp256k1 requirement to the editable build of this
+# very tree rather than to a second copy from PyPI. coincurve and
+# secp256k1 compile a libsecp256k1 of their own, so building this group
+# needs pkg-config besides the toolchain the README lists
+bench = ["btclib", "coincurve", "secp256k1"]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "build" },
 ]
 
-[tool.hatch.envs.test]
-dependencies = [
-  "pytest",
-  "pytest-cov"
-]
+[tool.uv]
+# the oldest uv allowed to touch uv.lock, and it is the version the
+# uv-lock hook of .pre-commit-config.yaml pins: that hook is what
+# regenerates the file, and its rev is something pre-commit.ci moves.
+# Declared here the floor holds for every uv command rather than for the
+# hook alone, so an older uv on a developer's machine says so instead of
+# rewriting the lock in a format the runners then fail to read — uv is
+# pre-1.0 and changes that format. It also reaches CI without a second
+# pin: setup-uv, given no version input, reads this key, and a bare
+# minimum specifier makes it install the latest uv, so the runners are
+# never behind the floor and there is nothing here to go stale
+required-version = ">=0.12.0"
 
 [tool.mypy]
-strict = false
+# the package ships py.typed: its annotations are what btclib downstream
+# type-checks against, so a wrong one propagates
+strict = true
 show_column_numbers = true
 show_error_codes = true
+# stubs/_btclib_libsecp256k1.pyi describes the cffi boundary; without it
+# ffi and lib are Any and every wrapper checks out vacuously
+mypy_path = "stubs"
 exclude = [
-    "build",
+    "^build/",
+    "^secp256k1/",
 ]
 
-[tool.isort]
-profile = "black"
-skip = ["secp256k1", ".nox"]
+[[tool.mypy.overrides]]
+# comparands of the benchmark script, not dependencies of the project:
+# btclib in particular must not become one, as it is btclib that depends
+# on these bindings. secp256k1 also has to be skipped explicitly, or the
+# vendored C tree is picked up as a namespace package of the same name
+module = ["btclib.*", "coincurve", "secp256k1"]
+follow_imports = "skip"
+ignore_missing_imports = true
 
-[tool.black]
-force_exclude = "secp256k1"
+[tool.ruff]
+# the vendored upstream sources are not ours to lint or reformat
+extend-exclude = ["secp256k1"]
 
-[tool.pylint.format]
-max-line-length = 130
-
-[tool.pylint.master]
-extension-pkg-whitelist="_btclib_libsecp256k1"
-min-similarity-lines=6
-disable = ["duplicate-code"]  # R0801
-
-[tool.flake8]
-max-line-length = 130
-exclude = [
-  ".git",
-  "__pycache__",
-  "build",
-  "dist",
-  "*egg",
-  ".nox",
-  "secp256k1",
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "C90",   # mccabe complexity
+    "S",     # flake8-bandit
+    "SIM",   # flake8-simplify
+    "PTH",   # flake8-use-pathlib
+    "RET",   # flake8-return
+    "D",     # pydocstyle
+    "PL",    # pylint
+    "RUF",   # ruff-specific
+    # ISC earns its place here: a test vector too long for one line is
+    # written as adjacent string literals, which is what a list of vectors
+    # missing a comma also looks like
+    "ISC",   # flake8-implicit-str-concat
+    "PT",    # flake8-pytest-style
+    "PGH",   # pygrep-hooks: a blanket noqa or type: ignore
+    "TRY",   # tryceratops
+    "FURB",  # refurb
+    "PIE",   # flake8-pie
 ]
-select = ["C", "E", "F", "W", "B"]
-# # E203 and W503 are not PEP 8 compliant
-ignore = ["E203", "W503"]
-# # emit a warning for high McCabe complexity
-# # See https://en.wikipedia.org/wiki/Cyclomatic_complexity
+ignore = [
+    # the blank line between a docstring and the body is the established
+    # style of this codebase
+    "D202",
+    # comparing against a key, signature or hash length (32, 33, 64, 65)
+    # is not a magic value: it is the domain
+    "PLR2004",
+    # the message of an exception belongs where it is raised, not in a
+    # class defined to carry it: these wrappers raise ValueError and
+    # RuntimeError, which is what a caller catches
+    "TRY003",
+    # what a wrapper rejects is an argument out of the domain, and the
+    # message says which: pytest.raises(ValueError) is the assertion, and
+    # narrowing every one of them to a match= pattern would test the
+    # wording of the message rather than the behaviour
+    "PT011",
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+# the names of a parametrize are a signature, and the comma-separated
+# string is how pytest itself writes one: with five of them the tuple form
+# wraps the decorator over three lines to say the same thing
+parametrize-names-type = "csv"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pycodestyle]
+# the formatter owns the code width (88 columns); E501 only guards
+# against the runaway comments and URLs it cannot wrap
+max-line-length = 130
+
+[tool.ruff.lint.mccabe]
+# see https://en.wikipedia.org/wiki/Cyclomatic_complexity
 max-complexity = 10
-per-file-ignores = "__init__.py:F401"
+
+[tool.ruff.lint.per-file-ignores]
+# asserts are the point of a test suite, and a test function documents
+# itself through its name
+"tests/*" = ["S101", "D103"]
+# the benchmark script asserts its own results before timing them
+"scripts/benchmark.py" = ["S101"]
+# the build scripts drive CMake and load the cffi build description by
+# exec(): both are inherent to compiling a C dependency from a build
+# backend, and neither ever sees untrusted input
+"scripts/cffi_build.py" = ["S404", "S603", "S607"]
+"scripts/hatch_build.py" = ["S102"]
+# the build scripts are not part of the documented API
+"scripts/*" = ["D"]
 
 [tool.pytest.ini_options]
-python_files = "test*.py"
-python_functions = "test*"
+testpaths = ["tests"]
+# belt and braces: testpaths is ignored when pytest is given explicit
+# paths, and the vendored tree carries python files of its own
 norecursedirs = ["secp256k1"]
+addopts = "-ra --strict-markers --strict-config"
+# an unknown warning is a deprecation the 3.9 to 3.14 spread will turn
+# into a breakage, so make it fail while it is still cheap
+filterwarnings = ["error"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["btclib_libsecp256k1"]
+# the interesting misses are the guard clauses of a wrapper: statement
+# coverage alone would call a half-tested if fully covered
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# the two exceptions the bindings raise are not equally reachable, and
+# counting them together made the ratchet meaningless: a ValueError
+# reports an argument out of the domain, and every one of them is
+# exercised, while a RuntimeError reports a libsecp256k1 call failing
+# where no input can make it fail, and none of them can be. Excluding
+# the latter leaves a number that only untested code can lower
+exclude_also = ["raise RuntimeError"]
+# with those excluded the suite reaches every line and every branch, so
+# the ratchet can be the only value that fails on a single new untested
+# one. It assumes the static extension the coverage job builds: on a
+# dynamic one the linked-in branch of _load_lib is the unexecuted one
+fail_under = 100
 
 [tool.cibuildwheel]
 test-requires = ["pytest"]
 test-command = "pytest {project}/tests/"
 build-frontend = "build"
 archs = "auto64"
+# PyPy wheels are opt-in since cibuildwheel 3.0
+enable = ["pypy"]
+# no static PyPy wheels on Windows, by design: PyPy is best served by
+# the ABI-mode dynamic wheel (py3-none-win_amd64), the cffi mode
+# recommended on PyPy, which pip falls back to; a static pp3 wheel
+# would take precedence over it and perform worse
+# cp39 and cp310 have no Windows arm64 build: cibuildwheel lists those
+# identifiers (it used to cross-compile them from an x86_64 host) but on
+# the native arm64 runner there is no interpreter to build them with
+skip = "pp*-win* cp39-win_arm64 cp310-win_arm64"
