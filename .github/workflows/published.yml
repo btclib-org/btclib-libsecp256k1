@@ -94,11 +94,11 @@ jobs:
             windows-latest,
             windows-11-arm,
           ]
-        python-version: ["3.9", "3.14", "3.14t"]
+        python-version: ["3.10", "3.14", "3.14t"]
         exclude:
           # CPython has no Windows arm64 build before 3.11
           - os: windows-11-arm
-            python-version: "3.9"
+            python-version: "3.10"
         include:
           # the path a platform with no wheel takes: compile the published
           # sdist. Only this package is forced from source, not its

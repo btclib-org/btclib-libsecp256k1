@@ -7,7 +7,7 @@ readme = "README.md"
 # deprecated license table and the License :: classifier
 license = "MIT"
 license-files = ["LICENSE", "COPYRIGHT"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Ferdinando Ametrano", email = "ferdinando@ametrano.net"},
     {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
@@ -15,7 +15,6 @@ authors = [
 keywords=["bitcoin", "libsecp256k1"]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
@@ -302,7 +301,7 @@ testpaths = ["tests"]
 # paths, and the vendored tree carries python files of its own
 norecursedirs = ["secp256k1"]
 addopts = "-ra --strict-markers --strict-config"
-# an unknown warning is a deprecation the 3.9 to 3.14 spread will turn
+# an unknown warning is a deprecation the 3.10 to 3.14 spread will turn
 # into a breakage, so make it fail while it is still cheap
 filterwarnings = ["error"]
 xfail_strict = true
@@ -340,7 +339,7 @@ enable = ["pypy"]
 # the ABI-mode dynamic wheel (py3-none-win_amd64), the cffi mode
 # recommended on PyPy, which pip falls back to; a static pp3 wheel
 # would take precedence over it and perform worse
-# cp39 and cp310 have no Windows arm64 build: cibuildwheel lists those
-# identifiers (it used to cross-compile them from an x86_64 host) but on
-# the native arm64 runner there is no interpreter to build them with
-skip = "pp*-win* cp39-win_arm64 cp310-win_arm64"
+# cp310 has no Windows arm64 build: cibuildwheel lists that identifier
+# (it used to cross-compile it from an x86_64 host) but on the native
+# arm64 runner there is no interpreter to build it with
+skip = "pp*-win* cp310-win_arm64"

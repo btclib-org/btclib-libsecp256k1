@@ -102,7 +102,7 @@ def test_serialization_round_trips() -> None:
 
 
 def test_scalar_algebra_matches_point_algebra() -> None:
-    for prvkey, tweak in zip(derived(b"scalar"), derived(b"tweak")):
+    for prvkey, tweak in zip(derived(b"scalar"), derived(b"tweak"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
 
         # (d + t)G == dG + tG, and (d * t)G == t(dG)
@@ -123,7 +123,7 @@ def test_scalar_algebra_matches_point_algebra() -> None:
 
 
 def test_ecdsa_signature_forms() -> None:
-    for prvkey, entropy in zip(derived(b"ecdsa"), derived(b"ndata")):
+    for prvkey, entropy in zip(derived(b"ecdsa"), derived(b"ndata"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
         msg = hashlib.sha256(prvkey).digest()
 
@@ -161,7 +161,7 @@ def test_recovery_recovers_the_signer() -> None:
 
 
 def test_schnorr_and_taproot_tweaking() -> None:
-    for prvkey, tweak in zip(derived(b"schnorr"), derived(b"taptweak")):
+    for prvkey, tweak in zip(derived(b"schnorr"), derived(b"taptweak"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
         msg = hashlib.sha256(prvkey).digest()
         aux_rand32 = hashlib.sha256(msg).digest()
@@ -189,7 +189,7 @@ def test_schnorr_and_taproot_tweaking() -> None:
 
 
 def test_ecdh_and_ellswift_agree() -> None:
-    for prvkey_a, prvkey_b in zip(derived(b"ecdh a"), derived(b"ecdh b")):
+    for prvkey_a, prvkey_b in zip(derived(b"ecdh a"), derived(b"ecdh b"), strict=True):
         pubkey_a = compress(mult.mult_(prvkey_a))
         pubkey_b = compress(mult.mult_(prvkey_b))
 
