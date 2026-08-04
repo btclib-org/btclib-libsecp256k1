@@ -1,3 +1,4 @@
+---
 name: published
 
 # the sentinel on what users actually install. Every other workflow here
@@ -71,7 +72,9 @@ concurrency:
 
 jobs:
   test-published:
-    name: "${{ matrix.no-binary && 'Build' || 'Install' }} ${{ matrix.python-version }} from PyPI on ${{ matrix.os }}"
+    name: >-
+      ${{ matrix.no-binary && 'Build' || 'Install' }}
+      ${{ matrix.python-version }} from PyPI on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # the sdist entry below compiles libsecp256k1 from source, which the
     # others do not; one timeout covers both

@@ -1,3 +1,4 @@
+---
 # Skip execution of one or more hooks using the SKIP environment variable:
 # $ SKIP=mypy git commit -m "foo"
 # $ SKIP=mypy,ruff-check pre-commit run --all-files
@@ -39,22 +40,72 @@ repos:
         # the csv module reads them either way
         exclude: ^tests/bip340_test_vectors\.csv$
       - id: check-case-conflict
+      # off, and measured rather than assumed: nothing tracked here carries
+      # the execute bit and no python file opens with a shebang, so both of
+      # these apply to no file at all. check-hooks-apply below is what would
+      # report them, a hook matching nothing being a rule that has stopped
+      # running rather than a rule that passes
       # - id: check-executables-have-shebangs
       # - id: check-shebang-scripts-are-executable
-      # - id: fix-byte-order-marker
+      # finds nothing today, and stops an editor on another platform from
+      # adding three bytes tomorrow
+      - id: fix-byte-order-marker
+      # off: it would add a dead `# -*- coding: utf-8 -*-` to every module,
+      # UTF-8 being python 3's default and 3.9 the floor here
       # - id: fix-encoding-pragma
       - id: check-yaml
       # the vector files are json: a malformed one is worth a red hook
       # rather than a test error that reads like a failing assertion
       - id: check-json
+      # off, and the reason is the two files it would reach: the only json
+      # tracked here is tests/ecdsa_sig.json and
+      # tests/ecdsa_custom_nonce_sig.json, whose bytes are recorded in
+      # .secrets.baseline. Reformatting them voids that record, and
+      # excluding both leaves the hook applying to nothing
       # - id: pretty-format-json
       - id: check-merge-conflict
       - id: check-vcs-permalinks
       - id: detect-private-key
       - id: debug-statements
       - id: check-docstring-first
-      # - id: name-tests-test
+      # a file pytest never collects is not a failing test, it is no test,
+      # which is the one failure a suite cannot report about itself.
+      # --pytest-test-first for the `test_*.py` convention this tree
+      # already uses, the hook's own default being the other one
+      - id: name-tests-test
+        args: [--pytest-test-first]
+      # measures what is being added, so the vendored submodule and the
+      # vector files already here pass and the next large blob does not
+      - id: check-added-large-files
       - id: check-toml
+  # pre-commit checking itself, which is the same argument as "the gate is
+  # one file": a `files` or `exclude` pattern that matches nothing is a
+  # rule that has stopped running, and it reads exactly like a rule that
+  # passes. These two are the only way that difference is visible
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
+  # .github/dependabot.yml is validated by nothing else, and a typo in it
+  # updates nothing and says nothing: the whole point of that file is to
+  # move the pins this repository depends on for its security updates
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.4
+    hooks:
+      - id: check-dependabot
+  # the shape of the workflows, which actionlint and zizmor do not read:
+  # the first says whether one is valid, the second whether it is safe,
+  # and neither says whether a line has grown to 118 columns. The limit is
+  # 100 rather than the 80 the prose gets, and .yamllint.yaml carries the
+  # arithmetic behind that
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      # no exclude for the vendored tree, unlike ruff and mypy: pre-commit
+      # passes the files tracked in this repository and a submodule's are
+      # not among them, so the pattern would match nothing --
+      # check-useless-excludes above said so of the one written here first
+      - id: yamllint
   # common misspellings, in comments and documentation as much as in code.
   # The default dictionaries (clear, rare) on purpose: the optional ones
   # were tried and report only what this repository means to say — code
@@ -66,6 +117,17 @@ repos:
     rev: v2.4.3
     hooks:
       - id: codespell
+  # the second spell checker, and the pair is the point: the two are blind
+  # in different places, so neither subsumes the other. codespell matches
+  # whole words against a list of known misspellings and keeps the hyphen
+  # and the underscore inside the token, so a misspelling inside an
+  # identifier is invisible to it; typos splits hyphens, snake_case and
+  # camelCase, and carries a dictionary of its own. Their configurations
+  # are in pyproject.toml, one section each
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.49.0
+    hooks:
+      - id: typos
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.23.2
     hooks:

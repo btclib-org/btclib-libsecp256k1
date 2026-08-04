@@ -214,6 +214,35 @@ module = ["btclib.*", "coincurve", "secp256k1"]
 follow_imports = "skip"
 ignore_missing_imports = true
 
+# the second spell checker of .pre-commit-config.yaml. codespell needs no
+# section of its own: it reads whole words against a curated list and finds
+# nothing here, the vendored tree never reaching it because pre-commit
+# passes only the files tracked in this repository. typos splits
+# identifiers, so it has two things to be told, and both are measured
+# rather than assumed -- with the rule off, `uvx typos` reports exactly
+# these and nothing else in what this repository owns
+[tool.typos.files]
+# the vendored tree, as for ruff and mypy above. Not needed for the hook,
+# which is handed tracked files only, but a bare `uvx typos` otherwise
+# answers with thousands of findings in C that is not ours to correct
+extend-exclude = ["secp256k1/"]
+
+[tool.typos.default.extend-words]
+# the macOS wheel-repair tool, named in __init__.py and in test.yml beside
+# auditwheel: a real name, and one no spelling of it can avoid
+delocate = "delocate"
+
+[tool.typos.default]
+# a quoted run of hexadecimal digits is a vector, not a word. The rule has
+# to be this rather than a minimum length, which is what would do for a
+# base58 or bech32 literal: the formatter wraps a long hex string across
+# adjacent literals, so `"ede781"` is six characters of a signature and
+# reads to a checker that splits identifiers as a misspelling of "edge".
+# Ignored by shape and not by file, the vectors sitting beside prose that
+# has to stay checked -- and this hook fixes in place, so with the rule off
+# it rewrites the vector it read
+extend-ignore-re = ['"[0-9a-fA-F]+"']
+
 [tool.ruff]
 # the vendored upstream sources are not ours to lint or reformat
 extend-exclude = ["secp256k1"]

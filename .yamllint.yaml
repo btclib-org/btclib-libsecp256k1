@@ -1,0 +1,33 @@
+---
+# the third width gate, beside markdownlint on the prose and ruff on the
+# python: the workflows were the one place a line could grow with nothing
+# to say so. actionlint answers whether a workflow is valid and zizmor
+# whether it is safe; neither reads its shape.
+
+extends: default
+
+rules:
+  # 100 and not the 80 the markdown and the python comments get, for an
+  # arithmetic this repository cannot argue with: an action pinned to a
+  # 40-character commit SHA with its tag in a trailing comment starts at
+  # 77 columns before the name of the action is written. Measured on this
+  # tree, 80 reports 62 lines against 8 at 100, and buying the difference
+  # would take a `yamllint disable-line` on every pin -- a width rule does
+  # not get to break the pinning rule. 100 also clears today's longest pin
+  # by enough that an action with a longer name cannot turn a dependabot
+  # pull request red for having no defect in it
+  line-length:
+    max: 100
+
+  # off, at 46 findings, every one of them a pin: dependabot and
+  # pre-commit.ci write one space before the trailing `#` where the rule
+  # wants two, and those two bots are what keeps the pins moving. A rule
+  # that turns every bot pull request red is a rule that gets ignored
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+
+  # off, at 4 findings, all of them the `on:` that opens a workflow: in
+  # yaml 1.1 that key *is* the boolean true, so the rule is reporting the
+  # spelling GitHub Actions requires
+  truthy: disable
