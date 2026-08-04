@@ -6,12 +6,17 @@ readme = "README.md"
 # PEP 639: a SPDX expression and the files it refers to, replacing the
 # deprecated license table and the License :: classifier
 license = "MIT"
-license-files = ["LICENSE", "COPYRIGHT"]
+license-files = ["LICENSE", "COPYRIGHT", "AUTHORS.md"]
 requires-python = ">=3.10"
-authors = [
-    {name = "Ferdinando Ametrano", email = "ferdinando@ametrano.net"},
-    {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
-]
+# the organization and not a list of people, which is btclib's convention
+# and the only one that stays true: a name in metadata is baked into every
+# wheel already published, so an author list here is a snapshot of who had
+# contributed by the release that carried it. AUTHORS.md is where the
+# question is answered instead, and it answers it by pointing at the
+# revision history, which is the record that keeps itself; license-files
+# above ships that file beside LICENSE so the pointer travels with the
+# distribution
+authors = [{ name = "The btclib developers", email = "devs@btclib.org" }]
 keywords=["bitcoin", "libsecp256k1"]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
@@ -140,7 +145,15 @@ ignore = ["W003", "W009"]
 # pinned in .pre-commit-config.yaml, which is the gate; the ones here
 # are for editor integration and ad hoc runs
 [dependency-groups]
-test = ["pytest", "pytest-cov"]
+# pytest-randomly needs no flag: installed, it shuffles the file order and
+# prints the seed, and `-p no:randomly` puts the order back to reproduce a
+# failure against it. What it guards is the one thing a green suite cannot
+# report about itself, whether a test passes because of what ran before it
+# -- which here is not hypothetical: the context is created once at import
+# and randomized, and tests/test_concurrency.py shares it across threads,
+# so an order that happens to work is an order this suite could not
+# distinguish from one that has to
+test = ["pytest", "pytest-cov", "pytest-randomly"]
 # the mypy hook of .pre-commit-config.yaml declares what the checked
 # files import, because it runs in its own isolated environment; running
 # mypy from this environment has to find the same things, or it reports
@@ -200,6 +213,18 @@ show_error_codes = true
 # stubs/_btclib_libsecp256k1.pyi describes the cffi boundary; without it
 # ffi and lib are Any and every wrapper checks out vacuously
 mypy_path = "stubs"
+# the floor requires-python declares, and not the interpreter that happens
+# to run the check. Without this key mypy targets the 3.14 of
+# .python-version, and a typing construct absent from the oldest supported
+# interpreter is then invisible to it: an annotation is deferred by
+# `from __future__ import annotations`, but a type *alias* is an ordinary
+# assignment, so `X | None` at module level is a TypeError before 3.10 that
+# no static check sees. Aimed at the floor, mypy reports it itself instead
+# of leaving it to whichever cell of the matrix dies at collection.
+# Keep the two in step: 3.10 is also the oldest mypy accepts, so raising
+# requires-python is what moves this, and lowering it below 3.10 would put
+# the gap back
+python_version = "3.10"
 exclude = [
     "^build/",
     "^secp256k1/",
@@ -305,6 +330,15 @@ convention = "google"
 # the formatter owns the code width (88 columns); E501 only guards
 # against the runaway comments and URLs it cannot wrap
 max-line-length = 130
+# and this is the half of a file the formatter never reaches. ruff-format
+# reflows code and never a comment or a docstring, so the prose that
+# carries the reasoning was the one width nothing measured -- in a
+# repository that is mostly prose. 80, the same as markdownlint gives every
+# markdown file here, and the same rule W505 already in the selected "W"
+# set applies, inert until this line names a length. It costs nothing
+# today, which is the point of taking it now: zero findings over
+# btclib_libsecp256k1, tests and scripts
+max-doc-length = 80
 
 [tool.ruff.lint.mccabe]
 # see https://en.wikipedia.org/wiki/Cyclomatic_complexity
