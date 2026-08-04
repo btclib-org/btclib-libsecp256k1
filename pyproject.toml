@@ -355,8 +355,6 @@ max-complexity = 10
 # backend, and neither ever sees untrusted input
 "scripts/cffi_build.py" = ["S404", "S603", "S607"]
 "scripts/hatch_build.py" = ["S102"]
-# the build scripts are not part of the documented API
-"scripts/*" = ["D"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

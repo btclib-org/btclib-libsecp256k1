@@ -6,6 +6,20 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
+"""Hatchling build hook: what the compiled extension makes of the wheel.
+
+The extension is built by scripts/cffi_build.py; what is decided here is
+how the wheel that carries it is labelled and what goes into it. Two
+answers, and which one applies is a property of the build rather than of
+this file: a static wheel has libsecp256k1 linked into a `cpNN` extension
+and takes the tag hatchling infers for the interpreter, while a dynamic
+one compiles no C at all and is tagged `py3-none-<platform>`, the shared
+object travelling beside it as a forced include.
+
+See scripts/README.md for the three build paths, and README.md for why
+the distinction reaches the installed package at all.
+"""
+
 import os
 import platform
 import shutil
@@ -17,11 +31,29 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 
 class CustomBuildHook(BuildHookInterface[Any]):
+    """The hook hatchling calls, once per target, before it builds one.
+
+    It is registered in pyproject.toml, whose `cffi_modules` entries name
+    the build description to run and the object to take out of it.
+    """
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Record which platform is being built for.
+
+        `CFFI_PLATFORM` overrides the running system, which is what makes
+        a cross-compiled Windows wheel possible from Linux: everything
+        downstream reads this attribute rather than asking the host.
+        """
         super().__init__(*args, **kwargs)
         self.platform = os.environ.get("CFFI_PLATFORM", platform.system())
 
     def get_ext_object(self, script: Path, ext_name: str) -> Any:
+        """Take the named object out of a cffi build description.
+
+        Raises RuntimeError if the script defines no such name, which is a
+        pyproject.toml `cffi_modules` entry that has gone stale rather
+        than anything a user did.
+        """
         # the cffi build description is a module of this very repository,
         # named in pyproject.toml: exec() runs it without importing it,
         # so that the build backend needs no import path setup
@@ -34,6 +66,15 @@ class CustomBuildHook(BuildHookInterface[Any]):
         return build_vars[ext_name]
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
+        """Build the extensions and tell hatchling what it is packaging.
+
+        An sdist returns at once, carrying sources and no build; a wheel
+        gets `pure_python` cleared, every artifact force-included under its
+        own name, and one of the two tags -- inferred for a static build,
+        `py3-none-<platform>` for a dynamic one. A wheel holding both kinds
+        is a build that went wrong in a way nothing downstream could
+        notice, so it is reported here rather than shipped quietly.
+        """
         if self.target_name != "wheel":
             return
 
