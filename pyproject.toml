@@ -9,6 +9,7 @@ license = "MIT"
 license-files = ["LICENSE", "COPYRIGHT"]
 requires-python = ">=3.9"
 authors = [
+    {name = "Ferdinando Ametrano", email = "ferdinando@ametrano.net"},
     {name = "Giacomo Caironi", email = "giacomo.caironi@gmail.com"},
 ]
 keywords=["bitcoin", "libsecp256k1"]
