@@ -23,20 +23,23 @@ name: published
 # demotes the cell to a second sdist test, and the loss it exists to
 # notice keeps the run green.
 #
-# It will be red until 0.7.1 is published, and not for a reason to shrug
-# at. PyPI carries 0.4.0, whose wheels are x86_64 only and stop at CPython
-# 3.12, so on every arm64 runner and on 3.13 or later the wheel cells fail
-# to resolve at all, while a user's unconstrained pip falls back to that
-# sdist — which builds the vendored library with autotools
-# (scripts/cffi_build.py of 0.4.0 runs autogen.sh), not with the CMake path
-# of today. Measured by hand on 30 July 2026, on Apple Silicon with 3.13,
-# that install fails: hatchling's force-include cannot find the extension
-# the build was supposed to produce. In other words a user on a current Mac
-# cannot install this package at all today, which is a fact worth a red
-# mark rather than one worth hiding until the matrix is narrowed to the
-# cells that pass. 0.7.1 ships arm64 wheels and CPython 3.14 support, so
-# checking that this workflow went green is a step of the release: see
-# RELEASING.md
+# It was red until 0.7.1 was published, every cell of it, and that red was
+# the point rather than a defect to hide. PyPI carried 0.4.0, whose wheels
+# are x86_64 only and stop at CPython 3.12, so on every arm64 runner and on
+# 3.13 or later the wheel cells could not resolve at all, while a user's
+# unconstrained pip fell back to that sdist — which builds the vendored
+# library with autotools (scripts/cffi_build.py of 0.4.0 runs autogen.sh),
+# not with the CMake path of today. Measured by hand on 30 July 2026, on
+# Apple Silicon with 3.13, that install failed: hatchling's force-include
+# could not find the extension the build was supposed to produce. A user on
+# a current Mac could not install this package at all, which was worth a
+# red mark rather than a matrix narrowed to the cells that passed.
+#
+# 0.7.1, published on 4 August 2026, ships arm64 wheels and CPython 3.14
+# support, and this workflow went green on it the same day: nineteen cells
+# out of nineteen, against nineteen out of nineteen red on the scheduled
+# run the day before. That inversion is what the sentinel is for, and
+# checking it is a step of the release: see RELEASING.md
 
 on:
   schedule:
