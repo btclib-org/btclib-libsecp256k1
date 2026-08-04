@@ -1,3 +1,4 @@
+---
 name: release
 
 # publish to PyPI with Trusted Publishing (OIDC): no long-lived PyPI
@@ -72,7 +73,8 @@ jobs:
           # of README.md, its fourth number included, and nothing PEP 440
           # reads as a pre-release, a dev build or a post release
           if ! echo "$version" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
-            echo "::error::$version is not a final version; rehearse on TestPyPI via workflow_dispatch instead"
+            hint="rehearse on TestPyPI via workflow_dispatch instead"
+            echo "::error::$version is not a final version; $hint"
             exit 1
           fi
 
@@ -85,10 +87,11 @@ jobs:
         run: |
           named=$(sed -n 's|.*secp256k1/releases/tag/\(v[0-9][0-9.]*\).*|\1|p' README.md | head -1)
           pinned=$(git ls-tree HEAD secp256k1 | awk '{print $3}')
-          tagged=$(git ls-remote https://github.com/bitcoin-core/secp256k1 "refs/tags/$named^{}" | cut -f1)
+          upstream=https://github.com/bitcoin-core/secp256k1
+          tagged=$(git ls-remote "$upstream" "refs/tags/$named^{}" | cut -f1)
           echo "README.md names $named ($tagged); the submodule is pinned to $pinned"
           if [ -z "$named" ] || [ -z "$tagged" ]; then
-            echo "::error::README.md names no libsecp256k1 release, or names one that does not exist"
+            echo "::error::README.md names no libsecp256k1 release, or one that does not exist"
             exit 1
           fi
           if [ "$tagged" != "$pinned" ]; then
@@ -110,7 +113,9 @@ jobs:
       # the release it rehearses (PEP 440). Re-running a finished
       # rehearsal reuses its run number and would collide, so dispatch a
       # fresh run instead
-      version-suffix: ${{ github.event_name == 'workflow_dispatch' && format('.dev{0}', github.run_number) || '' }}
+      version-suffix: >-
+        ${{ github.event_name == 'workflow_dispatch'
+        && format('.dev{0}', github.run_number) || '' }}
 
   # the two publish jobs differ only in where they upload to, and are two
   # jobs rather than one parameterized by an expression on purpose. The
@@ -130,7 +135,9 @@ jobs:
     # the repository condition keeps a fork from attempting an upload it
     # has no publisher for: a fork that pushes a tag, or dispatches this
     # workflow, gets the build and stops there
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'btclib-org/btclib_libsecp256k1'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && github.repository == 'btclib-org/btclib_libsecp256k1'
     needs: [lint, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15

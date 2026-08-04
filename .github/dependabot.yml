@@ -1,3 +1,4 @@
+---
 # three of the four things this repository tracks. The pre-commit hook
 # revisions are the one left out, dependabot having no pre-commit
 # ecosystem: pre-commit.ci opens that pull request instead, weekly, as

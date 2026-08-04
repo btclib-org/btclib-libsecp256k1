@@ -1,3 +1,4 @@
+---
 name: Bug report
 description: Something in these bindings does not work as documented
 labels: [bug]

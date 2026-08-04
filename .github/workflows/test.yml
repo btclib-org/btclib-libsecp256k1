@@ -1,3 +1,4 @@
+---
 name: test
 
 on:
@@ -218,8 +219,13 @@ jobs:
       # macOS 26 image still compiles for it
       - name: Set the macOS deployment target
         if: runner.os == 'macOS'
+        # the expression is a step env var rather than text spliced into
+        # the script: what reaches the shell is then a value and never a
+        # fragment of a command, which is the shape zizmor asks for
+        env:
+          TARGET: ${{ matrix.os == 'macos-26-intel' && '10.13' || '11.0' }}
         run: |
-          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os == 'macos-26-intel' && '10.13' || '11.0' }}" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=$TARGET" >> "$GITHUB_ENV"
 
       # the build group and --frozen: see build-cibuildwheel
       - name: Build wheel
@@ -298,7 +304,9 @@ jobs:
   # the PATH preprocesses the headers for cffi, and what the sdist has to
   # carry for it is not what a POSIX build reads
   test-sdist:
-    name: "Test sdist install on ${{ matrix.os }}${{ matrix.architecture && format(' ({0})', matrix.architecture) }}"
+    name: >-
+      Test sdist install on ${{ matrix.os }}${{
+      matrix.architecture && format(' ({0})', matrix.architecture) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -500,6 +508,11 @@ jobs:
             macos-latest,
             windows-latest,
           ]
+        # 3.14t, the free-threaded interpreter, matters here in particular:
+        # the dynamic wheel is tagged py3-none, so it is what a
+        # free-threaded interpreter installs, and unlike the static wheels
+        # nothing else exercises it (cibuildwheel tests every wheel it
+        # builds, including cp314t; this job has no such counterpart)
         python-version:
           [
             "3.10",
@@ -511,11 +524,6 @@ jobs:
             "pypy-3.10",
             "pypy-3.11",
           ]
-        # 3.14t, the free-threaded interpreter, matters here in particular:
-        # the dynamic wheel is tagged py3-none, so it is what a
-        # free-threaded interpreter installs, and unlike the static wheels
-        # nothing else exercises it (cibuildwheel tests every wheel it
-        # builds, including cp314t; this job has no such counterpart)
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
