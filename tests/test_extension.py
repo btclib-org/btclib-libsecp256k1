@@ -30,6 +30,13 @@ from btclib_libsecp256k1 import __version__, _load_lib
 
 
 def test_version() -> None:
+    """Check that __version__ is a non-empty string.
+
+    Not that the distribution is installed under the name __init__.py
+    asks for: were it not, importlib.metadata would raise at import and
+    every test in the suite would fail. What is checked is that the
+    attribute is still exposed, and with a value in it.
+    """
     # that the distribution is installed under the name __init__.py asks
     # for is not what this checks: were it not, importlib.metadata would
     # raise at import time and every test would fail. What is checked is
@@ -39,12 +46,25 @@ def test_version() -> None:
 
 
 def test_load_lib_no_candidate(tmp_path: pathlib.Path) -> None:
+    """A directory holding no library is reported, naming the directory.
+
+    The dynamic branch of `_load_lib` is driven with a stand-in module,
+    that being the only way to reach it from a static build -- and the
+    other way round.
+    """
     module = types.SimpleNamespace(__file__=str(tmp_path / "_extension.py"))
     with pytest.raises(ImportError, match=re.escape(str(tmp_path))):
         _load_lib(module)
 
 
 def test_load_lib_unloadable_candidate(tmp_path: pathlib.Path) -> None:
+    """A file that matches the glob but does not load is not a library.
+
+    It is skipped and the search continues, so what the caller is told is
+    that the directory holds no loadable libsecp256k1 -- rather than the
+    dlopen failure of one candidate, which would report the first
+    accident as the whole answer.
+    """
     # a file matching the glob that the loader rejects is skipped, and
     # the directory as a whole is reported as holding no library
     (tmp_path / "libsecp256k1.so").write_bytes(b"not a shared object")

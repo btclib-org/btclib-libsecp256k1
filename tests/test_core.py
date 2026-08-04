@@ -26,6 +26,15 @@ xonly_bytes = pubkey_bytes[1:]
 
 
 def test_sign_and_verify() -> None:
+    """Round-trip ECDSA and BIP340, and check what each call refuses.
+
+    A private key is interchangeable as an int and as 32 octets. A nonce
+    contribution changes the deterministic ECDSA signature and the result
+    still verifies; being entropy it is 32 octets or nothing, so a shorter
+    value is refused rather than padded. BIP340 verification takes the
+    x-only key and only it, a full public key being the caller's to
+    convert through `xonly`.
+    """
     msg = b"\xa0\xdce\xff\xcay\x98s\xcb\xea\n\xc2t\x01[\x95&P]\xaa\xae\xd3\x85\x15T%\xf73w\x04\x88>"
 
     dsa_sig = dsa.sign(msg, prvkey)
@@ -50,6 +59,16 @@ def test_sign_and_verify() -> None:
 
 
 def test_ssa_sign_custom() -> None:
+    """Sign a BIP340 message of any length, which only sign_custom takes.
+
+    For 32 octets the two entry points agree byte for byte, `sign` being
+    `sign_custom` with the default nonce function and nothing else set.
+    Past that: a longer message verifies, the same signature does not
+    verify against that message truncated, the empty message is a length
+    like any other, and `sign` refuses what is not 32 octets. The three
+    refusals are a zero private key and an aux_rand32 one octet too long
+    and one too short.
+    """
     msg = b"\x02" * 32
     aux_rand32 = b"\x11" * 32
 
@@ -79,6 +98,15 @@ def test_ssa_sign_custom() -> None:
 
 
 def test_safe_abort() -> None:
+    """An illegal argument does not take the interpreter down with it.
+
+    `secp256k1_ecdsa_sign` is called with NULL where a signature and a
+    key go. Upstream's default callbacks `abort()`, which would end the
+    hosting process; this returns because the vendored build replaces
+    them with do-nothing stubs, compiled as a unit of their own rather
+    than by editing the submodule. That the test returns at all is the
+    assertion.
+    """
     lib.secp256k1_ecdsa_sign(
         lib.secp256k1_context_create(769),
         ffi.new("secp256k1_ecdsa_signature *"),
@@ -90,6 +118,11 @@ def test_safe_abort() -> None:
 
 
 def test_mult() -> None:
+    """Both spellings of generator multiplication reach the same point.
+
+    `mult_` answers the serialized public key and `mult` the coordinates,
+    so the x of the second is the x the first carries.
+    """
     pubkey_ = mult.mult_(prvkey)
     assert pubkey_[1:33] == pubkey_bytes[1:]
     pubkey = mult.mult(prvkey)
@@ -97,6 +130,14 @@ def test_mult() -> None:
 
 
 def test_invalid_inputs() -> None:
+    """Every argument out of the domain is refused at the boundary.
+
+    A zero private key, a message hash that is not 32 octets, an
+    ndata that is not, a signature that is not DER, and a public key
+    that does not parse -- each raising ValueError with the message
+    naming the argument, which is what a caller catches rather than
+    finding out from libsecp256k1's return code.
+    """
     msg = b"\x01" * 32
 
     dsa_sig = dsa.sign(msg, prvkey)

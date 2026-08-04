@@ -28,6 +28,15 @@ def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
 
 
 def test_tagged_sha256() -> None:
+    """Match the definition, and check that the tag separates domains.
+
+    The four tags are the taproot ones of BIP341 and the challenge tag of
+    BIP340, over messages from empty to a thousand octets. Two further
+    assertions are about the construction rather than the digest: one
+    message under two tags gives two values, and the tag is not merely
+    prefixed to the message -- which is what the doubled tag hash is for,
+    and what an empty tag exhibits.
+    """
     # the taproot tags of BIP341 and the challenge tag of BIP340
     for tag in (b"TapLeaf", b"TapBranch", b"TapTweak", b"BIP0340/challenge"):
         for msg in (b"", b"\x00", b"btclib_libsecp256k1", b"\xff" * 1000):

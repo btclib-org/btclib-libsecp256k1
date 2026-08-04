@@ -63,6 +63,7 @@ def der_decode(sig: bytes) -> tuple[int, int]:
 
 
 def bip340_vectors() -> list[dict[str, str]]:
+    """Read the BIP340 vector csv, vendored from bitcoin/bips."""
     path = pathlib.Path(__file__).parent / "bip340_test_vectors.csv"
     with path.open(newline="") as csv_file:
         return list(csv.DictReader(csv_file))
@@ -72,6 +73,16 @@ def bip340_vectors() -> list[dict[str, str]]:
     "vector", bip340_vectors(), ids=lambda v: f"bip340-{v['index']}"
 )
 def test_bip340_vector(vector: dict[str, str]) -> None:
+    """Verify one BIP340 vector, and reproduce its signature where it has one.
+
+    The verification verdict is the vector's own. A vector carrying a
+    secret key is also signed and the signature compared byte for byte,
+    which the fixed aux_rand makes possible -- but only for a 32-octet
+    message, `ssa.sign` exposing BIP340's 32-byte signing alone and the
+    longer messages being `ssa.sign_custom`'s. A structurally invalid input
+    raises where the vector says false, so the exception is read as that
+    verdict rather than as an error.
+    """
     msg = bytes.fromhex(vector["message"])
     pubkey = bytes.fromhex(vector["public key"])
     sig = bytes.fromhex(vector["signature"])
@@ -162,6 +173,14 @@ RFC6979_ECDSA_VECTORS = [
 def test_rfc6979_ecdsa_vector(
     seckey_hex: str, msg_text: str, k_hex: str, r_hex: str, s_hex: str
 ) -> None:
+    """Reproduce an RFC6979 signature, with the vector checked against itself.
+
+    The vector publishes the nonce as well as r and s, so `r == x(k*G)` is
+    asserted first: what that buys is knowing the vector is internally
+    consistent before it is used to judge anything. libsecp256k1 always
+    produces the low-s form, so the expected s is the smaller of s and
+    n-s.
+    """
     msg32 = hashlib.sha256(msg_text.encode()).digest()
     r = int(r_hex, 16)
     s = int(s_hex, 16)
@@ -200,6 +219,12 @@ TREZOR_ECDSA_VECTORS = [
 
 @pytest.mark.parametrize("seckey_hex, digest_hex, sig_hex", TREZOR_ECDSA_VECTORS)
 def test_trezor_ecdsa_vector(seckey_hex: str, digest_hex: str, sig_hex: str) -> None:
+    """Reproduce a trezor ECDSA vector, given as a compact r||s.
+
+    Two keys whose repeating tail is what makes them worth having: the
+    vectors were chosen upstream to exercise the scalar arithmetic rather
+    than to look random. The low-s form applies as above.
+    """
     digest = bytes.fromhex(digest_hex)
     sig = bytes.fromhex(sig_hex)
     r = int.from_bytes(sig[:32], "big")
@@ -268,6 +293,7 @@ REJECTED_DER = [
 
 
 def json_vectors(name: str) -> list[dict[str, str]]:
+    """Read a json vector file vendored from the secp256k1-py test suite."""
     path = pathlib.Path(__file__).parent / name
     with path.open(encoding="ascii") as json_file:
         vectors: list[dict[str, str]] = json.load(json_file)["vectors"]
@@ -275,6 +301,12 @@ def json_vectors(name: str) -> list[dict[str, str]]:
 
 
 def test_secp256k1py_ecdsa_vectors() -> None:
+    """Reproduce every secp256k1-py ECDSA vector byte for byte.
+
+    The vendored signature carries a trailing SIGHASH_ALL octet, which is
+    a fact about the transaction it came from rather than part of the DER,
+    so it is stripped before the comparison.
+    """
     for vector in json_vectors("ecdsa_sig.json"):
         msg32 = bytes.fromhex(vector["msg"])
         prvkey = bytes.fromhex(vector["privkey"])
@@ -287,6 +319,14 @@ def test_secp256k1py_ecdsa_vectors() -> None:
 
 
 def test_secp256k1py_custom_nonce_vectors() -> None:
+    """Verify the custom-nonce vectors, and anchor each on its own nonce.
+
+    The nonce field is the literal k, and the bindings expose the default
+    RFC6979 derivation only, so these signatures cannot be reproduced.
+    They are verified instead, with `r == x(k*G)` and the low-s rule
+    asserted so that the vector is held to something of its own rather
+    than only to a verification this package performs.
+    """
     # the nonce field is the literal k: the bindings only expose the
     # default RFC6979 nonce, so signing cannot be reproduced; the
     # signature is verified instead, and anchored asserting r == x(k*G)
@@ -304,6 +344,14 @@ def test_secp256k1py_custom_nonce_vectors() -> None:
 
 
 def test_der_parsing() -> None:
+    """Tell a signature that parses from one that does not.
+
+    Both lists are encodings, and what separates them is whose question
+    they answer: the first parse and then fail to verify, which is a
+    verdict about the signature, and the second are refused as DER, which
+    is a verdict about the octets. Reporting either as the other is what
+    the two lists exist to catch.
+    """
     msg32 = b"\x01" * 32
     pubkey = mult.mult_(1)
     for der_hex in PARSED_DER:

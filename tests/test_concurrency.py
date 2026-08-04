@@ -35,6 +35,14 @@ ROUNDS = 32
 
 
 def test_concurrent_round_trips() -> None:
+    """Eight threads repeat every operation and reach one answer each.
+
+    The values are computed once on the main thread and then asserted
+    from the pool, so a result that differs is a buffer two calls shared
+    rather than a legitimate difference: every operation here is
+    deterministic. `map` is consumed rather than discarded, an assertion
+    failing in a worker being raised only when its result is read.
+    """
     pubkey_bytes = mult.mult_(prvkey)
     xonly_bytes, _ = xonly.from_pubkey(pubkey_bytes)
     dsa_sig = dsa.sign(msg, prvkey)

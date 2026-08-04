@@ -79,6 +79,13 @@ def compress(pubkey_bytes: bytes) -> bytes:
 
 
 def test_serialization_round_trips() -> None:
+    """Either form parses and comes back, and negation is an involution.
+
+    `mult` is checked to agree with the serialization it is derived from,
+    and negating the private key is checked to flip the y while leaving
+    the x alone -- which is the point-level meaning of the scalar
+    operation, asserted rather than assumed.
+    """
     for prvkey in derived(b"serialization"):
         uncompressed = mult.mult_(prvkey)
         compressed = compress(uncompressed)
@@ -102,6 +109,13 @@ def test_serialization_round_trips() -> None:
 
 
 def test_scalar_algebra_matches_point_algebra() -> None:
+    """(d + t)G is dG + tG, and (d * t)G is t(dG), over the whole sweep.
+
+    The scalar operation and the point operation are the bindings' own,
+    so what is compared is one against the other and never against a
+    second implementation of the curve. Addition is checked to commute,
+    and combining two points to be adding their scalars.
+    """
     for prvkey, tweak in zip(derived(b"scalar"), derived(b"tweak"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
 
@@ -123,6 +137,13 @@ def test_scalar_algebra_matches_point_algebra() -> None:
 
 
 def test_ecdsa_signature_forms() -> None:
+    """RFC6979 signing is deterministic, low-s, and converts both ways.
+
+    Over the sweep rather than the handful of small keys, which is what
+    reaches a DER length the fixed vectors never produce. A private key as
+    octets and as an int is the same key; a nonce contribution changes the
+    signature and the result still verifies.
+    """
     for prvkey, entropy in zip(derived(b"ecdsa"), derived(b"ndata"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
         msg = hashlib.sha256(prvkey).digest()
@@ -146,6 +167,13 @@ def test_ecdsa_signature_forms() -> None:
 
 
 def test_recovery_recovers_the_signer() -> None:
+    """A recoverable signature recovers the signer, and no other key.
+
+    Its DER form equals what `dsa.sign` produces, so the two entry points
+    are one signature. The other recovery id is asserted to give a
+    different key when it gives one at all -- it need not, which is why
+    the ValueError is suppressed rather than expected.
+    """
     for prvkey in derived(b"recovery"):
         pubkey = compress(mult.mult_(prvkey))
         msg = hashlib.sha256(prvkey).digest()
@@ -161,6 +189,15 @@ def test_recovery_recovers_the_signer() -> None:
 
 
 def test_schnorr_and_taproot_tweaking() -> None:
+    """BIP340 signing is deterministic, and a taproot tweak is consistent.
+
+    A signature verifies against the x-only key whatever the parity the
+    compressed form carries, and `sign_custom` agrees with `sign` on a
+    32-octet message. The tweaked key checks out against its commitment,
+    and the tweaked private key is asserted to be the one that signs for
+    it -- which is what a key path spending needs and what no single call
+    can confirm.
+    """
     for prvkey, tweak in zip(derived(b"schnorr"), derived(b"taptweak"), strict=True):
         pubkey = compress(mult.mult_(prvkey))
         msg = hashlib.sha256(prvkey).digest()
@@ -189,6 +226,14 @@ def test_schnorr_and_taproot_tweaking() -> None:
 
 
 def test_ecdh_and_ellswift_agree() -> None:
+    """Both parties reach one ECDH secret, and BIP324's is symmetric.
+
+    The secret is checked against the SHA256 of the shared point that
+    `keys` returns, hashlib being the independent reference. An
+    ElligatorSwift encoding decodes to the key it encodes, from a private
+    key and from an already computed public one, and the x-only ECDH gives
+    one value to the two parties naming their own side.
+    """
     for prvkey_a, prvkey_b in zip(derived(b"ecdh a"), derived(b"ecdh b"), strict=True):
         pubkey_a = compress(mult.mult_(prvkey_a))
         pubkey_b = compress(mult.mult_(prvkey_b))
@@ -213,6 +258,12 @@ def test_ecdh_and_ellswift_agree() -> None:
 
 
 def test_public_key_ordering() -> None:
+    """Ordering is the one of the compressed serialization, pairwise too.
+
+    Python sorting the same octets is the independent reference, and every
+    pair is checked against `<` on those octets, so the comparison is held
+    to the order rather than only the sort to the comparison.
+    """
     prvkeys = list(derived(b"ordering", 8))
     pubkeys = [compress(mult.mult_(prvkey)) for prvkey in prvkeys]
 
@@ -225,6 +276,12 @@ def test_public_key_ordering() -> None:
 
 
 def test_tagged_hashing() -> None:
+    """The tagged hash matches its definition, computed with hashlib.
+
+    Over the sweep and three tags, the empty one included: an
+    implementation of SHA256 that has nothing to do with the one inside
+    libsecp256k1.
+    """
     for msg in derived(b"tagged"):
         for tag in (b"", b"TapLeaf", b"BIP0340/challenge"):
             tag_hash = hashlib.sha256(tag).digest()
@@ -235,6 +292,11 @@ def test_tagged_hashing() -> None:
 
 
 def test_scalar_range_ends() -> None:
+    """Both ends of the scalar range are usable keys, and negate to each other.
+
+    1 and n-1 verify, sign and verify under ECDSA and BIP340. They are the
+    two values the sweep cannot reach, being a chain of hashes.
+    """
     msg = hashlib.sha256(b"edge").digest()
     for scalar in (1, N - 1):
         assert keys.prvkey_verify(scalar)
@@ -246,6 +308,13 @@ def test_scalar_range_ends() -> None:
 
 
 def test_pinned_zero_leading_x() -> None:
+    """A public key whose x starts with a zero octet still round trips.
+
+    About one key in 256, so not something the sweep can be relied on to
+    produce: it is pinned by value, taken from the same chain. What it
+    exercises is every place a leading zero could be dropped -- both
+    serializations, the x-only form, and the coordinates.
+    """
     # value 223 of derived(b""), the first of that chain whose public key
     # has an x coordinate starting with a zero byte: about 1 in 256, so
     # not something COUNT iterations can be relied on to produce
@@ -262,6 +331,13 @@ def test_pinned_zero_leading_x() -> None:
 
 
 def test_pinned_short_der_signature() -> None:
+    """A 69-octet DER signature converts, normalizes and recovers.
+
+    Both r and s short, which is about one signature in 200: the rest of
+    the suite only ever produces 70 and 71 octets, so a length assumption
+    anywhere would pass everything and fail here. Pinned by value from the
+    same chain.
+    """
     # value 220 of the same chain, signing the message derived from it:
     # r and s both short, for a DER encoding of 69 bytes. The rest of the
     # suite only ever produces 70 and 71; this is about 1 in 200
