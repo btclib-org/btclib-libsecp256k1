@@ -637,3 +637,44 @@ jobs:
 
       - name: Test
         run: pytest
+
+  # one context for the branch rule, instead of the matrix's own. A rule
+  # naming `Test 3.10 on ubuntu-latest` names a context that stops being
+  # produced the moment the matrix changes, and a required check that
+  # produces no run blocks every merge with nothing in the tree to explain
+  # why -- the rule living outside the repository. So the rule names this
+  # job, and a job added to this workflow belongs in the `needs` below or
+  # it gates nothing. REPOSITORY.md carries the branch rule itself.
+  #
+  # `if: always()` because a job with unmet `needs` is skipped, and a
+  # skipped check is not a failed one: without it a failing matrix cell
+  # would leave this context reported as skipped, which satisfies a
+  # required check rather than blocking on it. Cancelled is a failure here
+  # too, a superseded run being no evidence either way
+  tests-passed:
+    name: tests-passed
+    if: always()
+    needs:
+      - coverage
+      - build-cibuildwheel
+      - build-dynamic
+      - build-sdist
+      - test-sdist
+      - build-windows
+      - check-dist
+      - test-dynamic
+      - test-static
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Fail unless every job above succeeded
+        # the results are read rather than the run's conclusion, which is
+        # not available to a job of the run it would describe
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          case " $RESULTS " in
+            *" failure "* | *" cancelled "*) exit 1 ;;
+          esac
