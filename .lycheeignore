@@ -1,0 +1,15 @@
+# URLs the links workflow does not check. Empty on purpose, and the
+# measurement is why: all eighty-six external URLs this repository owns
+# resolve. The three that did not answer cleanly when it was taken were
+# every one of them inside the vendored secp256k1 tree, which that workflow
+# does not check out at all — upstream's documentation being upstream's to
+# maintain.
+#
+# The rule for an entry, when one is needed: it goes here with the reason
+# the URL *cannot* be checked, not the reason checking it is inconvenient.
+# Anything merely slow or occasionally throttled belongs in that workflow's
+# --max-retries, --timeout and --accept instead, which is where the 429
+# and the two-attempt bot-block already live. A host that answers a
+# developer machine and refuses a runner is the case that belongs here,
+# because no rewriting of the URL can make the workflow able to reach it,
+# and the entry should say that it was measured from both.
