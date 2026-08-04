@@ -85,7 +85,7 @@ repos:
   # pyproject.toml, and a fraction of the runtime. The rule selection
   # (and what each family stands in for) is documented there
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.0
+    rev: v0.16.1
     hooks:
       - id: ruff-check
         name: ruff (lint, in place fixes)
@@ -159,7 +159,7 @@ repos:
   # where an additional_dependencies pin is moved by nothing.
   # The args replace the hook's own, so --no-progress has to be repeated
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.28.0
+    rev: v1.29.0
     hooks:
       - id: zizmor
         name: zizmor (workflow security)
@@ -202,6 +202,6 @@ repos:
   # a dependency added to pyproject.toml from reaching a branch without
   # the lock entry that pins it
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.0
+    rev: 0.12.1
     hooks:
       - id: uv-lock
