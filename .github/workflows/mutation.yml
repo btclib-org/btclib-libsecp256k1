@@ -1,0 +1,122 @@
+---
+name: mutation
+
+# Coverage answers "was this line executed"; this answers "would the suite
+# notice if it were wrong". The ratchet in pyproject.toml is at 100% with no
+# slack, so the first question is settled here and the second was never
+# asked.
+#
+# The shape of this package is why it is worth asking. What is hand-written
+# is a boundary -- `if len(x) != 32: raise`, a scalar checked against the
+# group order, a return code compared with zero -- and that is exactly the
+# shape where a mutant survives a fully covered tree: change 32 to 31 and
+# the line still runs. What kills it is a test at 31 octets *and* one at 33,
+# and whether every bound has both is what nobody has measured.
+#
+# It gates nothing, and that is the design rather than a caution. A gate
+# needs a number nobody has yet, and a survival rate is not a regression: a
+# mutant survives because a test is missing, so a red merge would block
+# whoever next touched a file for a hole somebody else left. It therefore
+# does not appear in master's required checks, and must not -- that rule
+# lives outside the repository and names its checks as literal strings. See
+# REPOSITORY.md.
+#
+# What runs here is what .github/mutation/bindings.toml says, which is what
+# CONTRIBUTING.md documents for a local run: one statement of the scope and
+# the test command, not a second copy of them in yaml.
+
+on:
+  schedule:
+    # Saturday 03:29 UTC, so a session measured in minutes has the weekend
+    # to itself. Not on the hour: GitHub queues scheduled workflows across
+    # every repository that asked for the same minute, and a run can be
+    # dropped outright when that queue is long.
+    # Saturday because published.yml has Monday, links.yml Tuesday and
+    # latest.yml Friday: four sentinels in one inbox on one morning are one
+    # sentinel.
+    # Cron runs from the default branch only, so this file does nothing
+    # until it reaches master -- on dev it is reachable through the dispatch
+    # below and nowhere else
+    - cron: "29 3 * * 6"
+  # the escape hatch, and the way to re-measure after writing the tests a
+  # survivor asked for
+  workflow_dispatch:
+  # no pull_request trigger, unlike links.yml, which does run itself when
+  # its own configuration changes. The difference is what the two cost: a
+  # link sweep is a few hundred requests, and a session is 771 runs of the
+  # suite. check-toml parses this configuration on every commit, and
+  # `cosmic-ray baseline` below fails the run before any mutant if the test
+  # command has gone stale, which is what that trigger would have caught
+
+# least privilege for the GITHUB_TOKEN: everything running in a job can read
+# it, and nothing here writes. In particular no issues: write -- an
+# automatic issue per surviving mutant is the usual next step, and it would
+# make this the only workflow here able to write anything, to save a
+# maintainer from reading a report they already receive
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutate the bindings
+    runs-on: ubuntu-latest
+    # 771 mutants at a suite that runs in well under a second, so what this
+    # bounds is a session gone wrong rather than a session gone long
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # the extension has to be built for the suite to import anything
+          submodules: true
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      # first, always: it runs the configured test command against the
+      # unmutated tree, and without it a renamed test file or a stale flag
+      # fails every mutant identically and the session reports a perfect
+      # kill rate -- which is the one failure mode of a mutation run that
+      # looks like good news
+      - name: Check the baseline
+        run: >
+          uv run --locked --no-default-groups --group test --group mutation
+          cosmic-ray baseline .github/mutation/bindings.toml
+
+      - name: Enumerate the mutants
+        run: >
+          uv run --locked --no-default-groups --group test --group mutation
+          cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
+
+      # resumable: it runs whatever the session still has pending, so a
+      # cancelled run costs only the mutant it was on, and the artifact
+      # below can be finished locally
+      - name: Run the session
+        run: >
+          uv run --locked --no-default-groups --group test --group mutation
+          cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
+
+      # --surviving-only, which is the whole of what anybody acts on: a
+      # killed mutant is the suite doing its job, and printing all 771 of
+      # them buries the few that are not
+      - name: Report the survivors
+        run: |
+          uv run --locked --no-default-groups --group test --group mutation \
+            cr-rate --estimate bindings.sqlite
+          uv run --locked --no-default-groups --group test --group mutation \
+            cr-report --surviving-only --show-diff bindings.sqlite
+
+      # the session is the artifact: cr-report, cr-html and cr-rate all read
+      # one, so a downloaded session answers a question the log did not
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-session
+          path: bindings.sqlite
+          retention-days: 30

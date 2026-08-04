@@ -1,0 +1,107 @@
+---
+name: links
+
+# the documentation of this package is mostly links: the BIPs a wrapper
+# implements, the upstream functions it calls, the packaging specifications
+# the release follows. Eighty-six distinct external URLs across the
+# markdown, and until this workflow nothing looked at one of them.
+#
+# Not a pull request gate, and that is the design rather than a caution. A
+# link rots without anybody touching the repository, so checking it per
+# commit reports the internet's weather on somebody else's branch; and a
+# third party answering 502 or throttling a runner would turn a red merge
+# into something to re-run rather than something to fix. Weekly, on demand,
+# and red in the Actions tab is where this belongs -- the same division
+# published.yml already makes for what PyPI serves.
+# It therefore does not appear in master's required checks, and must not:
+# that rule lives outside the repository and names its checks as literal
+# strings. See REPOSITORY.md.
+
+on:
+  schedule:
+    # Tuesday 04:11 UTC. Not on the hour: GitHub queues scheduled workflows
+    # across every repository that asked for the same minute, and a run can
+    # be dropped outright when that queue is long.
+    # Tuesday because published.yml has Monday: two sentinels landing in
+    # the same inbox on the same morning are one sentinel.
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "11 4 * * 2"
+  # the escape hatch, and the way to check a branch before merging a
+  # change that adds links
+  workflow_dispatch:
+  # so a change to this file, or to the ignore list beside it, is checked
+  # by the thing it configures. The filter is evaluated against the pull
+  # request's whole diff against its base rather than against the push that
+  # triggered the run, so once a pull request touches either file every
+  # later push to that branch runs this too: harmless, being a few hundred
+  # requests that gate nothing
+  pull_request:
+    paths:
+      - .github/workflows/links.yml
+      - .lycheeignore
+
+# least privilege for the GITHUB_TOKEN: everything running in a job can
+# read it, and nothing here writes. lychee is given it for github.com
+# links alone, where an unauthenticated runner is rate limited hard enough
+# to look like rot.
+# Deliberately not issues: write. An automatic "link rot" issue is the
+# usual next step, and it would make this the only workflow here able to
+# write anything -- to save a maintainer from reading a failure
+# notification they already receive
+permissions:
+  contents: read
+
+# cancel superseded runs. Named literally rather than through
+# github.workflow, as everywhere else here: in a called workflow what that
+# expression resolves to is undocumented
+concurrency:
+  group: links-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    name: Check the documentation links
+    runs-on: ubuntu-latest
+    # a few hundred requests with retries; a job past this is hung on one
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # no `submodules:`, which is what keeps the vendored tree out of
+          # this sweep without an exclusion: secp256k1/ is not checked out
+          # at all here, and its own CHANGELOG and CONTRIBUTING carry links
+          # that are upstream's to maintain. Measured before writing this:
+          # the three URLs of the eighty-six that did not answer cleanly
+          # were all three inside that submodule
+
+      - name: Check the links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # the prose, and named by path rather than as `**/*.md`, so that
+          # adding `submodules: true` above could not silently widen the
+          # sweep to upstream's documentation.
+          # The retries, the timeout and the cache are what keep a slow or
+          # throttling host from being reported as a dead one, and the
+          # measurement behind them is this repository's own: of the
+          # eighty-six URLs, one answered 418 to the first request and 200
+          # to the second, which is a bot-block and not rot. 429 is
+          # accepted for the same reason -- a rate limit is the runner's
+          # address being judged, not the link
+          args: >-
+            --no-progress
+            --max-retries 3
+            --retry-wait-time 10
+            --timeout 45
+            --cache
+            --max-cache-age 1d
+            --accept 200,206,429
+            "*.md" "scripts/*.md" ".github/*.md"
+          # fail the job rather than only summarizing: a green run that
+          # found dead links is the state this workflow exists to end
+          fail: true
+        env:
+          # for github.com links only, per the permissions comment above
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

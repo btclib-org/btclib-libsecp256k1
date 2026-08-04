@@ -177,6 +177,12 @@ build = ["build", "cibuildwheel", "auditwheel", "delocate"]
 # release that changed nothing. `uv run --only-group check` omits the
 # project itself, so asking for these compiles no extension
 check = ["twine", "check-wheel-contents", "pyroma"]
+# mutation testing, which asks what coverage cannot: a line the suite
+# executes is not a line the suite checks. Its own group and not part of
+# test, because every cell of the matrix installs that one and none of them
+# runs this -- the scheduled mutation workflow is the only consumer, and it
+# asks for --group test as well, cosmic-ray shelling out to pytest
+mutation = ["cosmic-ray"]
 # what scripts/benchmark.py times these bindings against, deliberately
 # left out of dev: btclib depends on this package, so it cannot be a
 # dependency of developing it. Here it is harmless, the lock resolving
