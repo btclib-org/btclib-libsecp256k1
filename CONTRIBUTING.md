@@ -109,7 +109,7 @@ To test against another supported interpreter, bypass the build cache:
 uv keys it on the sources, which do not tell it that the compiled
 extension belongs to one ABI version only.
 
-    uv run --python 3.9 --no-cache pytest
+    uv run --python 3.10 --no-cache pytest
 
 On a Windows arm64 machine, mind which interpreter that request gets:
 uv installs an x86-64 one unless the architecture is named
@@ -143,7 +143,7 @@ the runner, and that is worth knowing before trying.
 
 - `Test <version> on <os>`, one row of the matrix
 
-      uv run --python 3.9 --no-cache pytest
+      uv run --python 3.10 --no-cache pytest
 
 - `Build wheels on <os>`, for this platform only
 

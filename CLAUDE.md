@@ -71,7 +71,7 @@ wrong place.
 
     # another interpreter; --no-cache because the cached extension
     # belongs to one ABI
-    uv run --python 3.9 --no-cache pytest
+    uv run --python 3.10 --no-cache pytest
 
     # the packaging gates, pinned by uv.lock rather than fetched by uvx
     uv build --sdist
@@ -96,7 +96,7 @@ wrong place.
   documents where each vendored file comes from
 - **coverage is a ratchet at 100%,** with `raise RuntimeError` excluded:
   see the reasoning in `pyproject.toml`
-- **warnings are errors** (`filterwarnings`), because the 3.9 to 3.14
+- **warnings are errors** (`filterwarnings`), because the 3.10 to 3.14
   spread turns a deprecation into a breakage
 - **the version is declared once,** in `pyproject.toml`; `__version__`
   reads the installed metadata. Never bump it in an ordinary change:
@@ -135,7 +135,7 @@ findings.
 
 ## Facts that would otherwise cost a session
 
-- **`uv run --python 3.9 …` replaces `.venv`** with an environment built
+- **`uv run --python 3.10 …` replaces `.venv`** with an environment built
   on that interpreter, and leaves it there. Going back is another
   `uv sync`, plus `--reinstall-package btclib_libsecp256k1 --no-cache` if
   the extension in the cache belongs to the ABI just left. The README
