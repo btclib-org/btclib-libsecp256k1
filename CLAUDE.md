@@ -101,7 +101,9 @@ wrong place.
 - **the version is declared once,** in `pyproject.toml`; `__version__`
   reads the installed metadata. Never bump it in an ordinary change:
   releases are cut by a maintainer, and the release workflow checks the
-  tag against it
+  tag against it. The one bump that is not a release is the fourth number
+  opened straight after one, so that the tree stops claiming the version
+  it shipped: step 9 of RELEASING.md, and the reason it is a step
 - **the `secp256k1` submodule moves in a change of its own,** with the
   version named in `README.md` and `HISTORY.md` moved with it
 - development happens on `dev`; a pull request targets `dev`, and `master`
