@@ -115,10 +115,11 @@ repos:
         # it is the gate itself disagreeing. Nothing moves an additional
         # dependency, so these are moved by hand, with the lint and test
         # groups of uv.lock: they are what it resolves for python 3.10 and
-        # later, which is what runs the hook (the lock reaches back to 3.9
-        # for the package, and pins older versions of these there)
+        # later, which is what runs the hook and, since 3.9 was dropped,
+        # the whole of what the lock resolves for — it used to reach back
+        # to 3.9 for the package and pin older versions of these there
         additional_dependencies:
-          - cffi==2.1.0
+          - cffi==2.1.1
           - types-cffi==2.0.0.20260518
           - hatchling==1.31.0
           - pytest==9.1.1
