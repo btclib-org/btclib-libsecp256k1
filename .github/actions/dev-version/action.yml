@@ -1,3 +1,4 @@
+---
 name: Append a dev suffix to the version
 description: >
   Rewrites the version in pyproject.toml, appending the given suffix, so

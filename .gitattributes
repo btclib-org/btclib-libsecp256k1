@@ -1,0 +1,11 @@
+# HISTORY.md is an append-only list that every release adds to at the same
+# place: the newest section goes on top, so two branches that each add one
+# conflict on the insertion point with nothing to decide. `union` keeps
+# both sides' added lines, on rebases included, which is what a merge of
+# two appends should be.
+#
+# Its price is that this file never conflicts at all any more, so two
+# branches editing *the same* line merge in silence. That is the trade: a
+# conflict with nothing to decide costs every branch, and a silent merge
+# costs only the branches that edited one line two ways.
+HISTORY.md merge=union

@@ -1,3 +1,4 @@
+---
 name: lint
 
 # fast gate, kept apart from the test workflow: the pre-commit hooks
