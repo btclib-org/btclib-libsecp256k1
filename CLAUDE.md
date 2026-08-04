@@ -153,10 +153,12 @@ findings.
 - **adding to the json vector files fails the `detect-secrets` hook**
   until `.secrets.baseline` is regenerated; the command is in
   CONTRIBUTING.md, and reading its diff is the point of the baseline
-- **the `published` workflow is red until 0.7.1 is on PyPI**, for a
-  documented reason: 0.4.0 has no arm64 wheel and its sdist no longer
-  builds. That red is a fact about what users can install, not a broken
-  workflow
+- **the `published` workflow went green with 0.7.1**, on 4 August 2026,
+  nineteen cells out of nineteen, having been nineteen out of nineteen red
+  the day before: 0.4.0 had no arm64 wheel and its sdist no longer built,
+  so that red was a fact about what users could install rather than a
+  broken workflow. A red there still means the outside world moved, which
+  is why it is a workflow of its own and not a job of `release`
 
 ## Verifying, rather than reasoning about, a change
 

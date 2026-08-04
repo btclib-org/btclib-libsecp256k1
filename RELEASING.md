@@ -84,16 +84,26 @@ the release it rehearses.
    does not match the claims fails there having uploaded nothing, as the
    0.7.1 rehearsal did on TestPyPI, and a version survives a failed
    exchange: delete the tag, fix the registration, tag again
-6. check that what was published installs, and that the PyPI page shows
-   the attestations:
+6. check that what was published installs, in an environment of its own
+   rather than one that may already hold it:
 
        python -m pip install --upgrade btclib_libsecp256k1
 
+   then run something with it, and check the attestations, the two checks
+   the rehearsal makes and for the same reasons: a compiled extension can
+   install and not work, and the attestations are under
+   `/integrity/<project>/<version>/<filename>/provenance` rather than in
+   the JSON API, which answers `null` for `provenance` even where they
+   are
 7. run the `published` workflow from the Actions tab, and expect it green:
    it installs from PyPI what was just uploaded, on every platform and at
    both ends of the supported interpreter range, and verifies BIP340
    vector 0 with it. From then on it runs weekly on its own, and a failure
-   means the outside world moved, not this repository
+   means the outside world moved, not this repository — which is why it is
+   a workflow of its own rather than a job of this one, besides its
+   racing the index if it ran straight after the upload. On 0.7.1 it went
+   from nineteen cells red to nineteen green, having had nothing
+   installable to find the day before
 8. check the GitHub release the workflow created once PyPI had accepted
    the upload: its notes are the tag's section of `HISTORY.md`, and the
    sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
