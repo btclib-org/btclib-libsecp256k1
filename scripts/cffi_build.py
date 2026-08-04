@@ -6,6 +6,23 @@
 # No part of btclib including this file, may be copied, modified, propagated,
 # or distributed except according to the terms contained in the LICENSE file.
 
+"""Build the vendored libsecp256k1 and the cffi extension over it.
+
+Three build paths, and which one runs is decided by the environment
+rather than by an argument: static with MSVC on native Windows, static
+with the interpreter's own toolchain everywhere else, and dynamic (cffi
+ABI mode) where no C is compiled at all. `BTCLIB_LIBSECP256K1_DYNAMIC`
+picks the third, `BTCLIB_LIBSECP256K1_CROSS_COMPILE` forces it for a
+target whose interpreter cannot be run here, and `CFFI_PLATFORM` names
+the platform being built for when it is not the one running.
+
+Two classes: `FFIExtension` is the shape of a build with the three steps
+a subclass has to answer, and `Secp256k1CFFIExtension` is this project's
+one. scripts/README.md walks the file; the module is also loaded by
+`exec()` from scripts/hatch_build.py, which is why nothing here depends
+on being importable.
+"""
+
 from __future__ import annotations
 
 import os
@@ -69,6 +86,15 @@ endif()
 # executables (cmake, cc) are looked up on PATH, as a build from source
 # has to do
 class FFIExtension:
+    """A cffi extension over a C library this build compiles first.
+
+    What a subclass answers is the three steps below -- `clean`,
+    `build_c`, `generate_def` -- plus the class attributes naming what
+    comes out of them. What this class owns is the part that does not
+    depend on which library it is: the cdef, the choice among the three
+    compilation paths, and the artifacts each hands back.
+    """
+
     # the contract a subclass has to fulfil before calling __init__
     name: str
     static: bool
@@ -77,11 +103,25 @@ class FFIExtension:
     libraries: list[str]
 
     def __init__(self) -> None:
+        """Clean the previous build, and record the platform being built for.
+
+        Called by a subclass *after* it has set the attributes above, the
+        clean needing to know what to remove. `CFFI_PLATFORM` overrides
+        the running system, which is what makes cross-compilation
+        possible: everything downstream reads this attribute rather than
+        asking the host.
+        """
         self.clean()
         self.platform = os.environ.get("CFFI_PLATFORM", platform.system())
 
     @property
     def shared_library_extension(self) -> str:
+        """Suffix a shared object carries on the platform being built for.
+
+        Raises RuntimeError on a platform this build does not know, rather
+        than guessing a suffix that would make the search below silently
+        find nothing.
+        """
         if self.platform == "Windows":
             return ".dll"
         if self.platform == "Darwin":
@@ -91,15 +131,29 @@ class FFIExtension:
         raise RuntimeError
 
     def clean(self) -> None:
+        """Remove what a previous build of this extension left behind."""
         raise NotImplementedError
 
     def build_c(self) -> None:
+        """Build the C library the extension is compiled or linked against."""
         raise NotImplementedError
 
     def generate_def(self) -> tuple[str, str]:
+        """Return the header to compile against and the cdef to declare.
+
+        Two values because cffi wants them separately: the first is C that
+        a compiler reads, the second the subset cffi's own parser can.
+        """
         raise NotImplementedError
 
     def create_cffi(self, build_dir: pathlib.Path) -> tuple[Any, list[pathlib.Path]]:
+        """Build the C, declare the cdef, and take one of the three paths.
+
+        Returns the `cffi.FFI` and the artifacts to package. The
+        `ffi._assigned_source` a caller reads afterwards is what says
+        which path was taken, a static build having a C source assigned
+        and a dynamic one not.
+        """
         build_dir = pathlib.Path(build_dir)
 
         self.build_c()
@@ -119,6 +173,7 @@ class FFIExtension:
     def compile_static_msvc(
         self, ffi: Any, ffi_header: str, build_dir: pathlib.Path
     ) -> list[pathlib.Path]:
+        """Compile a static extension with the setuptools/MSVC toolchain."""
         # native Windows: compile the extension with the standard
         # setuptools/MSVC toolchain instead of the manual Unix one;
         # SECP256K1_STATIC selects the static-consumer declarations
@@ -135,6 +190,12 @@ class FFIExtension:
     def compile_static_unix(
         self, ffi: Any, build_dir: pathlib.Path
     ) -> list[pathlib.Path]:
+        """Compile and link a static extension by hand, with `cc`.
+
+        The interpreter's own configuration decides the compiler, the
+        flags and the extension suffix, so that the result matches the ABI
+        of the interpreter that will import it.
+        """
         c_filename = f"{self.name}.c"
         o_filename = f"{self.name}.o"
         so_filename = self.name + get_config_var("EXT_SUFFIX")
@@ -167,6 +228,14 @@ class FFIExtension:
         return [so_path]
 
     def emit_dynamic(self, ffi: Any, build_dir: pathlib.Path) -> list[pathlib.Path]:
+        """Emit the ABI-mode python module, and collect the shared objects.
+
+        No C is compiled: the module is generated from the cdef alone and
+        the library is shipped beside it, to be `dlopen`ed at import. The
+        search raises rather than guessing when a library is missing or
+        when two candidates match, either of which would produce a wheel
+        that imports the wrong object or none.
+        """
         py_filename = f"{self.name}.py"
         py_path = build_dir / py_filename
 
@@ -199,7 +268,15 @@ class FFIExtension:
 
 
 class Secp256k1CFFIExtension(FFIExtension):
+    """The vendored libsecp256k1, built with CMake and wrapped by cffi."""
+
     def __init__(self) -> None:
+        """Name the sources, the headers and where the build output goes.
+
+        Also decides whether this build is static: the dynamic path is
+        asked for by environment variable, and cross-compilation forces
+        it, the target's interpreter not being runnable here.
+        """
         self.name = "_btclib_libsecp256k1"
         self.static = static and not cross_compile
         self.clean_patterns = [
@@ -230,6 +307,7 @@ class Secp256k1CFFIExtension(FFIExtension):
         super().__init__()
 
     def clean(self) -> None:
+        """Remove the out-of-tree CMake build and the emitted extensions."""
         # a stale CMake cache remembers the previous configuration
         # (static or shared, host or cross): reconfigure from scratch
         if self.cmake_dir.exists():
@@ -354,6 +432,14 @@ class Secp256k1CFFIExtension(FFIExtension):
             self.libraries = ["libsecp256k1"]
 
     def generate_def(self) -> tuple[str, str]:
+        """Concatenate the public headers, and preprocess them for cffi.
+
+        The `#include` directives are stripped and the concatenation order
+        satisfies the dependencies between the headers instead; `gcc -E`
+        then expands the `__attribute__ ((...))` that cffi's parser cannot
+        read. Raises RuntimeError if the preprocessing fails, a partial
+        cdef being a wrapper that compiles and declares the wrong thing.
+        """
         ffi_header = ""
         for h in self.headers:
             location = self.include_dir / h
