@@ -50,6 +50,14 @@ def compress(pubkey_bytes: bytes) -> bytes:
 
 
 def test_ecdh() -> None:
+    """Both parties reach one secret, and it is the hash of the point.
+
+    Cross-checked three ways rather than against a constant: the two
+    parties agree, the secret is the SHA256 of the compressed shared
+    point recomputed here, and `keys.pubkey_tweak_mul` gives that same
+    point -- which is why the hash of the ecdh call is not a parameter, a
+    protocol wanting another derivation applying it to the point.
+    """
     prvkey_a, prvkey_b = 3, 5
     pubkey_a, pubkey_b = mult.mult_(prvkey_a), mult.mult_(prvkey_b)
 
@@ -69,6 +77,7 @@ def test_ecdh() -> None:
 
 
 def test_ecdh_invalid_inputs() -> None:
+    """A zero key, a short key and an unparsable public key are refused."""
     pubkey_bytes = mult.mult_(1)
 
     with pytest.raises(ValueError, match="private key"):
@@ -80,6 +89,14 @@ def test_ecdh_invalid_inputs() -> None:
 
 
 def test_recovery() -> None:
+    """A recoverable signature recovers the signer, and is the ECDSA one.
+
+    The recovery id is 0 or 1 for a key of this curve, and the DER form
+    of the recoverable signature equals what `dsa.sign` produces for the
+    same message and key -- so the two entry points are one signature,
+    not two. A nonce contribution gives a different signature that is
+    still recoverable.
+    """
     prvkey = 7
     pubkey_bytes = compress(mult.mult_(prvkey))
 
@@ -100,6 +117,12 @@ def test_recovery() -> None:
 
 
 def test_recovery_invalid_inputs() -> None:
+    """Every argument the recovery module bounds is refused out of range.
+
+    A zero private key, a message hash that is not 32 octets, a compact
+    signature that is not 64, a recovery id outside 0..3, and a compact
+    signature whose r cannot be parsed.
+    """
     signature_bytes, recid = recovery.sign(msg, 7)
 
     with pytest.raises(ValueError, match="private key"):
@@ -127,6 +150,14 @@ def test_recovery_invalid_inputs() -> None:
 
 
 def test_ellswift() -> None:
+    """An ElligatorSwift encoding decodes back, and the x-only ECDH agrees.
+
+    The encoding is 64 octets and randomized, so a fresh one differs from
+    the last; supplying the randomness makes it a function of that, which
+    is what allows the assertion at all. The BIP324 secret is bound to the
+    transcript rather than to the two keys: both parties reach one value
+    naming their own side, and swapping the roles changes it.
+    """
     prvkey_a, prvkey_b = 11, 13
     pubkey_a = compress(mult.mult_(prvkey_a))
 
@@ -154,6 +185,12 @@ def test_ellswift() -> None:
 
 
 def test_ellswift_invalid_inputs() -> None:
+    """Every argument the ellswift module bounds is refused out of range.
+
+    A zero private key, a key and an entropy argument that are not 32
+    octets, a public key that does not parse, an encoding that is not 64
+    octets, and a party that is neither 0 nor 1.
+    """
     ell = ellswift.create(11)
 
     with pytest.raises(ValueError, match="private key"):

@@ -345,9 +345,12 @@ max-doc-length = 80
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-# asserts are the point of a test suite, and a test function documents
-# itself through its name
-"tests/*" = ["S101", "D103"]
+# asserts are the point of a test suite. D103 is deliberately *not* here:
+# a test function states what it verifies -- the property, the published
+# vector, the failure mode -- which its name cannot, and which is what a
+# reader deciding whether a red test matters needs. The name says which
+# call is under test; the docstring says what about it is being claimed
+"tests/*" = ["S101"]
 # the benchmark script asserts its own results before timing them
 "scripts/benchmark.py" = ["S101"]
 # the build scripts drive CMake and load the cffi build description by
