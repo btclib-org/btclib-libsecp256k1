@@ -56,7 +56,10 @@ the release it rehearses.
 1. bump the version in `pyproject.toml` and run `uv lock`, which carries
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
-   Versioning section of [README.md](README.md)
+   Versioning section of [README.md](README.md). The previous release
+   left a fourth number open, by step 9 below, so this is often a matter
+   of confirming what is already declared, or of renumbering it if the
+   submodule has moved since
 2. add the release notes to `HISTORY.md`; if the vendored libsecp256k1
    moved, update the version named at the top of `README.md` too
 3. merge `dev` into `master` with a green CI. Development happens on
@@ -109,6 +112,20 @@ the release it rehearses.
    sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
    generated the notes from the merged pull requests instead, and they
    are worth replacing by hand
+9. open the next version on `dev`: bump `pyproject.toml` to a fourth
+   number over what was just published — `0.7.1.1` after `0.7.1` — and
+   run `uv lock`. It is a placeholder, and step 1 renumbers it if the
+   submodule moves before the next release; what it buys is a tree that
+   no longer claims to be a version it is not. `__version__` reads
+   installed metadata, so a checkout a developer installed stops
+   reporting itself as the release, and a report from it is unambiguous.
+   And pushing `v0.7.1` a second time — the mistake a just-finished
+   release invites — then fails at `version-check` in a minute, the
+   declared version having moved, rather than building the whole matrix
+   and dying at an upload PyPI refuses for a version it already carries.
+   A fourth number below the published one would be worse than no bump
+   at all: `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever
+   resolve it, and `version-check` accepts it, being digits and dots
 
 ## Rehearsing on TestPyPI
 
