@@ -11,7 +11,17 @@
 # is measured in machine hours. For the same reason each one waits a week
 # before proposing a release: a version yanked within days of publication
 # would otherwise be a pull request that opens, runs that matrix, and is
-# then closed
+# then closed.
+#
+# Monthly is now a cost decision rather than a visibility one, and the
+# difference is worth writing down. It used to be both: with nothing else
+# resolving afresh, five weeks was also how long an upstream break could sit
+# unseen. latest.yml is that sentinel now -- weekly, off the critical path,
+# and narrow, so it costs three platforms rather than the matrix -- which
+# leaves this interval trading machine hours against the size of one diff
+# and nothing else. btclib runs the same two ecosystems weekly for exactly
+# that reason, its pull requests being cheap; here they are not, so the
+# interval stays where it is and the early warning arrives by another route
 version: 2
 updates:
   # what this buys is the exact pins: every action is pinned to a commit

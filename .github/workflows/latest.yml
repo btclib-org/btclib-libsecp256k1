@@ -1,0 +1,207 @@
+---
+name: latest
+
+# the dependency sentinel: everything uv resolves, upgraded to the newest
+# release that satisfies pyproject.toml, and then put through the suite,
+# the lint gate and the packaging checks.
+#
+# Nothing else covers this, and the gap is wider here than in a pure python
+# package. Every uv command in every other workflow passes --locked, so
+# what CI runs is the resolution somebody locked rather than the one PyPI
+# holds today; the dependency groups declare no version at all, so the
+# whole drift of pytest, mypy, twine and cibuildwheel lives in uv.lock. And
+# the one runtime dependency is cffi, which this package does not merely
+# import but *compiles against*: a cffi release that changes the extension
+# ABI, or a setuptools or cmake release that changes how the vendored
+# library is built, breaks the build itself and not a test. That has
+# happened, and it was found by other means.
+#
+# uv.lock moves on a monthly dependabot pull request here, with a seven day
+# cooldown in front of it, so without this workflow an upstream break can
+# sit unseen for five weeks and then arrive inside a diff of many entries,
+# where its cause is one line among them.
+#
+# The obvious alternative -- dropping --locked from test.yml and resolving
+# afresh every run -- is what this exists instead of: a pull request would
+# go red for a release in somebody else's repository, and the contributor
+# holding the branch can fix none of it. pytest runs with
+# filterwarnings = ["error"] and coverage with a fail_under of 100, so the
+# ways an upstream release turns this tree red without anybody touching it
+# are not hypothetical. Determinism is what makes the gate legible; the
+# early warning belongs on a schedule, off the critical path -- the same
+# division published.yml makes for what PyPI serves.
+#
+# Scope: what uv resolves. Not the pre-commit hook revisions, which are
+# pinned by rev in .pre-commit-config.yaml and moved by pre-commit.ci's
+# weekly pull request, which runs the whole matrix. mypy is the exception
+# and the reason the lint job below exists at all: its hook is a local one
+# shelling out to uv, so it is the lock that pins it.
+#
+# Nothing here gates anything, by construction: a workflow of its own, no
+# aggregate job, named by no branch protection rule (see REPOSITORY.md).
+# That is the point. This is expected to go red for reasons no pull request
+# introduced, and a red check nobody can act on from a branch is noise. It
+# opens no issue either, which would cost this repository its only workflow
+# able to write: a failed scheduled run notifies the last person to have
+# touched the cron below, and that is the signal.
+
+on:
+  schedule:
+    # Friday 04:37 UTC, and not on the hour, for the reason links.yml
+    # gives. Friday because published.yml has Monday and links.yml Tuesday:
+    # three sentinels in one inbox on one morning are one sentinel.
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "37 4 * * 5"
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, dependencies, build scripts) can read it, so it must not be
+# able to write to the repository
+permissions:
+  contents: read
+
+# named literally rather than through github.workflow: nothing calls this
+# workflow today, but that expression is the caller's name when something
+# does, and the convention is what keeps the groups distinct
+concurrency:
+  group: latest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # far narrower than test.yml's matrix, and the reasoning is published.yml's:
+  # there, every (os, arch, interpreter) triple is a distinct C toolchain and
+  # a distinct wheel; here what varies is which release of each dependency
+  # the interpreter selects, and the two ends of the supported range are
+  # what a sentinel needs. Three platforms rather than six, because a
+  # dependency release is not architecture-specific in the way a wheel is.
+  #
+  # The low end earns its place on its own: a dependency dropping 3.10 does
+  # not fail to resolve, it resolves to an older version there and keeps
+  # this job green while 3.10 quietly stops being tested against what
+  # everybody else runs. Dropping 3.9 was exactly that, and it had split a
+  # large part of the lock in two before anybody looked
+  test-latest:
+    name: "Test ${{ matrix.python }} on ${{ matrix.os }}, deps at latest"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.14"]
+    # libsecp256k1 is built from source here, as everywhere else: CMake and
+    # a C compiler, on a cold uv cache when a dependency moved
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # the vendored library is what gets compiled, so unlike
+          # links.yml this one needs it
+          submodules: true
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # a week where nothing moved is a full hit, and a week where
+          # something did is a week this job has work to do anyway
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      # --upgrade re-resolves every entry. It prints one
+      # "Updated <pkg> vA -> vB" line per package it moves, so the log
+      # names the suspects without a diff of uv.lock; a run that moved
+      # nothing says so, and its green then means nothing new.
+      # This rewrites uv.lock, which is harmless on an ephemeral checkout
+      # and worth knowing before running the same command in a working tree
+      - name: Upgrade every dependency to its latest release
+        run: uv lock --upgrade
+
+      # still --locked, which is not a contradiction: the step above just
+      # wrote that lock, so this asserts nothing moved between the two and
+      # keeps the convention that no uv command here installs from a lock
+      # it has not checked
+      - name: Run pytest
+        run: uv run --locked --no-default-groups --group test pytest
+
+  # mypy is the whole reason this job exists, and it is worth being explicit
+  # about how little else differs from the lint gate: the hooks pinned by
+  # rev are the same ones a commit runs, pre-commit.ci moving those and this
+  # not being able to. What the upgrade reaches is pre-commit itself and,
+  # through the local hook that shells out to uv, mypy and types-cffi -- a
+  # new release of either adding a check this tree fails, on a schedule
+  # rather than on somebody's branch
+  lint-latest:
+    name: Lint and type-check, deps at latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      # keyed on the config file, as in lint.yml: the hook environments are
+      # the slow part, and the upgrade below does not touch them
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Upgrade every dependency to its latest release
+        run: uv lock --upgrade
+
+      # --all-files, so pre-commit does not stash the rewritten uv.lock: it
+      # stashes unstaged changes only when given neither --all-files nor
+      # --files, and a stash here would hand the mypy hook back the
+      # committed lock and quietly type check the pinned mypy, which is the
+      # one thing this job is for
+      - name: Run the pre-commit hooks
+        run: >
+          uv run --locked --only-group lint
+          pre-commit run --all-files --show-diff-on-failure
+
+  # the check group, for the same reason the packaging checks live in
+  # test.yml rather than in the release workflow: a release is the one place
+  # where finding a problem is too late, a version being consumed by the
+  # upload that carries it. twine, check-wheel-contents and pyroma are
+  # pinned by uv.lock like everything else, and a new pyroma with a stricter
+  # rating would otherwise fail --min 10 for the first time on a tag
+  dist-latest:
+    name: Validate distributions, deps at latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Upgrade every dependency to its latest release
+        run: uv lock --upgrade
+
+      # setuptools, hatchling and cmake are resolved by the build itself
+      # rather than from uv.lock, so this step is at latest whether or not
+      # the one above moved anything: the build requirements in
+      # pyproject.toml are lower bounds and uv builds in an isolated
+      # environment. Which makes this the one job here that would catch a
+      # build backend release breaking the wheel
+      - name: Build the distributions
+        run: |
+          uv build --sdist
+          uv build --wheel
+
+      - name: Validate them
+        run: |
+          uv run --locked --only-group check twine check --strict dist/*
+          uv run --locked --only-group check check-wheel-contents dist/*.whl
+          uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
