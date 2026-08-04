@@ -208,15 +208,67 @@ release.
   libsecp256k1's answer to give, and an argument of the wrong size or
   form raises rather than being padded or reinterpreted into a valid one.
   The reasoning is in the README, under What the boundary checks
-- **the comments say why, not what.** The workflows, the build scripts
-  and the configuration files in this repository carry the reasoning
-  behind their choices, because that is the part a reader cannot recover.
-  A change that invalidates one of those comments has to update it
+- **the prose satisfies the section below.** The workflows, the build
+  scripts and the configuration files in this repository carry the
+  reasoning behind their choices, because that is the part a reader
+  cannot recover, and a hook can check that a docstring exists but not
+  what it says
 - **the vendored submodule moves on purpose.** Bumping `secp256k1` is a
   change of what this package wraps: it belongs in its own pull request,
   with the version named in the README and in `HISTORY.md` moved with it.
   Dependabot signals upstream movement but tracks the default branch, so
   a release always needs the tagged commit
+
+### Documentation and comments
+
+What "satisfies" means for the prose is written down here, because a hook
+can check that a docstring exists and not what it says. It governs the
+workflows, `pyproject.toml` and `.pre-commit-config.yaml` as much as the
+package: the reasoning with its negative results is what makes those
+files reviewable rather than merely readable.
+
+**Tone of voice: neutral, factual, dry.** The same register everywhere:
+no jokes, no salesmanship, no emphasis where the fact is enough.
+Explanatory detail is wanted; decoration is not.
+
+**A docstring states the contract.** What the function takes, what it
+returns or raises, and the rule the behaviour comes from — not a
+restatement of the name. A test's docstring states what it verifies: the
+property, the published vector, the failure mode, and which side of the
+assertion is the independent one. That last part is why a docstring is
+required of a test at all — the name says which call is under test, which
+is not the same as what is being claimed about it.
+
+**A comment carries the reasoning, including the negative result.** Say
+why the code is as it is and why *not* the obvious alternative. The second
+half is what stops the next reader from "fixing" a deliberate choice, and
+it is why this repository's configuration files are as long as they are.
+
+**Cite the authority.** Where behaviour comes from a BIP, an RFC, or
+libsecp256k1 itself, name it rather than asserting the behaviour as if
+these bindings had decided it. Where they deviate, say so and say why.
+
+**Measure, don't assert.** A number in prose comes from a command, and the
+command belongs beside it, so the next reader can re-measure instead of
+trusting a figure whose date they cannot see. Never state a count that
+nothing checks — an unchecked number drifts into a false claim — and never
+state how many of anything a file or a matrix holds: a stated total is a
+line every open branch has to edit, and two branches moving it to the same
+wrong number merge without a conflict. A dated measurement is the
+exception, and it is dated for exactly that reason.
+
+**One fact in one place.** Two files stating the same thing become two
+files disagreeing about it; the second one points at the first. That is
+why [REPOSITORY.md](REPOSITORY.md) holds the repository settings and
+CLAUDE.md points at it.
+
+**No history in the prose.** Comments and docstrings say why the code is
+as it is, in the present tense; they do not tell the story of what it used
+to be. "This is here rather than X because X breaks Y" stays, whatever
+prompted it; "this used to be X, until Z" goes — unless the old spelling
+is something a caller can still encounter, in which case it is not history
+but the present. History has a file of its own,
+[HISTORY.md](HISTORY.md), and the commit messages.
 
 ## Pull requests
 
@@ -229,6 +281,26 @@ work in progress.
 Link the issue the pull request solves, allow maintainer edits so the
 branch can be updated for a merge, and mark review conversations
 resolved as you address them.
+
+**A correction is a commit of its own, never an amend.** Once a branch is
+pushed and under review, `git commit --amend` and a force-push replace the
+commits the review is attached to: the reviewer loses the diff they read,
+"changes since your last review" has nothing to compare against, and every
+one of those matrix jobs starts again from a commit nobody has seen. Add
+the fix on top, with a message saying what it fixes, and reply to the
+comment with the sha. The one force-push that stays right is the one
+carrying no new work — a `git rebase origin/dev` on a branch whose base has
+moved — and it wants the gates re-run after it, not only before, and a note
+in the pull request saying the head moved.
+
+Nothing is lost in `dev`'s history by working that way, because a pull
+request is squashed on merge: the branch lands as one commit whose subject
+is the pull request title with its number, so the review's commits are the
+record of the review and `dev` keeps one commit per landed change. All
+three merge buttons are enabled on this repository, so which one is used
+is a choice made at the merge rather than one GitHub enforces — check it
+before clicking, `dev` into `master` being the case that wants a different
+answer, a release having to keep the commits a tag was cut from.
 
 Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.

@@ -3,7 +3,16 @@
 Python bindings to a vendored [libsecp256k1](secp256k1/), built from
 source. The package is thin: the cryptography is upstream, and what lives
 here is the wrapping, the argument validation at the cffi boundary, and
-the packaging of eleven kinds of wheel.
+the packaging — one wheel per platform and linkage, which is where most of
+the complexity is. How many that comes to is a question for the release
+that asks it, and `gh run view <id> --json artifacts` answers it; a number
+here would be a line every matrix change has to edit, and nothing would
+fail when it was not edited.
+
+Repository configuration — branch protection, required checks, token
+permissions, publishing environments, Dependabot, secret scanning — is in
+[REPOSITORY.md](REPOSITORY.md). Read that file before changing a workflow,
+a branch rule or a repository setting. Writing code does not need it.
 
 This file is for what is not written down elsewhere. The documentation is,
 and stays, in:
@@ -63,6 +72,44 @@ may not have carries it in `additional_dependencies` (this is why
 to a version). A check discovered by CI after a push is a check in the
 wrong place.
 
+## The primary checkout is the maintainer's
+
+**Never work in it.** No edit, no `git add`, no commit, no branch switch,
+no rebase, no `git stash`, no `pre-commit run` — the hooks fix files in
+place. It is the maintainer's window on the tree: whatever is open in
+their editor, whatever they have half-staged, and the branch they are
+looking at are theirs, and one working tree has one index and one HEAD to
+lose. Reading it is fine — `git log`, `git show`, `git diff`, `gh`, and a
+`git fetch`, which writes refs and leaves the work tree alone.
+
+**Every session works in a worktree**, its own, from the first edit:
+
+    WT=<scratchpad>/wt<issue>
+    git worktree add -b <branch> "$WT" origin/dev
+    cd "$WT" && uv sync --locked      # a second venv, and a second build of
+                                      # the extension: minutes, not seconds
+    # edit, gate and commit here, then
+    git push origin HEAD:refs/heads/<branch>
+    git worktree remove --force "$WT" # removing it is part of finishing
+
+The venv and the C build are the whole of the cost, and they buy the thing
+that matters: a commit cannot contain work that was never in it, and the
+maintainer's branch does not move under them.
+
+**Never `git stash`, in the primary checkout or in a worktree:
+`refs/stash` is shared.** A worktree isolates files, not refs, so
+`git stash push` pushes onto the same stack every other session pops
+from — and on a clean tree it creates nothing, so the `git stash pop`
+that follows applies and *drops* whatever another session shelved. Commit
+to your own branch instead. What is already lost is still in the object
+store: `git fsck --unreachable` names the commit and `git stash store
+<sha>` puts the ref back.
+
+**`git checkout -- <file>` is the other way to lose work**, and it does it
+quietly: it restores from the index, so an edit made and not staged is
+gone with no output at all. Reverting a deliberate experiment is what a
+copy is for — `cp file file.bak`, then put it back.
+
 ## Commands whose flags are load-bearing
 
     # the suite, as the coverage job runs it: uv run syncs by itself, and
@@ -87,10 +134,12 @@ wrong place.
 
 ## What this repository expects
 
-- **comments say why.** The what is in the diff; the why is not
-  recoverable from it. A change that makes a comment untrue updates the
-  comment, in the workflows and the build scripts as much as in the
-  package
+- **the prose style is CONTRIBUTING.md's "Documentation and comments"
+  section**, stated once there because contributors read that file and not
+  this one. Its shortest form: comments say why, the what being in the
+  diff; a change that makes a comment untrue updates the comment, in the
+  workflows and the build scripts as much as in the package; and never
+  state a count that nothing checks
 - **tests validate against external vectors.** A test that compares these
   bindings with themselves proves nothing. `tests/test_vectors.py`
   documents where each vendored file comes from
@@ -144,11 +193,10 @@ findings.
   `--no-default-groups --group test` it installs the whole dev set, which
   is how the coverage job came to install twenty-nine packages after
   deliberately installing ten
-- **the two secret-scanning extensions cannot be enabled.** Non-provider
-  patterns and validity checks need paid Secret Protection; the API
-  answers a PATCH with 200 and leaves them `disabled`, and the toggles
-  are absent from the UI on this plan. The `detect-secrets` hook is the
-  compensating control. Do not spend a session rediscovering this
+- **the settings that cannot be enabled are in REPOSITORY.md**, with the
+  API call that shows each still off: the two secret-scanning extensions
+  are the ones that answer a PATCH with 200 and change nothing. Do not
+  spend a session rediscovering them
 - **`release.yml` and `published.yml` are inert until they are on
   `master`**: `schedule` and `workflow_dispatch` only run from the default
   branch, so a rehearsal cannot be dispatched from `dev`
