@@ -30,17 +30,29 @@ NOWHERE_ARGS = (ffi.NULL, b"\x02" + b"\x01" * 32, 33)
 
 
 def test_check_with_nothing_reported() -> None:
+    """With nothing reported, check returns: that is the whole behaviour."""
     # nothing reported is not an error: returning is the whole behaviour
     context.check()
 
 
 def test_illegal_argument() -> None:
+    """An illegal argument reaches the caller as ValueError, with its text.
+
+    Driven through `lib`, which the bindings' own wrappers cannot do:
+    they always give libsecp256k1 the buffer it asks for.
+    """
     assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
     with pytest.raises(ValueError, match="illegal argument: pubkey != NULL"):
         context.check()
 
 
 def test_check_clears_what_it_reported() -> None:
+    """A message is reported once, and not attributed to a later call.
+
+    The second `check` returns, so what was raised is gone: left in
+    place, it would surface out of whichever call came next and blame it
+    for something it did not do.
+    """
     assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
     with pytest.raises(ValueError, match="pubkey != NULL"):
         context.check()
@@ -50,12 +62,24 @@ def test_check_clears_what_it_reported() -> None:
 
 
 def test_internal_error() -> None:
+    """An internal error reaches the caller as RuntimeError.
+
+    The recording function is called directly, that callback being how
+    libsecp256k1 reports what it holds to be unreachable: there is no
+    argument that provokes it.
+    """
     context._record_error(ffi.new("char[]", b"deliberate"), ffi.NULL)
     with pytest.raises(RuntimeError, match="internal error: deliberate"):
         context.check()
 
 
 def test_internal_error_comes_first() -> None:
+    """With both reported, the internal error is the one raised.
+
+    A broken invariant and a caller's mistake are not the same news, and
+    the first is what has to be told. Both are cleared, so neither
+    lingers to be raised by an unrelated call.
+    """
     # an internal error is a broken invariant, an illegal argument is a
     # caller mistake: the first is what has to be reported
     context._record_illegal(ffi.new("char[]", b"argument"), ffi.NULL)
@@ -67,6 +91,12 @@ def test_internal_error_comes_first() -> None:
 
 
 def test_reported_per_thread() -> None:
+    """What one thread reports is not another thread's to raise.
+
+    A callback runs on the thread of the call that triggered it, so a
+    second thread sees nothing and the first still has its message. This
+    is what lets one shared context serve every thread.
+    """
     # a callback runs on the thread of the call that triggered it, so
     # what one thread reports is not another thread's to raise
     assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)

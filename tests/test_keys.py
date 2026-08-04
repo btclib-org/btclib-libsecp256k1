@@ -37,6 +37,7 @@ def compress(pubkey_bytes: bytes) -> bytes:
 
 
 def test_prvkey_verify() -> None:
+    """Accept 1 and n-1, refuse 0, n and a value above the order."""
     assert keys.prvkey_verify(1)
     assert keys.prvkey_verify(N - 1)
     # zero and the group order are out of the [1, n-1] range
@@ -46,6 +47,13 @@ def test_prvkey_verify() -> None:
 
 
 def test_prvkey_algebra() -> None:
+    """Scalar algebra on a private key matches the arithmetic mod n.
+
+    Negation, addition and multiplication are each compared with the
+    integer answer computed here, and negation is checked to be its own
+    inverse. The sum wraps at the group order, and a sum that reaches zero
+    is refused: zero is no private key, so there is no result to hand back.
+    """
     a, b = 3, 5
 
     assert keys.prvkey_negate(a) == (N - a).to_bytes(32, "big")
@@ -61,6 +69,14 @@ def test_prvkey_algebra() -> None:
 
 
 def test_pubkey_algebra() -> None:
+    """Tweaking a public key matches tweaking the private key under it.
+
+    Add, multiply and negate, each against `mult.mult_` of the tweaked
+    scalar, with negation checked to be its own inverse. Combining keys
+    matches adding their scalars and does not depend on the order they are
+    given in; one key combines to itself. A sum landing on the point at
+    infinity is refused, that point having no public key.
+    """
     a, b = 3, 5
     pubkey_a, pubkey_b = mult.mult_(a), mult.mult_(b)
 
@@ -83,6 +99,11 @@ def test_pubkey_algebra() -> None:
 
 
 def test_pubkey_serialization() -> None:
+    """Both serialized forms parse, and either converts to the other.
+
+    The uncompressed form is 65 octets opening with 0x04, the compressed
+    33 whose first octet carries the parity of the y being dropped.
+    """
     pubkey_bytes = mult.mult_(7)
 
     # both forms parse, and either can be serialized from the other
@@ -93,6 +114,15 @@ def test_pubkey_serialization() -> None:
 
 
 def test_pubkey_order() -> None:
+    """Sorting is by compressed serialization, whatever form is given.
+
+    Python sorting the same octets is the independent reference: what
+    libsecp256k1 orders by is that serialization, so an ordering it
+    produces is checkable without reimplementing the comparison. `cmp` is
+    checked to agree with the order pairwise and to answer zero for one
+    key against itself in the other form; sorting no key is no key rather
+    than an error, and a key that does not parse is refused.
+    """
     uncompressed = [mult.mult_(k) for k in (5, 2, 9, 1)]
     compressed = [compress(pubkey_bytes) for pubkey_bytes in uncompressed]
     # what libsecp256k1 orders by is the compressed serialization, so
@@ -122,6 +152,13 @@ def test_pubkey_order() -> None:
 
 
 def test_keys_invalid_inputs() -> None:
+    """Every argument the keys module bounds is refused out of range.
+
+    A private key that is not 32 octets or is zero, a tweak that is not,
+    a public key that does not parse, an empty list to combine, and the
+    two products that reach zero or infinity -- neither of which has a key
+    to answer with.
+    """
     pubkey_bytes = mult.mult_(7)
 
     with pytest.raises(ValueError, match="private key"):
@@ -146,6 +183,12 @@ def test_keys_invalid_inputs() -> None:
 
 
 def test_xonly_from_pubkey() -> None:
+    """An x-only key is the x of the public key, with the parity beside it.
+
+    Checked over three keys, in both serialized forms: the parity is the
+    one the uncompressed form carries, and it is what a caller needs to
+    lift the x back to the point it came from.
+    """
     for prvkey in (1, 2, 3):
         pubkey_bytes = mult.mult_(prvkey)
         xonly_bytes, parity = xonly.from_pubkey(pubkey_bytes)
@@ -159,6 +202,16 @@ def test_xonly_from_pubkey() -> None:
 
 
 def test_xonly_tweak_add() -> None:
+    """BIP341 tweaking of an x-only key, against the plain key path.
+
+    The same result is reached by lifting the key to its even y point and
+    tweaking that through `keys.pubkey_tweak_add`, which is what the x-only
+    call does internally. A full public key is refused rather than lifted:
+    the key used here has odd y, so accepting one would tweak a point the
+    caller did not pass, and `from_pubkey` is where that lift is asked for.
+    `tweak_add_check` then verifies the commitment without recomputing it,
+    and fails on a different tweak, key or parity.
+    """
     prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
     xonly_bytes, _ = xonly.from_pubkey(mult.mult_(prvkey))
 
@@ -205,6 +258,14 @@ def test_taproot_key_path() -> None:
 
 
 def test_xonly_invalid_inputs() -> None:
+    """Every argument the xonly module bounds is refused out of range.
+
+    Thirty-two octets that are not an x coordinate, a key that is not 32
+    octets, a tweak that is not, a parity outside 0..1, a zero private
+    key, a public key that does not parse -- and the two tweaks by the
+    negation of the scalar, which land on the point at infinity and have
+    no x-only form to answer with.
+    """
     xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
 
     with pytest.raises(ValueError, match="invalid x-only public key"):
@@ -231,6 +292,13 @@ def test_xonly_invalid_inputs() -> None:
 
 
 def test_dsa_signature_forms() -> None:
+    """The compact form is r and s, and the conversion round trips.
+
+    Both halves are checked to be in 1..n-1, as two assertions rather than
+    one conjunction so that a failure says which half. A compact signature
+    that is not 64 octets and one whose r is out of range are both
+    refused, and the DER rebuilt from the compact form still verifies.
+    """
     prvkey = 7
     pubkey_bytes = compress(mult.mult_(prvkey))
     der_bytes = dsa.sign(msg, prvkey)
@@ -257,6 +325,13 @@ def test_dsa_signature_forms() -> None:
 
 
 def test_dsa_low_s() -> None:
+    """A signature is made low-s, and a malleated one normalizes back.
+
+    Negating s gives the other signature of the same message under the
+    same key, which is what the low-s rule exists to rule out: it is
+    reported as not low-s and does not verify, while `normalize` returns
+    the original byte for byte and that verifies.
+    """
     prvkey = 7
     pubkey_bytes = compress(mult.mult_(prvkey))
     der_bytes = dsa.sign(msg, prvkey)
