@@ -113,14 +113,15 @@ The rehearsal is what the release machinery itself is tested with, when
 the workflow, the packaging metadata or the build matrix changed. A
 release that only bumps versions and notes does not need one.
 
-As of 0.7.1 it cannot actually reach the index, and this is not a fault
-of the workflow: on TestPyPI the name `btclib-libsecp256k1` belongs to an
-unrelated `0.0.1`, and a trusted publisher can only be registered by an
-owner of the project. The rehearsal of 0.7.1 built its whole matrix,
-collected every artifact, waited for its approval, and then stopped at
-the token exchange with `invalid-publisher`, having uploaded nothing.
-That is where the rehearsal currently ends, which is everything below
-except the upload itself.
+The rehearsal of 0.7.1 is what taught this section most of what it says,
+having failed once before it worked. The first attempt built the whole
+matrix, collected every artifact, waited for its approval, and then
+stopped at the token exchange with `invalid-publisher`: on TestPyPI the
+name `btclib-libsecp256k1` was an unrelated `0.0.1`, and a trusted
+publisher can only be registered by an owner of the project. Owner
+rights on that project, and a registration matching the claims the
+failure had printed, were all it needed; the second attempt published,
+without rebuilding anything.
 
 1. run the `release` workflow from the Actions tab, on the branch holding
    it: a manual run builds the full matrix and stops at the `testpypi`
@@ -134,13 +135,18 @@ except the upload itself.
    while one that failed earlier — at the token exchange, say — left its
    version free, and `gh run rerun --failed` re-runs the publish job
    alone against the artifacts already built, run number and version
-   intact, instead of an hour of matrix again.
+   intact, instead of an hour of matrix again. That is what published
+   0.7.1.dev1, three minutes after a registration was corrected, and it
+   holds for as long as the artifacts do: ninety days, this repository
+   not having narrowed the retention.
    Never tag a rehearsal: the trigger is what picks the index, so a
    `v0.7.1rc1` tag would take the pre-release to PyPI itself and burn it
    there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
    installs. The `version-check` job refuses a tag whose version is not
    digits and dots, so the mistake stops before anything is built
-2. approve it, then check that what was published installs:
+2. approve it, then check that what was published installs. A re-run has
+   to be approved again, the protection applying to each deployment
+   attempt rather than once per run:
 
    <!-- markdownlint-disable MD013 -->
 
@@ -151,6 +157,19 @@ except the upload itself.
    the extra index being needed for `cffi`, which TestPyPI does not have.
    The version installed carries the `.dev<run number>` suffix, and
    `--pre` is what makes it resolvable
+3. run something with it, installing being weaker than working where a
+   compiled extension is what was installed. The check the `published`
+   workflow makes — BIP340 vector 0, and the round trip of a signature
+   the build makes itself — is the one to reach for, and it is worth
+   reaching for here rather than only after PyPI: this is the first
+   moment a wheel this repository built is fetched from an index by a
+   resolver, and the last before the version cannot be replaced
+4. check the attestations. The JSON API will not show them, its
+   `provenance` field being null on every file of a release that has
+   them; the project page shows them, and machine-readably they are
+   under `/integrity/<project>/<version>/<filename>/provenance`, whose
+   `attestation_bundles[].publisher` should name this repository and
+   `release.yml`
 
 There is no version commit to revert, and nothing to clean up: the
 suffix only ever exists inside the run that built it.
@@ -182,11 +201,14 @@ next fork.
 - on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
   trusted publisher for `btclib-org/btclib_libsecp256k1`, workflow
   `release.yml`, environment `pypi` and `testpypi` respectively. The two
-  indexes are separate accounts and separate registrations; owning the
-  project on one says nothing about the other, and on TestPyPI this one
-  is not ours: the name there carries an unrelated `0.0.1`, which is why
-  the rehearsal stops at `invalid-publisher`. A registration is only
-  addable by an owner, so that step waits on the name
+  indexes are separate accounts and separate registrations, and separate
+  credentials with them, TestPyPI being its own deployment of Warehouse
+  with its own user database: owning the project on one says nothing
+  about the other, and neither does having an account. On TestPyPI the
+  name was somebody else's `0.0.1` from 2021, which is what the
+  rehearsal's `invalid-publisher` was; only an owner can add a
+  registration, and what unblocked it was being made one, which costs a
+  collaborator invitation rather than a transfer of the project
 - what a mismatched registration looks like, since only the run can tell
   you: `invalid-publisher`, followed by the claims the token carried.
   Those claims are the answer key — `repository`, `environment`, and the
