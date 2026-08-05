@@ -348,6 +348,22 @@ select = [
     "RSE",   # flake8-raise
     "T20",   # flake8-print: a library writes to no stream of its own
     "TID",   # flake8-tidy-imports: absolute, so the layering is readable
+    # a fresh survey, of rule sets neither project had named before:
+    # FA, FIX, FLY and T10 are clean here too. TD is the other
+    # zero-finding set it turned up and is not selected, matching
+    # btclib's own reasoning -- it disciplines a TODO's format where FIX
+    # refuses the comment outright, and only one belongs in a codebase
+    # that finishes what it starts. SLOT is not selected either, but for
+    # the opposite reason from btclib: it checks tuple and NamedTuple
+    # subclasses specifically, and this package has none, so selecting
+    # it would enforce nothing rather than ratchet something clean
+    "FA",    # flake8-future-annotations
+    "FIX",   # flake8-fixme: a TODO left behind is a thing not finished
+    "FLY",   # flynt: string concatenation ruff can turn into an f-string
+    "T10",   # flake8-debugger: a breakpoint() left in
+    # the one finding PYI has, on stubs/_btclib_libsecp256k1.pyi, is
+    # exempted below rather than fixed: see per-file-ignores
+    "PYI",   # flake8-pyi
 ]
 ignore = [
     # comparing against a key, signature or hash length (32, 33, 64, 65)
@@ -406,6 +422,12 @@ max-complexity = 10
 # here is what a wheel builder reads in its own log, not the library
 # talking to a stream it does not own
 "scripts/hatch_build.py" = ["S102", "T201"]
+# PYI021 wants no docstring in a stub, on the assumption that one
+# lives in the .py file the stub mirrors -- true everywhere else, and
+# not here: the extension this stub describes is compiled, not
+# written, so this module docstring is the only place its own
+# reasoning (why ffi and lib need one, why lib stays Any) can live
+"stubs/_btclib_libsecp256k1.pyi" = ["PYI021"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
