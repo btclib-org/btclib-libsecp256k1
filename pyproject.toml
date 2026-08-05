@@ -313,6 +313,15 @@ select = [
     "TRY",   # tryceratops
     "FURB",  # refurb
     "PIE",   # flake8-pie
+    # also selected in btclib's own pyproject.toml; added here to match,
+    # each measured zero-finding on this tree with `uv run ruff check
+    # --select <code> --no-cache btclib_libsecp256k1 tests`
+    "A",     # flake8-builtins: a name that shadows a builtin
+    "BLE",   # flake8-blind-except
+    "ERA",   # eradicate: code that was commented out instead of deleted
+    "RSE",   # flake8-raise
+    "T20",   # flake8-print: a library writes to no stream of its own
+    "TID",   # flake8-tidy-imports: absolute, so the layering is readable
 ]
 ignore = [
     # the blank line between a docstring and the body is the established
@@ -366,13 +375,19 @@ max-complexity = 10
 # reader deciding whether a red test matters needs. The name says which
 # call is under test; the docstring says what about it is being claimed
 "tests/*" = ["S101"]
-# the benchmark script asserts its own results before timing them
-"scripts/benchmark.py" = ["S101"]
+# the benchmark script asserts its own results before timing them, and
+# prints them: T20 is selected for the library, which writes to no stream
+# of its own, and a script whose caller is a terminal is the case it is
+# not about
+"scripts/benchmark.py" = ["S101", "T201"]
 # the build scripts drive CMake and load the cffi build description by
 # exec(): both are inherent to compiling a C dependency from a build
 # backend, and neither ever sees untrusted input
 "scripts/cffi_build.py" = ["S404", "S603", "S607"]
-"scripts/hatch_build.py" = ["S102"]
+# same T201 exemption as the benchmark script above: the warning printed
+# here is what a wheel builder reads in its own log, not the library
+# talking to a stream it does not own
+"scripts/hatch_build.py" = ["S102", "T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
