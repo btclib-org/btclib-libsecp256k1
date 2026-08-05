@@ -31,3 +31,10 @@ rules:
   # yaml 1.1 that key *is* the boolean true, so the rule is reporting the
   # spelling GitHub Actions requires
   truthy: disable
+
+  # the "---" every yaml file here already opens with, matching btclib's
+  # own .yamllint.yaml: `extends: default` carries the rule already, but
+  # only as a warning, which .readthedocs.yaml's own missing one passed
+  # unnoticed until measured -- enable is what turns it into the same
+  # question a review can fail on
+  document-start: enable
