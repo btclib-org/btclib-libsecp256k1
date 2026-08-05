@@ -428,6 +428,10 @@ max-complexity = 10
 # written, so this module docstring is the only place its own
 # reasoning (why ffi and lib need one, why lib stays Any) can live
 "stubs/_btclib_libsecp256k1.pyi" = ["PYI021"]
+# BEHIND, SKIPPED and the all-clear line are what a monthly run's log
+# says happened, the issue it opens or closes being the same report a
+# second way; matching btclib's own T201 exemption for the same script
+".github/scripts/check_vendored_vectors.py" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
