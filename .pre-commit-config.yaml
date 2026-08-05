@@ -279,3 +279,14 @@ repos:
     rev: 0.12.1
     hooks:
       - id: uv-lock
+
+  # what test.yml's own pyroma step rates the sdist for -- a missing
+  # classifier or url, metadata that is valid but poor -- this rates the
+  # source tree instead, for an answer before pushing rather than after
+  # the build. Matching btclib's own hook, unpinned to any args or
+  # additional_dependencies for the same reason every other hook here
+  # isn't: the rev below is the version pin
+  - repo: https://github.com/regebro/pyroma
+    rev: "5.0.1"
+    hooks:
+      - id: pyroma
