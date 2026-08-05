@@ -19,14 +19,17 @@ name: links
 
 on:
   schedule:
-    # Tuesday 04:11 UTC. Not on the hour: GitHub queues scheduled workflows
+    # Monday 04:11 UTC. Not on the hour: GitHub queues scheduled workflows
     # across every repository that asked for the same minute, and a run can
     # be dropped outright when that queue is long.
-    # Tuesday because published.yml has Monday: two sentinels landing in
-    # the same inbox on the same morning are one sentinel.
+    # Monday, matching btclib's own links.yml, and first among the
+    # weekday sentinels: whether an external page still resolves is the
+    # least volatile of the four questions this week asks, published.yml
+    # (Tuesday), latest.yml (Wednesday) and Dependabot (Thursday) each
+    # asking something that changes more often than the last.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
-    - cron: "11 4 * * 2"
+    - cron: "11 4 * * 1"
   # the escape hatch, and the way to check a branch before merging a
   # change that adds links
   workflow_dispatch:
