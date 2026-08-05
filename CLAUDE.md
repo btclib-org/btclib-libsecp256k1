@@ -152,11 +152,16 @@ copy is for — `cp file file.bak`, then put it back.
   releases are cut by a maintainer, and the release workflow checks the
   tag against it. The one bump that is not a release is the fourth number
   opened straight after one, so that the tree stops claiming the version
-  it shipped: step 9 of RELEASING.md, and the reason it is a step
+  it shipped: step 10 of RELEASING.md, and the reason it is a step
 - **the `secp256k1` submodule moves in a change of its own,** with the
   version named in `README.md` and `HISTORY.md` moved with it
 - development happens on `dev`; a pull request targets `dev`, and `master`
-  only ever receives merges from it
+  only ever receives merges from it — with **Rebase and merge**, never
+  *Squash and merge*, which would leave one commit on `master` where `dev`
+  carried the reasoning one commit at a time. Which button GitHub has
+  selected is worth reading before it is pressed: all three are enabled,
+  and it remembers the last one used. Afterwards `dev` is realigned onto
+  `master`, both being steps of RELEASING.md and for reasons given there
 
 ## Conventions the workflows hold to
 

@@ -57,22 +57,36 @@ the release it rehearses.
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
    Versioning section of [README.md](README.md). The previous release
-   left a fourth number open, by step 9 below, so this is often a matter
+   left a fourth number open, by step 10 below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
    submodule has moved since
 2. add the release notes to `HISTORY.md`; if the vendored libsecp256k1
    moved, update the version named at the top of `README.md` too
-3. merge `dev` into `master` with a green CI. Development happens on
-   `dev`, and `master` only receives merges from it. What has to be green
-   is `lint` and `test` on the merge commit itself, which is worth asking
-   for by commit rather than reading off a branch:
+3. merge `dev` into `master` with a green CI, using **Rebase and merge**.
+   Which button that is has to be read before it is pressed: all three
+   methods are enabled on this repository, and GitHub preselects the one
+   used last. *Squash and merge* is what 0.7.1 got, and it left a single
+   commit on `master` where `dev` carried ninety-two, each of them the
+   record of a decision. The trees were identical, so nothing published
+   was wrong, but the history could not be put back afterwards: `master`
+   refuses force pushes with `enforce_admins` on, six of those ninety-two
+   commits were unsigned where `master` requires signatures, and the tag
+   could not have followed a rewrite either, the PEP 740 attestation
+   binding 0.7.1 to that commit and to `refs/tags/v0.7.1` alike. They are
+   kept at the tag `history/dev-0.7.1`. A merge commit is not among the
+   choices: `master` requires linear history.
+
+   Development happens on `dev`, and `master` only receives merges from
+   it. What has to be green is `lint` and `test` on the commit `master`
+   ends up at — a rebase leaves no merge commit of its own — which is
+   worth asking for by commit rather than reading off a branch:
 
        gh run list --commit "$(git rev-parse origin/master)"
 
    the red `Dependabot Updates` runs sitting beside them are Dependabot's
    own updater failing to compute an update, not a workflow of this
    repository, and say nothing about the tree
-4. tag the merge commit, and push that tag alone:
+4. tag the tip `master` now points at, and push that tag alone:
 
        git tag v0.7.1
        git push origin v0.7.1
@@ -112,20 +126,47 @@ the release it rehearses.
    sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
    generated the notes from the merged pull requests instead, and they
    are worth replacing by hand
-9. open the next version on `dev`: bump `pyproject.toml` to a fourth
-   number over what was just published — `0.7.1.1` after `0.7.1` — and
-   run `uv lock`. It is a placeholder, and step 1 renumbers it if the
-   submodule moves before the next release; what it buys is a tree that
-   no longer claims to be a version it is not. `__version__` reads
-   installed metadata, so a checkout a developer installed stops
-   reporting itself as the release, and a report from it is unambiguous.
-   And pushing `v0.7.1` a second time — the mistake a just-finished
-   release invites — then fails at `version-check` in a minute, the
-   declared version having moved, rather than building the whole matrix
-   and dying at an upload PyPI refuses for a version it already carries.
-   A fourth number below the published one would be worse than no bump
-   at all: `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever
-   resolve it, and `version-check` accepts it, being digits and dots
+9. realign `dev` onto `master`, before anything else is committed to it.
+   Rebase and merge replays `dev`'s commits with new SHAs, so the moment
+   a release is merged the two branches hold the same tree through
+   different histories, and the merge base between them stops advancing.
+   Left alone, the next release's pull request presents the whole of this
+   one as new, and asks the rebase to replay commits `master` already
+   carries. Archive what is about to become unreachable, then move the
+   branch:
+
+       git fetch origin
+       git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
+       git push origin history/dev-0.7.1
+       git switch dev && git reset --hard origin/master
+       git push --force-with-lease origin dev
+
+   the tag is what keeps `dev`'s own commits readable, and it must not
+   start with `v`, `release.yml` triggering on `tags: ["v*"]`. Nothing in
+   the working tree changes, the two trees being identical, and
+   `git diff origin/master origin/dev` is how to say so rather than
+   assume it. Every branch still open against `dev` has had its base
+   moved out from under it, and reports the whole release as its own diff
+   until it is rebased:
+
+       git rebase --onto origin/master <the old dev tip> <branch>
+
+   this comes before step 10 rather than after it: the bump step 10 makes
+   is on `dev`, and the force update above would discard it
+10. open the next version on `dev`: bump `pyproject.toml` to a fourth
+    number over what was just published — `0.7.1.1` after `0.7.1` — and
+    run `uv lock`. It is a placeholder, and step 1 renumbers it if the
+    submodule moves before the next release; what it buys is a tree that
+    no longer claims to be a version it is not. `__version__` reads
+    installed metadata, so a checkout a developer installed stops
+    reporting itself as the release, and a report from it is unambiguous.
+    And pushing `v0.7.1` a second time — the mistake a just-finished
+    release invites — then fails at `version-check` in a minute, the
+    declared version having moved, rather than building the whole matrix
+    and dying at an upload PyPI refuses for a version it already carries.
+    A fourth number below the published one would be worse than no bump
+    at all: `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever
+    resolve it, and `version-check` accepts it, being digits and dots
 
 ## Rehearsing on TestPyPI
 
