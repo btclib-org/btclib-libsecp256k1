@@ -170,6 +170,15 @@ the runner, and that is worth knowing before trying.
 - `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
   faithful: the cross-compilation CI does is from ubuntu, not from macOS
 
+- `Build the documentation`, the same command `.readthedocs.yaml` runs
+  and `docs/README.rst` documents. Needs the submodule checked out,
+  unlike btclib's own equivalent job: every `automodule` directive
+  imports this package, which means compiling libsecp256k1 first
+
+      git submodule update --init
+      uv run --locked --no-default-groups --group docs \
+          sphinx-build -W --keep-going -b html docs/source docs/build/html
+
 The `published` workflow has no local equivalent by design: what it
 installs is what PyPI serves.
 
