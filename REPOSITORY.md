@@ -96,18 +96,29 @@ moving it now would desynchronize a published release from what it
 attests to rather than restore anything. What changed is only whether the
 next incident has the same escape hatch btclib already keeps.
 
-`dev` is **not protected**:
+`dev` is protected too, minimally and identically to btclib's own:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/branches/dev/protection
-    # {"message": "Branch not protected", "status": "404"}
+    gh api repos/btclib-org/btclib_libsecp256k1/branches/dev/protection \
+      --jq '{required_linear_history, allow_force_pushes, allow_deletions,
+        enforce_admins, required_conversation_resolution}'
 
-That is where Dependabot and pre-commit.ci push, and where every branch
-is cut from, so it can be force-pushed or deleted under an open pull
-request. btclib protects its own `dev` with no force pushes, no
-deletions and linear history, and nothing else — no required check, no
-review, no signature, so a direct push still works, which is what both
-bots rely on. Requiring signatures there would reject every bot commit,
-and one approving review cannot be satisfied by the author.
+No force pushes, no deletions, linear history, resolved conversations —
+and nothing beyond that: no required check, no review, no signature, so a
+direct push still works, which is what Dependabot and pre-commit.ci both
+rely on, and where every branch here is cut from. Requiring signatures
+would reject every bot commit outright, and one approving review cannot
+be satisfied by the author on a single-maintainer repository.
+`enforce_admins` off is what keeps the first two rules from becoming a
+lock: the release process (see RELEASING.md) force-pushes `dev` to
+realign it with `master` after every release, and only an admin bypass
+lets that step run at all — the rule still stops anyone, and any
+compromised token, that is not.
+
+Before this, `dev` had no protection at all — a branch cut from and
+pushed to by two bots, force-pushable or deletable under an open pull
+request. What btclib answers with a minimal rule, this repository
+answered with none, which is the gap this section used to describe
+instead of closing.
 
 ## Token permissions
 
