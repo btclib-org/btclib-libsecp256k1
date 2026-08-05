@@ -7,8 +7,17 @@
 # `if not 0 < scalar < n: raise`, a return code checked against zero. Change
 # `!=` to `<=`, or 32 to 31, and the line still runs and coverage still
 # reads 100% -- what kills that mutant is a test that passes 31 octets *and*
-# one that passes 33, and whether every bound here has both is precisely
-# what nobody has measured.
+# one that passes 33.
+#
+# The first session answered that, and the answer is that not every bound
+# has both: of 383 survivors, 341 are the inert shape described under
+# excluded-modules below and 42 are real, and of those 42 the largest group
+# is a size check whose `!=` becomes `<` or `>` and nothing notices. Read a
+# survivor list with that ratio in mind -- `core/ReplaceBinaryOperator` on a
+# signature line is an annotation and not a hole, and everything else is
+# worth reading. The measurement is `cr-rate --estimate`, which reported
+# 49.68 on a tree at 100% statement coverage: the two numbers are answers to
+# different questions, which is the whole reason this configuration exists.
 #
 # Here rather than at the repository root: cosmic-ray takes the path of its
 # configuration as an argument, so nothing forces a name or a place, and
