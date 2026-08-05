@@ -158,6 +158,12 @@ repos:
     rev: v2.3.0
     hooks:
       - id: mypy
+        # matching btclib's own mypy hook, which checks btclib, tests and
+        # .github/scripts and nothing under docs/: sphinx and its stub-less
+        # extensions are build tooling, not part of what py.typed promises
+        # a downstream type checker, and mypy's own `exclude` config (unlike
+        # this key) does not apply to a file pre-commit names explicitly
+        exclude: ^docs/
         # the mirror injects --ignore-missing-imports by default, which
         # silently turns an unresolved (or misspelled) import into Any:
         # that is the opposite of strict. The modules that legitimately

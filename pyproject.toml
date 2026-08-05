@@ -51,9 +51,10 @@ dependencies = [
 
 [project.urls]
 homepage = "https://btclib.org"
-# btclib.readthedocs.io documents btclib, not these bindings: the README
-# is their documentation
-documentation = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/README.md"
+# its own readthedocs project, matching btclib's own: an autodoc build
+# of docs/source, the README included in its toctree rather than left as
+# the whole of the documentation
+documentation = "https://btclib-libsecp256k1.readthedocs.io"
 repository = "https://github.com/btclib-org/btclib_libsecp256k1"
 download = "https://github.com/btclib-org/btclib_libsecp256k1/releases"
 changelog = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/HISTORY.md"
@@ -183,6 +184,13 @@ check = ["twine", "check-wheel-contents", "pyroma"]
 # runs this -- the scheduled mutation workflow is the only consumer, and it
 # asks for --group test as well, cosmic-ray shelling out to pytest
 mutation = ["cosmic-ray"]
+# matching btclib's own docs group exactly: myst-parser reads the four
+# root markdown files docs/source/*_link.md includes, sphinx_rtd_theme
+# is the html theme docs/source/conf.py names, and sphinx itself compiles
+# this package to autodoc it -- the reason CONTRIBUTING.md's Build
+# section and the git submodule matter here in a way they do not for
+# btclib's own pure Python build
+docs = ["myst-parser", "sphinx", "sphinx_rtd_theme"]
 # what scripts/benchmark.py times these bindings against, deliberately
 # left out of dev: btclib depends on this package, so it cannot be a
 # dependency of developing it. Here it is harmless, the lock resolving
@@ -195,6 +203,7 @@ dev = [
     { include-group = "test" },
     { include-group = "lint" },
     { include-group = "build" },
+    { include-group = "docs" },
 ]
 
 [tool.uv]

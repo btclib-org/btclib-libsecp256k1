@@ -1,0 +1,39 @@
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+#
+# The dotted name is the canonical one; readthedocs.yml is honored too,
+# but documented as deprecated.
+
+# Required
+version: 2
+
+# every automodule directive imports this package, and this package
+# compiles the vendored libsecp256k1 to do that -- read the docs has to
+# check out the git submodule, matching what CONTRIBUTING.md's Build
+# section already asks a developer to do, or every directive gets a bare
+# heading and nothing beneath it, silently, the same failure mode
+# .readthedocs.yaml's -W exists to turn into a build error instead
+submodules:
+  include:
+    - secp256k1
+  recursive: false
+
+# the interpreter is declared rather than left to whatever read the docs
+# defaults to, matching btclib's own file
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.13"
+  # build.commands rather than the sphinx: and python: keys, which cannot
+  # express installing this package's own dependency group and are
+  # rejected when it is present. uv installs the docs group from
+  # uv.lock, which is why there is no docs/requirements.txt.
+  # -W turns a failed import into a failed build, which is the point of
+  # the whole file; --keep-going comes first so one broken module
+  # reports every other problem in the same run instead of one per push
+  commands:
+    - pip install uv
+    - uv sync --locked --no-default-groups --group docs
+    - >-
+      uv run --locked --no-default-groups --group docs
+      sphinx-build -W --keep-going -b html docs/source $READTHEDOCS_OUTPUT/html
