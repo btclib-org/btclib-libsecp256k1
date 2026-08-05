@@ -29,7 +29,6 @@ msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
 
 def compress(pubkey_bytes: bytes) -> bytes:
     """Compress an uncompressed 65-byte public key."""
-
     return bytes([2 + (pubkey_bytes[64] & 1)]) + pubkey_bytes[1:33]
 
 
@@ -239,7 +238,6 @@ def test_xonly_tweak_add() -> None:
 
 def test_taproot_key_path() -> None:
     """Sign a taproot key path spending with a tweaked private key."""
-
     prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
     internal_bytes, _ = xonly.from_pubkey(mult.mult_(prvkey))
     output_bytes, _ = xonly.tweak_add(internal_bytes, tweak)

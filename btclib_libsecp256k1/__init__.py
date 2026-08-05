@@ -31,7 +31,6 @@ def _load_lib(module: Any) -> Any:
     in any given build: the other one is only reachable, and therefore
     only testable, with a stand-in.
     """
-
     # a static extension has the library linked in
     if hasattr(module, "lib"):
         return module.lib

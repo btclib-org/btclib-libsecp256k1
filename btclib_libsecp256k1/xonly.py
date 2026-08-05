@@ -27,7 +27,6 @@ from .context import ctx
 
 def from_pubkey(pubkey_bytes: bytes) -> tuple[bytes, int]:
     """Convert a public key into its x-only form and y parity."""
-
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -39,7 +38,6 @@ def tweak_add(pubkey_bytes: bytes, tweak: bytes | int) -> tuple[bytes, int]:
 
     Return the tweaked x-only public key and its y parity.
     """
-
     internal_pubkey = _parse(pubkey_bytes)
     tweak_bytes = scalar(tweak, "tweak")
 
@@ -62,7 +60,6 @@ def tweak_add_check(
     This is the verification of a taproot commitment: it is cheaper than
     recomputing the tweak, as it compares the serialized keys.
     """
-
     if len(tweaked_pubkey_bytes) != 32:
         raise ValueError("the tweaked x-only public key must be 32 bytes")
     if tweaked_parity not in (0, 1):
@@ -86,7 +83,6 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     tweak_add of the x-only public key of the input: this is the private
     key to sign a taproot key path spending with.
     """
-
     keypair = _keypair(prvkey)
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair, tweak_bytes):
@@ -100,7 +96,6 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
 
 def _parse(pubkey_bytes: bytes) -> CData:
     """Parse a 32-byte x-only public key."""
-
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
     if len(pubkey_bytes) != 32:
         raise ValueError("the x-only public key must be 32 bytes")
@@ -113,7 +108,6 @@ def _parse(pubkey_bytes: bytes) -> CData:
 
 def _to_xonly(pubkey: CData) -> tuple[bytes, int]:
     """Serialize a public key as its x-only form and y parity."""
-
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
     if not lib.secp256k1_xonly_pubkey_from_pubkey(ctx, xonly_pubkey, parity, pubkey):
@@ -127,7 +121,6 @@ def _to_xonly(pubkey: CData) -> tuple[bytes, int]:
 
 def _keypair(prvkey: bytes | int) -> CData:
     """Create a keypair from a private key."""
-
     keypair = ffi.new("secp256k1_keypair *")
     if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
         raise ValueError("invalid private key")

@@ -23,7 +23,6 @@ def sign(
 
     Return the 64-byte compact signature and its recovery id.
     """
-
     prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
@@ -52,7 +51,6 @@ def sign(
 
 def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
     """Recover the compressed public key from a recoverable ECDSA signature."""
-
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
     if len(signature_bytes) != 64:
@@ -81,7 +79,6 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
     high-s input is rejected by dsa.verify; signatures produced by
     sign are always low-s.
     """
-
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")
     if recid not in (0, 1, 2, 3):
@@ -102,7 +99,6 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
 
 def _parse(signature_bytes: bytes, recid: int) -> CData:
     """Parse a compact signature and its recovery id."""
-
     signature = ffi.new("secp256k1_ecdsa_recoverable_signature *")
     if not lib.secp256k1_ecdsa_recoverable_signature_parse_compact(
         ctx, signature, signature_bytes, recid
