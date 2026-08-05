@@ -53,6 +53,22 @@ the release it rehearses.
 
 ## Cutting a release
 
+Two of the sentinels are worth dispatching before the tag rather than
+waiting for their cron, because what they answer is cheaper to know before a
+version is consumed than after. Neither gates anything, so neither will stop
+you: reading them is the point.
+
+- **`latest`**, which resolves every dependency at its newest and then runs
+  the suite, the lint gate and the packaging checks. A release ships what
+  `uv.lock` pins, so a red run here does not make the release wrong — it
+  says the next dependency bump is going to be work, and that is worth
+  knowing before rather than during
+- **`mutation`**, if the release added or changed a wrapper. A surviving
+  mutant is a test nobody has written, and the release is the last moment
+  at which adding it costs nothing
+
+Then:
+
 1. bump the version in `pyproject.toml` and run `uv lock`, which carries
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
