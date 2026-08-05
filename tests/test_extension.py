@@ -57,6 +57,10 @@ def test_load_lib_no_candidate(tmp_path: pathlib.Path) -> None:
         _load_lib(module)
 
 
+@pytest.mark.skipif(
+    getattr(_cffi_backend, "__file__", None) is None,
+    reason="a PyPy interpreter has _cffi_backend built in, so there is no file",
+)
 def test_load_lib_returns_a_loadable_candidate(tmp_path: pathlib.Path) -> None:
     """A candidate the loader accepts is returned, which is the point of it.
 
@@ -64,10 +68,16 @@ def test_load_lib_returns_a_loadable_candidate(tmp_path: pathlib.Path) -> None:
     the `return ffi.dlopen(...)` of the dynamic branch was never taken --
     invisibly, because coverage sees that line executed by the call that
     raises. What it takes to reach it is a shared object the loader can
-    load, under a name the glob matches, and `_cffi_backend` is one on
-    every platform this package supports: cffi is a hard dependency, so its
-    own extension is always there and is always a real shared object,
-    whichever of the two builds these tests run on.
+    load, under a name the glob matches, and on CPython `_cffi_backend` is
+    one whichever of the two builds these tests run on: cffi is a hard
+    dependency, so its own extension is always there and is always a real
+    shared object.
+
+    A PyPy interpreter is the exception, and the skip above is why this
+    test cannot simply pick something else: it has `_cffi_backend` built
+    in rather than beside it, so the module has no `__file__` at all, and
+    it loads no other C extension this suite could borrow one from. The
+    line stays covered because coverage is measured on CPython.
     """
     suffix = {"win32": ".dll", "darwin": ".dylib"}.get(sys.platform, ".so")
     shutil.copy(_cffi_backend.__file__, tmp_path / f"libsecp256k1{suffix}")
