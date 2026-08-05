@@ -88,11 +88,15 @@ repos:
       - id: check-useless-excludes
   # .github/dependabot.yml is validated by nothing else, and a typo in it
   # updates nothing and says nothing: the whole point of that file is to
-  # move the pins this repository depends on for its security updates
+  # move the pins this repository depends on for its security updates.
+  # .readthedocs.yaml is the same argument again, matching btclib's own
+  # hook list: a build definition nothing but check-yaml reads, on a
+  # service whose failure mode is a docs build that stops happening
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.37.4
     hooks:
       - id: check-dependabot
+      - id: check-readthedocs
   # the shape of the workflows, which actionlint and zizmor do not read:
   # the first says whether one is valid, the second whether it is safe,
   # and neither says whether a line has grown to 118 columns. The limit is
@@ -122,8 +126,9 @@ repos:
   # whole words against a list of known misspellings and keeps the hyphen
   # and the underscore inside the token, so a misspelling inside an
   # identifier is invisible to it; typos splits hyphens, snake_case and
-  # camelCase, and carries a dictionary of its own. Their configurations
-  # are in pyproject.toml, one section each
+  # camelCase, and carries a dictionary of its own. typos' configuration
+  # is in pyproject.toml; codespell needs none today -- measured, with its
+  # default dictionaries it finds nothing here to skip or allow for
   - repo: https://github.com/crate-ci/typos
     rev: v1.49.0
     hooks:
