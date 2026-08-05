@@ -348,7 +348,7 @@ ignore = [
 parametrize-names-type = "csv"
 
 [tool.ruff.lint.pydocstyle]
-convention = "google"
+convention = "pep257"
 
 [tool.ruff.lint.pycodestyle]
 # the formatter owns the code width (88 columns); E501 only guards
