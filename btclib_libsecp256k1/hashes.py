@@ -22,7 +22,6 @@ def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
     cannot be read as a message of another. The BIP340 challenge and the
     BIP341 taproot tags (TapLeaf, TapBranch, TapTweak) are built with it.
     """
-
     output = ffi.new("char[32]")
     if not lib.secp256k1_tagged_sha256(ctx, output, tag, len(tag), msg, len(msg)):
         raise RuntimeError("tagged hashing failed")

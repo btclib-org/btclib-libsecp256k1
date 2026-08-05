@@ -27,7 +27,6 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     This is safer than encode(mult_(prvkey)), as the private key itself
     is used as entropy for the encoding.
     """
-
     prvkey_bytes = scalar(prvkey, "private key")
 
     # entropy is not a serialization: a shorter value is a caller mistake
@@ -49,7 +48,6 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     The randomness must not be a deterministic function of the public
     key; when it is not provided, it is freshly generated.
     """
-
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -68,7 +66,6 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
 
 def decode(ell_bytes: bytes) -> bytes:
     """Decode a 64-byte ElligatorSwift public key into its compressed form."""
-
     if len(ell_bytes) != 64:
         raise ValueError("the ElligatorSwift public key must be 64 bytes")
 
@@ -92,7 +89,6 @@ def xdh(
     1 for party B; the correspondence is not checked. The 32-byte secret
     is derived with the BIP324 hash function.
     """
-
     if len(ell_a_bytes) != 64 or len(ell_b_bytes) != 64:
         raise ValueError("the ElligatorSwift public keys must be 64 bytes")
     if party not in (0, 1):

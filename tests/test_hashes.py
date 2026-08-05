@@ -19,7 +19,6 @@ from btclib_libsecp256k1 import hashes
 
 def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
     """Compute a BIP340 tagged hash with hashlib."""
-
     tag_hash = hashlib.sha256(tag).digest()
     return hashlib.sha256(tag_hash + tag_hash + msg).digest()
 

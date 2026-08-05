@@ -62,7 +62,6 @@ def derived(tag: bytes, count: int = COUNT) -> Iterator[bytes]:
     astronomically unlikely here, and would be reported by the very
     bindings under test rather than silently skipped.
     """
-
     value = hashlib.sha256(b"btclib_libsecp256k1 properties" + tag).digest()
     for _ in range(count):
         value = hashlib.sha256(value).digest()
@@ -71,7 +70,6 @@ def derived(tag: bytes, count: int = COUNT) -> Iterator[bytes]:
 
 def compress(pubkey_bytes: bytes) -> bytes:
     """Compress an uncompressed 65-byte public key."""
-
     return bytes([2 + (pubkey_bytes[64] & 1)]) + pubkey_bytes[1:33]
 
 

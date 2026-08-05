@@ -14,7 +14,6 @@ from .context import ctx
 
 def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> bytes:
     """Create an ECDSA signature."""
-
     prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
@@ -41,7 +40,6 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
     A signature which is not in the normalized lower-s form is rejected;
     normalize it first if it comes from a system not enforcing it.
     """
-
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
 
@@ -56,7 +54,6 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
 
 def normalize(signature_bytes: bytes) -> bytes:
     """Convert a DER signature to its normalized lower-s form."""
-
     signature = _parse_der(signature_bytes)
     normalized = ffi.new("secp256k1_ecdsa_signature *")
     lib.secp256k1_ecdsa_signature_normalize(ctx, normalized, signature)
@@ -70,7 +67,6 @@ def is_low_s(signature_bytes: bytes) -> bool:
     yields a second valid signature of the same message, which the
     lower-s requirement rules out.
     """
-
     signature = _parse_der(signature_bytes)
     # a NULL output only checks the input, which is reported as
     # not normalized by a return value of 1
@@ -79,7 +75,6 @@ def is_low_s(signature_bytes: bytes) -> bool:
 
 def to_compact(signature_bytes: bytes) -> bytes:
     """Convert a DER signature into its 64-byte compact form."""
-
     signature = _parse_der(signature_bytes)
     sig_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ecdsa_signature_serialize_compact(ctx, sig_bytes, signature):
@@ -89,7 +84,6 @@ def to_compact(signature_bytes: bytes) -> bytes:
 
 def to_der(signature_bytes: bytes) -> bytes:
     """Convert a 64-byte compact signature into its DER form."""
-
     if len(signature_bytes) != 64:
         raise ValueError("the compact signature must be 64 bytes")
 
@@ -101,7 +95,6 @@ def to_der(signature_bytes: bytes) -> bytes:
 
 def _parse_der(signature_bytes: bytes) -> CData:
     """Parse a DER signature into its internal representation."""
-
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_der(
         ctx, signature, signature_bytes, len(signature_bytes)
@@ -112,7 +105,6 @@ def _parse_der(signature_bytes: bytes) -> CData:
 
 def _serialize_der(sig: CData) -> bytes:
     """Serialize an internal signature in DER form."""
-
     sig_bytes = ffi.new("char[73]")
     length = ffi.new("size_t *", 73)
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, sig):

@@ -338,7 +338,6 @@ class Secp256k1CFFIExtension(FFIExtension):
         64-bit host would need the -m32 of a multilib toolchain, which is
         not a target CMake selects.
         """
-
         if cross_compile:
             # the target is the toolchain file's, not this machine's
             return []

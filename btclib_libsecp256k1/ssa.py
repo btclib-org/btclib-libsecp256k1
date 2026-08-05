@@ -26,7 +26,6 @@ def sign(
     msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
 ) -> bytes:
     """Create a Schnorr signature of a 32-byte message hash."""
-
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
     keypair = _keypair(prvkey)
@@ -51,7 +50,6 @@ def sign_custom(
     cannot be read as one of a different protocol. For a 32-byte message
     the signature is the one sign returns.
     """
-
     keypair = _keypair(prvkey)
 
     ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
@@ -78,7 +76,6 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
     of the caller, `xonly.from_pubkey` being the conversion, because a
     key with odd y verifies as the point that is not the one passed.
     """
-
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
@@ -98,7 +95,6 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
 
 def _keypair(prvkey: bytes | int) -> CData:
     """Create a keypair from a private key."""
-
     keypair = ffi.new("secp256k1_keypair *")
     if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
         raise ValueError("invalid private key")
@@ -114,7 +110,6 @@ def _aux_rand32(aux_rand32: bytes | None) -> bytes:
     caller mistake rather than a small number, and padding it here would
     turn one into a valid argument.
     """
-
     if aux_rand32 is None:
         return secrets.token_bytes(32)
     if len(aux_rand32) != 32:

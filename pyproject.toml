@@ -350,9 +350,6 @@ select = [
     "TID",   # flake8-tidy-imports: absolute, so the layering is readable
 ]
 ignore = [
-    # the blank line between a docstring and the body is the established
-    # style of this codebase
-    "D202",
     # comparing against a key, signature or hash length (32, 33, 64, 65)
     # is not a magic value: it is the domain
     "PLR2004",
