@@ -42,7 +42,6 @@ msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
 
 def compress(pubkey_bytes: bytes) -> bytes:
     """Compress an uncompressed 65-byte public key."""
-
     return bytes([2 + (pubkey_bytes[64] & 1)]) + pubkey_bytes[1:33]
 
 
@@ -212,7 +211,6 @@ def test_ellswift_invalid_inputs() -> None:
 
 def test_musig() -> None:
     """Run a 2-of-2 MuSig2 signing session, then verify it with ssa."""
-
     prvkeys = [(1).to_bytes(32, "big"), (2).to_bytes(32, "big")]
 
     keypairs, pubkeys = [], []

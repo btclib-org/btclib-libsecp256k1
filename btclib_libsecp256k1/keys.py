@@ -30,14 +30,12 @@ UNCOMPRESSED = 2
 
 def prvkey_verify(prvkey: bytes | int) -> bool:
     """Return True if the private key is a valid scalar, i.e. in [1, n-1]."""
-
     prvkey_bytes = scalar(prvkey, "private key")
     return bool(lib.secp256k1_ec_seckey_verify(ctx, prvkey_bytes))
 
 
 def prvkey_negate(prvkey: bytes | int) -> bytes:
     """Negate a private key."""
-
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     if not lib.secp256k1_ec_seckey_negate(ctx, prvkey_buffer):
         raise ValueError("invalid private key")
@@ -46,7 +44,6 @@ def prvkey_negate(prvkey: bytes | int) -> bytes:
 
 def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     """Add a tweak to a private key."""
-
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_add(ctx, prvkey_buffer, tweak_bytes):
@@ -56,7 +53,6 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
 
 def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     """Multiply a private key by a tweak."""
-
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_mul(ctx, prvkey_buffer, tweak_bytes):
@@ -66,7 +62,6 @@ def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
 
 def pubkey_negate(pubkey_bytes: bytes, compressed: bool = True) -> bytes:
     """Negate a public key."""
-
     pubkey = parse(pubkey_bytes)
     if not lib.secp256k1_ec_pubkey_negate(ctx, pubkey):
         raise RuntimeError("public key negation failed")
@@ -77,7 +72,6 @@ def pubkey_tweak_add(
     pubkey_bytes: bytes, tweak: bytes | int, compressed: bool = True
 ) -> bytes:
     """Add the generator multiplied by the tweak to a public key."""
-
     pubkey = parse(pubkey_bytes)
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes):
@@ -93,7 +87,6 @@ def pubkey_tweak_mul(
     This is the multiplication of an arbitrary point, as opposed to the
     multiplication of the generator provided by the mult module.
     """
-
     pubkey = parse(pubkey_bytes)
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_pubkey_tweak_mul(ctx, pubkey, tweak_bytes):
@@ -103,7 +96,6 @@ def pubkey_tweak_mul(
 
 def pubkey_combine(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> bytes:
     """Add public keys together."""
-
     if not pubkeys_bytes:
         raise ValueError("at least one public key is required")
 
@@ -124,7 +116,6 @@ def pubkey_cmp(pubkey1_bytes: bytes, pubkey2_bytes: bytes) -> int:
     The order is the one of the compressed serialization, whichever form
     the arguments are given in.
     """
-
     return int(
         lib.secp256k1_ec_pubkey_cmp(ctx, parse(pubkey1_bytes), parse(pubkey2_bytes))
     )
@@ -137,7 +128,6 @@ def pubkey_sort(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> list
     key aggregation applies when the participants have not agreed on a
     different one.
     """
-
     pubkeys = [parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
     # the array holds borrowed pointers, and is what gets reordered: the
     # list above is what keeps the keys it points to alive
@@ -149,7 +139,6 @@ def pubkey_sort(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> list
 
 def parse(pubkey_bytes: bytes) -> CData:
     """Parse a public key into its internal libsecp256k1 representation."""
-
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -158,7 +147,6 @@ def parse(pubkey_bytes: bytes) -> CData:
 
 def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     """Serialize an internal public key, in compressed form by default."""
-
     size = 33 if compressed else 65
     output = ffi.new(f"char[{size}]")
     length = ffi.new("size_t *", size)

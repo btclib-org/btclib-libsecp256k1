@@ -28,7 +28,6 @@ def scalar(num: bytes | int, name: str) -> bytes:
     no arithmetic on the secret happened here; scalar arithmetic that
     must not leak belongs where that can be promised.
     """
-
     if isinstance(num, int):
         # an int outside the 32-byte range is out of domain like any
         # other invalid argument, and must be reported the same way:

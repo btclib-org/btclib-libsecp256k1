@@ -26,7 +26,6 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
     itself constant time. A protocol needing another derivation applies
     it to that: SHA256 of it is what this function returns.
     """
-
     prvkey_bytes = scalar(prvkey, "private key")
 
     pubkey = ffi.new("secp256k1_pubkey *")

@@ -77,7 +77,6 @@ def check() -> None:
     MuSig2 session is, and it reports what was last recorded: call it
     right after the call whose return value you are explaining.
     """
-
     illegal, error = _reported.illegal, _reported.error
     _reported.illegal = _reported.error = None
     if error is not None:
