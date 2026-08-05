@@ -181,3 +181,44 @@ def test_invalid_inputs() -> None:
 
     with pytest.raises(ValueError, match="scalar"):
         mult.mult(0)
+
+
+def test_size_checks_refuse_both_sides() -> None:
+    """Every size check refuses a value too long as well as one too short.
+
+    A check written `!= 32` has two edges, and a test at one of them leaves
+    the other unasserted: the first mutation session found exactly that,
+    every one of these surviving a `!=` turned into `<` or `>` while the
+    line still ran and coverage still read 100%. So each is exercised at
+    n-1 and at n+1 here, whichever side the tests elsewhere already had.
+
+    The int scalar is the same shape one step further out: `0 <= num <
+    2**256` mutated to `0 <= num != 2**256` accepts everything above the
+    range, and `2**256` alone cannot say so -- both spellings refuse that
+    one. It takes a value past it.
+    """
+    msg = b"\x01" * 32
+    prvkey = 7
+    pubkey_bytes = mult.mult_(prvkey)
+    der_bytes = dsa.sign(msg, prvkey)
+    ssa_sig = ssa.sign(msg, prvkey)
+    xonly_bytes = pubkey_bytes[1:33]
+
+    # one octet too many, where the tests above pass one too few
+    with pytest.raises(ValueError, match="message hash"):
+        dsa.sign(msg + b"\x01", prvkey)
+    with pytest.raises(ValueError, match="message hash"):
+        dsa.verify(msg + b"\x01", pubkey_bytes, der_bytes)
+    with pytest.raises(ValueError, match="compact signature"):
+        dsa.to_der(dsa.to_compact(der_bytes) + b"\x01")
+    with pytest.raises(ValueError, match="signature"):
+        ssa.verify(msg, xonly_bytes, ssa_sig + b"\x01")
+
+    # and one too few, where they pass one too many
+    with pytest.raises(ValueError, match="x-only public key"):
+        ssa.verify(msg, xonly_bytes[:-1], ssa_sig)
+
+    # past the top of the scalar range, which 2**256 cannot reach: both
+    # the check and its mutant refuse that value
+    with pytest.raises(ValueError, match="fit in 32 bytes"):
+        dsa.sign(msg, 2**256 + 1)
