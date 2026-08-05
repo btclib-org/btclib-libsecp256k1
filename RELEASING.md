@@ -18,11 +18,19 @@ submodule is pinned to.
 
 ## Which version string is which
 
-Five strings here look like versions, and two of them are written by
+Six strings here look like versions, and three of them are written by
 hand. Telling them apart is most of what can go wrong:
 
 - **`0.7.1`**, in `pyproject.toml`, is *the* version. It is what gets
   published, on either index, and the only one a human edits
+- **`0.7.1.1`**, a fourth number on an already-final version, plays two
+  roles this list would otherwise leave out: right after 0.7.1 ships,
+  step 10 opens `dev` on it as a placeholder, nothing having moved the
+  submodule since to renumber it; and if 0.7.1 itself shipped broken,
+  "When a release turns out to be broken" ships the very same string
+  as the fix, tagged. Both are typed by hand, like `0.7.1` above, and
+  both read the same way — "the same libsecp256k1, one change since" —
+  whichever of the two prompted it
 - **`v0.7.1`**, the tag, carries no version of its own: it picks the
   index, PyPI rather than TestPyPI, and `version-check` exists to
   confirm it says what `pyproject.toml` says
