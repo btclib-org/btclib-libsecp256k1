@@ -21,56 +21,60 @@ aggregate job at the end of `test.yml` that `needs` every other job in
 it; a job added to that workflow belongs in its `needs` list, or it gates
 nothing.
 
-**As of this writing no check is required at all**, which is worth knowing
-before reading anything else here:
+`master` requires three checks, bound to the app that produces each —
+`checks` with an `app_id` rather than the bare `contexts` list, so nothing
+else can satisfy one:
 
     gh api repos/btclib-org/btclib_libsecp256k1/branches/master/protection \
       --jq '.required_status_checks'
-    # {"strict": true, "checks": [], "contexts": [], ...}
-
-`strict: true` requires a branch to be up to date with `master`; the empty
-list is what says that no *particular* check has to pass. So a pull
-request whose matrix is red can be merged once it carries a review.
-
-Two checks are candidates for a rule, and they are the two a pull request
-actually produces — measured, rather than read off the workflow files:
 
 | Check | Produced by |
 | --- | --- |
 | `tests-passed` | `test.yml`, aggregate over the matrix |
 | `Lint and type-check` | `lint.yml`, its only job |
+| `CodeQL` | code scanning's default setup |
 
     gh api repos/btclib-org/btclib_libsecp256k1/commits/<sha>/check-runs \
       --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
 
-**CodeQL is not among them, and that is a fact to check before naming
-it.** It is code scanning's default setup rather than a workflow of this
-repository — `state: configured`, python and actions, the default query
-suite, weekly — so there is no file here to read its triggers off, and on
-the pull requests measured it produced no check run at all. Naming a
-check that a pull request does not produce is what blocks every merge
-with nothing in the tree to explain why.
+**CodeQL is code scanning's default setup, not a workflow of this
+repository** — `state: configured`, python and actions, the default query
+suite, weekly — so there is no file here to read its triggers off:
 
     gh api repos/btclib-org/btclib_libsecp256k1/code-scanning/default-setup
+
+That absence of a file is also why the check was first left out of the
+rule, on a measurement that was the wrong one: every ordinary pull
+request targets `dev`, and default setup analyzes push events on the
+default branch and pull requests *against* it, nothing else, so a pull
+request like #43 produces no CodeQL check run at all — measured, zero
+analyses. But the rule protects `master`, and the pull request that
+matters there is the other kind, `dev` into `master`; #21, the 0.7.1
+release merge, has CodeQL analyses under `refs/pull/21/head`. That is
+the pull request this rule actually gates, and CodeQL runs on it:
+
+    gh api repos/btclib-org/btclib_libsecp256k1/code-scanning/analyses \
+      --jq '.[] | {ref, category, created_at}'
 
 `Dependency Graph` is not a candidate either: its runs are `dynamic`,
 GitHub submitting the graph after a push rather than checking a pull
 request.
 
-Binding each named check to the app that produces it — `checks` with an
-`app_id` rather than the bare `contexts` list, 15368 for Actions — is what
-keeps anything else from satisfying one.
-
 **PATCH the sub-endpoint, never PUT the whole protection object**: a
-partial PUT drops the reviews, the signatures and the rest.
+partial PUT drops the reviews, the signatures and the rest. And `-F`,
+not `-f`, for `strict` — `gh api`'s `-f` sends every value as a string,
+and GitHub refuses `"true"` where a boolean is declared:
 
     sub=branches/master/protection/required_status_checks
-    gh api "repos/{owner}/{repo}/$sub"
+    gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
+      -F 'checks[][context]=tests-passed' -F 'checks[][app_id]=15368' \
+      -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
+      -F 'checks[][context]=CodeQL' -F 'checks[][app_id]=57789'
 
 ## Branch protection
 
-`master`, all of it read from the endpoint above: `strict` with the empty
-check list already described, one approving review with
+`master`, all of it read from the endpoint above: `strict` with the three
+checks already described, one approving review with
 `dismiss_stale_reviews`, **required signatures**, linear history, no force
 pushes, no deletions, `required_conversation_resolution`, and
 `enforce_admins` **on** — which is the one place this repository is
