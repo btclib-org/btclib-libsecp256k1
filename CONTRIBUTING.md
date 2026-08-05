@@ -173,6 +173,53 @@ the runner, and that is worth knowing before trying.
 The `published` workflow has no local equivalent by design: what it
 installs is what PyPI serves.
 
+The three sentinels beside it gate nothing, so a red one is read in the
+Actions tab rather than fixed on a branch. Each is dispatchable, and two of
+them run locally.
+
+- `latest`, which resolves every dependency at its newest before running
+  the suite. The upgrade rewrites `uv.lock`, so restore it afterwards with
+  `git checkout uv.lock`:
+
+      uv lock --upgrade
+      uv run --locked --no-default-groups --group test pytest
+
+- `links` needs a tool uv does not provide, lychee being a rust binary, so
+  the workflow uses the action. `.lycheeignore` holds the URLs a checker
+  cannot judge, each with the reason it cannot be checked rather than the
+  reason checking it is inconvenient
+
+- `mutation`, scoped by `.github/mutation/bindings.toml`, which is what the
+  workflow reads too:
+
+      uv run --locked --no-default-groups --group test --group mutation \
+          cosmic-ray baseline .github/mutation/bindings.toml
+      uv run --locked --no-default-groups --group test --group mutation \
+          cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
+      uv run --locked --no-default-groups --group test --group mutation \
+          cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
+      uv run --locked --no-default-groups --group test --group mutation \
+          cr-report --surviving-only --show-diff bindings.sqlite
+
+  `baseline` first, always: it runs the configured test command against the
+  unmutated tree, and without it a stale command fails every mutant
+  identically and the session reports a perfect kill rate — the one failure
+  mode of a mutation run that looks like good news. The session mutates the
+  source in place and restores it, so nothing else may read the tree while
+  it runs: no second session, no `pytest` in another shell, and a
+  `git status` in the middle is a working tree with a mutant in it. `exec`
+  is resumable, so interrupting one costs only the mutant it was on, and the
+  `.sqlite` is the artifact the workflow uploads — `cr-report`, `cr-html`
+  and `cr-rate` all read one.
+
+  `--surviving-only` is the whole of what anybody acts on, a killed mutant
+  being the suite doing its job. Read the list expecting two shapes that are
+  not holes: `core/ReplaceBinaryOperator` on a signature line is an
+  annotation, which `from __future__ import annotations` leaves unevaluated,
+  and an output buffer or a piece of internally generated randomness has a
+  size nothing observable depends on. Anything else is a test nobody has
+  written yet.
+
 ## What a change has to satisfy
 
 Development happens on `dev`, so that is what a pull request targets;

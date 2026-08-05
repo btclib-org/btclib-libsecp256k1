@@ -132,6 +132,38 @@ copy is for — `cp file file.bak`, then put it back.
     # recorded rather than excluded
     uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
 
+## The workflows that gate, and the four that do not
+
+`lint` and `test` are the gate, and `release` reuses both. The other four
+are sentinels: each is a workflow of its own, has no aggregate job, is named
+by no branch rule, and opens no issue on failure. That is deliberate in
+every case — each is expected to go red for a reason no pull request
+introduced, and a red check nobody can act on from a branch is noise. Their
+crons are on four different mornings, because four sentinels landing in one
+inbox on one morning are one sentinel.
+
+| workflow | asks | when |
+| --- | --- | --- |
+| `published` | can the world install what PyPI serves | Mon |
+| `links` | do the URLs in the prose still resolve | Tue |
+| `latest` | does the tree survive every dependency at its newest | Fri |
+| `mutation` | would the suite notice a wrong line | Sat |
+
+`latest` is the one that covers a gap nothing else does. Every uv command
+elsewhere passes `--locked`, the dependency groups declare no version, and
+the one runtime dependency is cffi — which this package does not merely
+import but *compiles against*, so a cffi, setuptools or cmake release can
+break the build rather than a test. Dependabot is monthly here on purpose,
+that being a cost decision now rather than a visibility one, and this is why.
+
+`mutation` is scoped by `.github/mutation/bindings.toml`, which is also
+what a local run reads, so there is one statement of what is mutated and
+what judges it. Two things to know before starting one: it mutates the
+source in place and restores it, so nothing else may read the tree while it
+runs, and `cosmic-ray baseline` comes first — without it a stale test
+command fails every mutant identically and the session reports a perfect
+kill rate, which is the one failure mode that looks like good news.
+
 ## What this repository expects
 
 - **the prose style is CONTRIBUTING.md's "Documentation and comments"
@@ -205,6 +237,13 @@ findings.
 - **`release.yml` and `published.yml` are inert until they are on
   `master`**: `schedule` and `workflow_dispatch` only run from the default
   branch, so a rehearsal cannot be dispatched from `dev`
+- **a hand-applied mutation can outlive its restore.** `(0, 1, 2, 3)` and
+  `(0, 1, 1, 3)` are the same length, so restoring the file with `cp` in the
+  same second leaves mtime *and* size matching what the `.pyc` recorded, and
+  python reuses the mutated bytecode — silently, in the next unrelated run.
+  `PYTHONDONTWRITEBYTECODE=1`, with a passing baseline run before and a
+  passing control run after, is what makes a hand verification mean
+  anything. cosmic-ray does not have the problem
 - **adding to the json vector files fails the `detect-secrets` hook**
   until `.secrets.baseline` is regenerated; the command is in
   CONTRIBUTING.md, and reading its diff is the point of the baseline
