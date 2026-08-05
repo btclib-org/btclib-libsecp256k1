@@ -77,8 +77,24 @@ and GitHub refuses `"true"` where a boolean is declared:
 checks already described, one approving review with
 `dismiss_stale_reviews`, **required signatures**, linear history, no force
 pushes, no deletions, `required_conversation_resolution`, and
-`enforce_admins` **on** — which is the one place this repository is
-*stricter* than btclib, where an administrator can bypass.
+`enforce_admins` **off** — an administrator can bypass all of it, matching
+btclib now and for the same reason: a solo-maintainer repository cannot
+satisfy "one approving review" from the author, GitHub refusing
+self-approval, so the review is a stop rather than a speed bump, and the
+admin bypass is the only way past it without a second maintainer to add.
+
+    gh api -X DELETE \
+      repos/btclib-org/btclib_libsecp256k1/branches/master/protection/enforce_admins
+
+Turned off after being on through the 0.7.1 release, whose squash merge
+(see RELEASING.md) is what the previous setting actually cost: with
+`enforce_admins` on, neither the force push nor the six unsigned commits
+among the ninety-two `dev` carried could have gone back onto `master`,
+admin included. Off would not undo that squash today either — `master`'s
+tip is the commit PyPI's PEP 740 attestations for 0.7.1 are bound to, and
+moving it now would desynchronize a published release from what it
+attests to rather than restore anything. What changed is only whether the
+next incident has the same escape hatch btclib already keeps.
 
 `dev` is **not protected**:
 
