@@ -7,15 +7,15 @@
 # every pull request here runs the whole build and test matrix, tens of
 # jobs compiling libsecp256k1 from source, so each ecosystem groups its
 # updates into a single pull request. Weekly, matching btclib: latest.yml
-# upgrades everything and runs that same matrix against it every Friday,
-# off the critical path, so a Dependabot pull request opening the day
-# after is a diff whose result is already known, and a smaller one is
-# easier to read and to revert than a month of drift arriving at once.
-# That is what makes the extra machine time worth it here too, tens of
-# jobs compiling libsecp256k1 from source included. Each still waits a
-# week before proposing a release regardless: a version yanked within
-# days of publication would otherwise be a pull request that opens, runs
-# that matrix, and is then closed
+# upgrades everything and runs that same matrix against it every
+# Wednesday, off the critical path, so a Thursday pull request is a diff
+# whose result is already known, and a smaller one is easier to read and
+# to revert than a month of drift arriving at once. That is what makes
+# the extra machine time worth it here too, tens of jobs compiling
+# libsecp256k1 from source included. Each still waits a week before
+# proposing a release regardless: a version yanked within days of
+# publication would otherwise be a pull request that opens, runs that
+# matrix, and is then closed
 version: 2
 updates:
   # what this buys is the exact pins: every action is pinned to a commit
@@ -24,7 +24,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "saturday"
+      day: "thursday"
     target-branch: "dev"
     groups:
       # one PR for all action bumps instead of one PR each
@@ -44,7 +44,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "saturday"
+      day: "thursday"
     target-branch: "dev"
     groups:
       dev-tooling:
@@ -59,7 +59,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "saturday"
+      day: "thursday"
     target-branch: "dev"
     cooldown:
       default-days: 7

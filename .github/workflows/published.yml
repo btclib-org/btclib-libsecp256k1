@@ -46,14 +46,20 @@ on:
   schedule:
     # weekly, on a minute that is not the hour: what everyone schedules on
     # the hour queues together, and a run that waits is a failure noticed
-    # later. Only the default branch schedules workflows, so on any other
-    # branch this is reachable through the dispatch below alone.
+    # later. Tuesday, matching btclib's own published.yml, and the day
+    # after links.yml's Monday for the same reason every one of these
+    # sentinels picks a distinct morning: a fixed, already-released
+    # artifact is checked first, before latest.yml asks the more volatile
+    # question of what the newest dependency does to a tree not yet
+    # released.
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone.
     # One caveat has no fix inside this file: GitHub suspends a schedule
     # after sixty days without repository activity, which is precisely the
     # quiet period a sentinel exists to cover, and announces it only by
     # email. A silence from this workflow is worth a look at the Actions
     # tab before it is read as green
-    - cron: "23 6 * * 1"
+    - cron: "23 6 * * 2"
   workflow_dispatch:
 
 # least privilege for the GITHUB_TOKEN: everything running in a job
