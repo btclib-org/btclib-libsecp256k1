@@ -360,11 +360,6 @@ ignore = [
     # class defined to carry it: these wrappers raise ValueError and
     # RuntimeError, which is what a caller catches
     "TRY003",
-    # what a wrapper rejects is an argument out of the domain, and the
-    # message says which: pytest.raises(ValueError) is the assertion, and
-    # narrowing every one of them to a match= pattern would test the
-    # wording of the message rather than the behaviour
-    "PT011",
 ]
 
 [tool.ruff.lint.flake8-pytest-style]
