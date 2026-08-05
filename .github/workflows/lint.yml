@@ -84,3 +84,53 @@ jobs:
       # matches pyproject.toml, which nothing rewrites on this path
       - name: Run pre-commit
         run: uv run --locked --only-group lint pre-commit run --all-files --show-diff-on-failure
+
+  # matching btclib's own second lint job: nothing else in CI builds the
+  # documentation, only read the docs does, on a service whose failure is
+  # not a check on the pull request. A separate job because the branch
+  # rule, once one names this workflow, names "Lint and type-check" as a
+  # literal string -- a step added to that job would silently change what
+  # gates a merge, where a new job gates nothing until added on purpose.
+  # It also installs a different dependency group and runs in parallel
+  docs:
+    name: Build the documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # every automodule directive imports this package, which compiles
+          # the vendored libsecp256k1 to do that -- unlike btclib's own
+          # docs job, which builds nothing
+          submodules: true
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      # the same command .readthedocs.yaml runs and docs/README.rst
+      # documents, so what CI checks is what gets published. -W turns a
+      # module sphinx cannot import into a failed build rather than a bare
+      # heading; --keep-going reports every problem in one run
+      - name: Build the docs
+        run: >
+          uv run --locked --no-default-groups --group docs
+          sphinx-build -W --keep-going -b html docs/source docs/build/html
+
+      # the one defect the build above cannot report on itself, matching
+      # btclib's own second step and the reasoning in its docs/source/conf.py:
+      # a relative link myst cannot resolve becomes an anchor on the page it
+      # is already on -- href="#SECURITY.md", an id nothing has -- rather
+      # than a warning, which conf.py's RootFileLinks transform exists to
+      # prevent. This is the same claim made about the artifact rather than
+      # about the configuration, and what would catch a suppression added
+      # back. No "./" prefix in the pattern, unlike btclib's: the root files
+      # here link to each other by bare name ("SECURITY.md"), never "./SECURITY.md"
+      - name: Check the built pages for unresolved links
+        run: |
+          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
+            echo "::error::the links above resolve to no page"
+            exit 1
+          fi

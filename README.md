@@ -9,6 +9,7 @@
 [![type-check: mypy](https://img.shields.io/badge/type--check-mypy-yellowgreen.svg?logo=mypy)](http://mypy-lang.org/)
 [![lint](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/lint.yml)
 [![test](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml)
+[![docs](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
 
 [![Follow on Twitter](https://img.shields.io/twitter/follow/btclib?style=social&logo=twitter)](https://twitter.com/intent/follow?screen_name=btclib)
 
