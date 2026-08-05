@@ -22,8 +22,11 @@ mistaken for one.
 
 import pathlib
 import re
+import shutil
+import sys
 import types
 
+import _cffi_backend
 import pytest
 
 from btclib_libsecp256k1 import __version__, _load_lib
@@ -55,6 +58,24 @@ def test_load_lib_no_candidate(tmp_path: pathlib.Path) -> None:
     module = types.SimpleNamespace(__file__=str(tmp_path / "_extension.py"))
     with pytest.raises(ImportError, match=re.escape(str(tmp_path))):
         _load_lib(module)
+
+
+def test_load_lib_returns_a_loadable_candidate(tmp_path: pathlib.Path) -> None:
+    """A candidate the loader accepts is returned, which is the point of it.
+
+    The two tests beside this one both end in the raise, so until this one
+    the `return ffi.dlopen(...)` of the dynamic branch was never taken --
+    invisibly, because coverage sees that line executed by the call that
+    raises. What it takes to reach it is a shared object the loader can
+    load, under a name the glob matches, and `_cffi_backend` is one on
+    every platform this package supports: cffi is a hard dependency, so its
+    own extension is always there and is always a real shared object,
+    whichever of the two builds these tests run on.
+    """
+    suffix = {"win32": ".dll", "darwin": ".dylib"}.get(sys.platform, ".so")
+    shutil.copy(_cffi_backend.__file__, tmp_path / f"libsecp256k1{suffix}")
+    module = types.SimpleNamespace(__file__=str(tmp_path / "_extension.py"))
+    assert _load_lib(module) is not None
 
 
 def test_load_lib_unloadable_candidate(tmp_path: pathlib.Path) -> None:

@@ -299,3 +299,68 @@ def test_musig() -> None:
     )
     with pytest.raises(ValueError, match="secnonce_magic"):
         context.check()
+
+
+def test_size_checks_refuse_both_sides() -> None:
+    """Every size check of recovery and ellswift refuses both edges.
+
+    The far edge of each, the one the tests above leave out: a check
+    written `!= 32` or `!= 64` has two, and the first mutation session
+    found every one of these surviving a `!=` turned into `<` or `>`.
+    """
+    prvkey = 7
+    signature_bytes, recid = recovery.sign(msg, prvkey)
+    ell = ellswift.create(prvkey)
+
+    with pytest.raises(ValueError, match="message hash"):
+        recovery.sign(msg + b"\x01", prvkey)
+    with pytest.raises(ValueError, match="ndata"):
+        recovery.sign(msg, prvkey, b"\x01" * 31)
+    with pytest.raises(ValueError, match="message hash"):
+        recovery.recover(msg + b"\x01", signature_bytes, recid)
+    with pytest.raises(ValueError, match="64 bytes"):
+        recovery.recover(msg, signature_bytes + b"\x01", recid)
+    with pytest.raises(ValueError, match="64 bytes"):
+        recovery.to_der(signature_bytes + b"\x01", recid)
+
+    with pytest.raises(ValueError, match="aux_rand32"):
+        ellswift.create(prvkey, b"\x01" * 31)
+    with pytest.raises(ValueError, match="rnd32"):
+        ellswift.encode(mult.mult_(prvkey), b"\x01" * 33)
+    with pytest.raises(ValueError, match="64 bytes"):
+        ellswift.decode(ell + b"\x01")
+    with pytest.raises(ValueError, match="64 bytes"):
+        ellswift.xdh(ell + b"\x01", ell, prvkey, 0)
+    with pytest.raises(ValueError, match="64 bytes"):
+        ellswift.xdh(ell, ell + b"\x01", prvkey, 0)
+    with pytest.raises(ValueError, match="64 bytes"):
+        ellswift.xdh(ell, ell[:-1], prvkey, 0)
+
+
+def test_every_recovery_id_of_the_curve_is_accepted() -> None:
+    """A recovery id of 2 or 3 is a valid argument, not only 0 and 1.
+
+    `recovery.sign` answers 0 or 1 for a key of this curve, so those are
+    the only two the tests above ever pass, and a bound written
+    `recid not in (0, 1, 2, 3)` was therefore asserted on one half of its
+    own domain: the first mutation session found it surviving with 2 or 3
+    dropped from that tuple. What the API accepts is the whole SEC 1 range,
+    a recovery id being two bits, so `to_der` has to take all four --
+    reached here through the parse alone, `recover` being free to fail on a
+    candidate that names no key.
+    """
+    signature_bytes, _ = recovery.sign(msg, 7)
+
+    for recid in (0, 1, 2, 3):
+        assert len(recovery.to_der(signature_bytes, recid)) > 0
+
+    # `recover` bounds the recovery id separately, so it needs its own
+    # two: 2 and 3 name the candidate whose x is r + n, which exists only
+    # when r + n < p -- some 2^-127 of secp256k1 signatures, so for this
+    # one the recovery fails. What the assertion is about is *which* way it
+    # fails: "public key recovery failed" says the id was accepted and the
+    # arithmetic answered, where "the recovery id must be" would say the
+    # bound had refused it
+    for recid in (2, 3):
+        with pytest.raises(ValueError, match="public key recovery failed"):
+            recovery.recover(msg, signature_bytes, recid)

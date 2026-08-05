@@ -351,3 +351,22 @@ def test_dsa_low_s() -> None:
     # but normalizes back to the original signature
     assert dsa.normalize(malleated_bytes) == der_bytes
     assert dsa.verify(msg, pubkey_bytes, dsa.normalize(malleated_bytes))
+
+
+def test_size_checks_refuse_both_sides() -> None:
+    """Both x-only size checks refuse a value too short as well as too long.
+
+    The tests above pass a 33-octet key to each, which is the compressed
+    form and the mistake a caller actually makes; what they leave out is
+    the other edge, and the first mutation session found both checks
+    surviving a `!=` turned into `>`.
+    """
+    xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
+
+    # _parse, reached through both entry points
+    with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
+        xonly.tweak_add(xonly_bytes[:-1], b"\x01" * 32)
+
+    # and the tweaked key of the commitment check, one octet too many
+    with pytest.raises(ValueError, match="tweaked x-only public key"):
+        xonly.tweak_add_check(xonly_bytes + b"\x01", parity, xonly_bytes, b"\x01" * 32)
