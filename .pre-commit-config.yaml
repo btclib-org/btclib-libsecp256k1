@@ -21,6 +21,16 @@ ci:
   autoupdate_branch: dev
   autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
   autoupdate_schedule: weekly
+  # the one hook pre-commit.ci cannot run, and the only entry this list
+  # may ever have without a reason of the same kind: pyroma rates the
+  # metadata of the source tree, which means building that metadata, and
+  # pre-commit.ci runs hooks with no network at all -- so the isolated
+  # build cannot fetch hatchling to prepare it, and the fallback to a
+  # non-isolated one has no backend in the hook environment either. The
+  # lint workflow runs this same file with a network, so what is skipped
+  # here is one of the hook's two runners rather than the hook: it still
+  # gates a commit on this machine and a pull request in that workflow
+  skip: [pyroma]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -283,20 +293,14 @@ repos:
   # what test.yml's own pyroma step rates the sdist for -- a missing
   # classifier or url, metadata that is valid but poor -- this rates the
   # source tree instead, for an answer before pushing rather than after
-  # the build. Matching btclib's own hook, and taking no args: the rev
-  # below is the version pin.
+  # the build. Matching btclib's own hook, unpinned to any args or
+  # additional_dependencies for the same reason every other hook here
+  # isn't: the rev below is the version pin.
   #
-  # virtualenv is the one addition, and it is not pyroma's dependency but
-  # build's: pyroma reads this project's metadata by building it in an
-  # isolated environment, and pre-commit.ci's runner image has a python
-  # with no ensurepip, so the `python -m venv` build reaches for there
-  # cannot seed pip and the hook dies before reading a line of
-  # pyproject.toml. build creates that environment with virtualenv
-  # instead whenever it can import one, which brings its own pip wheel.
-  # Neither a local run nor the lint job takes that branch, which is why
-  # this was red on pre-commit.ci alone
+  # Named in the ci block's skip list at the top of this file, and it is
+  # the only hook there: building metadata needs an index to fetch the
+  # backend from, and pre-commit.ci has no network
   - repo: https://github.com/regebro/pyroma
     rev: "5.0.1"
     hooks:
       - id: pyroma
-        additional_dependencies: ["virtualenv==21.7.1"]
