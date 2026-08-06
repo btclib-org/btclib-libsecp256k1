@@ -21,6 +21,9 @@
   note: the rfc6979.json vectors used by btclib are NOT imported,
   as they only cover NIST curves (per RFC 6979 appendix A.2),
   not secp256k1
+- the recovery id 2 and 3 fixture, which is published nowhere and is
+  constructed here instead, against arithmetic this file does itself.
+  Its derivation is documented where it is built
 """
 
 from __future__ import annotations
@@ -32,10 +35,19 @@ import pathlib
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, mult, ssa
+from btclib_libsecp256k1 import dsa, mult, recovery, ssa
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+# and its field prime and generator: the recovery below is computed here
+# as well as by the bindings, which is what holds one to the other
+P = 2**256 - 2**32 - 977
+G = (
+    0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+    0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8,
+)
+
+Point = tuple[int, int] | None
 
 
 def der_decode(sig: bytes) -> tuple[int, int]:
@@ -57,6 +69,40 @@ def der_decode(sig: bytes) -> tuple[int, int]:
         cursor += 2 + length
     assert cursor == len(sig), "trailing garbage in DER"
     return ints[0], ints[1]
+
+
+def point_add(point_1: Point, point_2: Point) -> Point:
+    """Add two points of secp256k1, None being the point at infinity."""
+    if point_1 is None:
+        return point_2
+    if point_2 is None:
+        return point_1
+    if point_1[0] == point_2[0] and (point_1[1] + point_2[1]) % P == 0:
+        return None
+    if point_1 == point_2:
+        slope = 3 * point_1[0] * point_1[0] * pow(2 * point_1[1], -1, P) % P
+    else:
+        slope = (point_2[1] - point_1[1]) * pow(point_2[0] - point_1[0], -1, P) % P
+    x = (slope * slope - point_1[0] - point_2[0]) % P
+    return x, (slope * (point_1[0] - x) - point_1[1]) % P
+
+
+def point_mul(scalar: int, point: Point) -> Point:
+    """Multiply a point of secp256k1 by a scalar, double and add."""
+    result: Point = None
+    addend = point
+    while scalar:
+        if scalar & 1:
+            result = point_add(result, addend)
+        addend = point_add(addend, addend)
+        scalar >>= 1
+    return result
+
+
+def compressed(point: Point) -> bytes:
+    """Serialize a point of secp256k1 in its 33-byte compressed form."""
+    assert point is not None, "the point at infinity has no serialization"
+    return bytes([2 + (point[1] & 1)]) + point[0].to_bytes(32, "big")
 
 
 def bip340_vectors() -> list[dict[str, str]]:
@@ -102,6 +148,97 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
         # structurally invalid inputs raise instead of returning false
         result = False
     assert result == expected, vector["comment"]
+
+
+# A signature whose nonce point has an x coordinate above the group
+# order, which is what a recovery id of 2 or 3 says. No search produces
+# one: x(kG) lands in [n, p) with probability about 2**-128, and finding
+# a k that puts it there is the discrete logarithm problem. So the point
+# comes first and the signature is built around it, which needs no k at
+# all -- recovery is r**-1 (sR - eG), an equation in R rather than in its
+# logarithm, and the key it answers with is defined by that equation
+# rather than by a signer. Nobody holds the private key of this
+# signature, and nothing here needs to.
+#
+# x is the smallest one above the order that is on the curve, and s is an
+# arbitrary low-s scalar, low so that the DER conversion of the same
+# signature is one dsa.verify accepts
+HIGH_X_NONCE = N + 2
+HIGH_X_S = 0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
+HIGH_X_MSG = hashlib.sha256(b"btclib_libsecp256k1 recid 2 and 3").digest()
+
+
+@pytest.mark.parametrize("recid", [2, 3])
+def test_recovery_of_a_high_x_nonce(recid: int) -> None:
+    """Recover a key from a signature whose nonce point x exceeds the order.
+
+    recovery.py accepts `recid in range(4)` and the suite only ever fed
+    it 0 and 1, so half of the accepted domain reached libsecp256k1 from
+    no test. What the high bit of the recovery id says is that the x
+    coordinate of the nonce point was reduced modulo the order on the way
+    into r, so recovery has to add the order back before decompressing
+    it; getting that wrong recovers a different key, or none.
+
+    The recovered key is compared against the recovery equation computed
+    here in python, not against something these bindings produced.
+    """
+    # n itself is on the curve, and would make r zero; n + 1 is not
+    assert pow((pow(N + 1, 3, P) + 7) % P, (P - 1) // 2, P) == P - 1
+    y_squared = (pow(HIGH_X_NONCE, 3, P) + 7) % P
+    y = pow(y_squared, (P + 1) // 4, P)
+    assert pow(y, 2, P) == y_squared, "n + 2 is not on the curve"
+
+    # the low bit of the recovery id is the parity of that y
+    if (y % 2 == 0) != (recid == 2):
+        y = P - y
+    r = HIGH_X_NONCE - N
+    e = int.from_bytes(HIGH_X_MSG, "big") % N
+    expected = compressed(
+        point_mul(
+            pow(r, -1, N),
+            point_add(point_mul(HIGH_X_S, (HIGH_X_NONCE, y)), point_mul(N - e, G)),
+        )
+    )
+
+    signature = r.to_bytes(32, "big") + HIGH_X_S.to_bytes(32, "big")
+    pubkey = recovery.recover(HIGH_X_MSG, signature, recid)
+    assert pubkey == expected
+
+    # and it is a key this signature verifies under, which is the whole
+    # point of recovering one
+    assert dsa.verify(HIGH_X_MSG, pubkey, recovery.to_der(signature, recid))
+    # the same signature read as a low recovery id answers another key,
+    # so the high bit is doing something rather than being ignored
+    assert recovery.recover(HIGH_X_MSG, signature, recid - 2) != pubkey
+
+
+def test_high_s_is_carried_through_recovery_unchanged() -> None:
+    """recovery.recover and recovery.to_der leave a high-s signature alone.
+
+    `to_der` documents that it does not normalize s, and nothing held it
+    to that. Negating s modulo the order is the malleability ECDSA has:
+    the result is a second valid signature of the same message under the
+    same key, and it flips the parity of the nonce point, so it is the
+    other recovery id that recovers the key from it.
+    """
+    msg = hashlib.sha256(b"btclib_libsecp256k1 high s").digest()
+    prvkey = 7
+    signature, recid = recovery.sign(msg, prvkey)
+    pubkey = recovery.recover(msg, signature, recid)
+    s = int.from_bytes(signature[32:], "big")
+    assert s <= N // 2, "libsecp256k1 signs low-s"
+
+    high_s = signature[:32] + (N - s).to_bytes(32, "big")
+    assert recovery.recover(msg, high_s, recid ^ 1) == pubkey
+    assert recovery.recover(msg, high_s, recid) != pubkey
+
+    der = recovery.to_der(high_s, recid ^ 1)
+    assert not dsa.is_low_s(der)
+    # which is why dsa.verify refuses it, and normalizing recovers the
+    # signature dsa.sign would have produced
+    assert not dsa.verify(msg, pubkey, der)
+    assert dsa.verify(msg, pubkey, dsa.normalize(der))
+    assert dsa.normalize(der) == dsa.sign(msg, prvkey)
 
 
 # (secret key, message, k, r, s)
