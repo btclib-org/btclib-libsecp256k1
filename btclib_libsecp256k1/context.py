@@ -23,6 +23,10 @@ class _Reported(threading.local):
 
     A callback runs on the thread of the call that triggered it, so a
     thread local is what attributes a message to the right call.
+
+    Attributes:
+        illegal: the last violated precondition, or None.
+        error: the last internal error, or None.
     """
 
     illegal: str | None = None
@@ -33,12 +37,22 @@ _reported = _Reported()
 
 
 def _record_illegal(message: CData, data: CData) -> None:
-    """Record a violated precondition. Called by libsecp256k1."""
+    """Record a violated precondition. Called by libsecp256k1.
+
+    Args:
+        message: the failed condition, as a C string.
+        data: the pointer the callback was registered with, NULL here.
+    """
     _reported.illegal = ffi.string(message).decode()
 
 
 def _record_error(message: CData, data: CData) -> None:
-    """Record an internal error. Called by libsecp256k1."""
+    """Record an internal error. Called by libsecp256k1.
+
+    Args:
+        message: the failed condition, as a C string.
+        data: the pointer the callback was registered with, NULL here.
+    """
     _reported.error = ffi.string(message).decode()
 
 
@@ -76,6 +90,14 @@ def check() -> None:
     this. It is meant for a call made through `lib` directly, as a
     MuSig2 session is, and it reports what was last recorded: call it
     right after the call whose return value you are explaining.
+
+    What was recorded is cleared, so a second call reports nothing and
+    a later one cannot inherit this call's message.
+
+    Raises:
+        ValueError: if libsecp256k1 reported a violated precondition.
+        RuntimeError: if it reported an internal error, which takes
+            precedence, being the graver of the two.
     """
     illegal, error = _reported.illegal, _reported.error
     _reported.illegal = _reported.error = None

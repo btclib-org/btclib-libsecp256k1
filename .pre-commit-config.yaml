@@ -178,6 +178,23 @@ repos:
         args: [--fix]
       - id: ruff-format
         name: ruff (format, in place fixes)
+  # what ruff's D rules do not reach: they ask that a docstring exists,
+  # and this asks that it documents the arguments and the return value.
+  # The configuration is in pyproject.toml, next to the ruff one.
+  #
+  # Scoped to the package, which is where the contract of a compiled
+  # wheel has to live: a caller reading help() or an IDE tooltip has no
+  # source to fall back on. A test function documents what it claims, not
+  # its fixtures, and the build scripts are read from the source tree by
+  # whoever changes them
+  - repo: https://github.com/jsh9/pydoclint
+    rev: 0.9.1
+    hooks:
+      - id: pydoclint
+        name: pydoclint (arguments and return values)
+        args: [--config=pyproject.toml]
+        files: ^btclib_libsecp256k1/.*\.py$
+
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.3.0
     hooks:

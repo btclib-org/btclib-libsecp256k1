@@ -390,6 +390,31 @@ ignore = [
 # wraps the decorator over three lines to say the same thing
 parametrize-names-type = "csv"
 
+# what keeps the docstrings of the boundary complete, ruff having no
+# rule for a missing argument: pydocstyle below asks that a docstring
+# exists, and this asks that it says what the function takes and gives
+# back. Run as a hook, over btclib_libsecp256k1 only; see the comment
+# there for the scope
+[tool.pydoclint]
+# napoleon renders it, which is what docs/source/conf.py enables, so the
+# sections here are the ones sphinx already understands
+style = "google"
+# the types are in the signature, and mypy is strict: repeating them in
+# the docstring is a second place to be wrong
+arg-type-hints-in-docstring = false
+check-return-types = false
+# the default skips a docstring that is only a summary line, which is
+# exactly the state this check exists to end: without it every function
+# documented in one line passes, and the gate holds nothing
+skip-checking-short-docstrings = false
+# and this one is off, deliberately. It compares the Raises section with
+# the `raise` statements of the body, and these wrappers raise mostly
+# through what they call -- _scalar.scalar, keys.parse, keys.serialize --
+# so what a caller catches is not what the body raises. Kept on, it would
+# force each docstring to document its own body instead of its contract,
+# which is the opposite of what these sections are for
+skip-checking-raises = true
+
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
 

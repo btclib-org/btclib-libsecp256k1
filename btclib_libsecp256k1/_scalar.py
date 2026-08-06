@@ -27,6 +27,18 @@ def scalar(num: bytes | int, name: str) -> bytes:
     call. bytes are not zeroized either, so what they buy is only that
     no arithmetic on the secret happened here; scalar arithmetic that
     must not leak belongs where that can be promised.
+
+    Args:
+        num: the scalar, exactly 32 bytes or an int in [0, 2**256).
+        name: what the scalar is, as the exception should call it.
+
+    Returns:
+        The scalar as 32 bytes, big endian.
+
+    Raises:
+        ValueError: if bytes are not exactly 32 long, or if an int does
+            not fit in 32 bytes. Whether the value is a valid scalar,
+            i.e. in [1, n-1], is for libsecp256k1 to say.
     """
     if isinstance(num, int):
         # an int outside the 32-byte range is out of domain like any

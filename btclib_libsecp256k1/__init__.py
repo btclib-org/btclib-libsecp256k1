@@ -30,6 +30,18 @@ def _load_lib(module: Any) -> Any:
     enclosing scope, because only one of the two branches below exists
     in any given build: the other one is only reachable, and therefore
     only testable, with a stand-in.
+
+    Args:
+        module: the compiled extension module, or a stand-in for it.
+
+    Returns:
+        The object every wrapper calls libsecp256k1 through: the `lib`
+        of a static extension, or what `ffi.dlopen` returns for the
+        shared object shipped beside a dynamic one.
+
+    Raises:
+        ImportError: if the extension carries no linked-in library and
+            no shared object beside it can be loaded.
     """
     # a static extension has the library linked in
     if hasattr(module, "lib"):

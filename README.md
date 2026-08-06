@@ -29,6 +29,38 @@ To install (and/or upgrade):
 
     python -m pip install --upgrade btclib_libsecp256k1
 
+## Quickstart
+
+Sign and verify, ECDSA and BIP340. Every line below is executed by the
+test suite, on every interpreter and every kind of wheel, so an example
+that stops working fails a build rather than sitting here:
+
+    >>> import hashlib
+    >>> from btclib_libsecp256k1 import dsa, keys, mult, ssa, xonly
+
+    >>> # BIP340 test vector 1; yours comes from os.urandom or a wallet
+    >>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
+    >>> pubkey = keys.serialize(keys.parse(mult.mult_(prvkey)))
+    >>> msg = hashlib.sha256(b"hello").digest()
+
+ECDSA, over the 32-byte hash, with the deterministic RFC6979 nonce:
+
+    >>> signature = dsa.sign(msg, prvkey)
+    >>> dsa.verify(msg, pubkey, signature)
+    True
+
+BIP340 Schnorr, over the same hash, against the x-only key:
+
+    >>> xonly_pubkey, parity = xonly.from_pubkey(pubkey)
+    >>> signature = ssa.sign(msg, prvkey)
+    >>> ssa.verify(msg, xonly_pubkey, signature)
+    True
+
+Both take the private key as `bytes` or as an `int`, and both return
+`bytes`. What each argument may be, and what is refused rather than
+coerced, is *What the boundary checks* below; every function states its
+own contract in its docstring.
+
 ## Versioning
 
 btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
