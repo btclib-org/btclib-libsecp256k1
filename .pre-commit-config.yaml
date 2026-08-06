@@ -258,27 +258,44 @@ repos:
   # with --no-verify, an edit from the web interface, a fork.
   #
   # The test data of a signing library is private keys by the hundred,
-  # published upstream and vendored here to be compared against, so the
-  # two json vector files are 398 findings on their own. They are recorded
-  # in .secrets.baseline as already reviewed rather than excluded from the
-  # scan: an exclusion would have made those files blind for good, and the
-  # difference is not theoretical — an AWS key planted in one of them was
-  # not seen while they were excluded, and is seen now.
-  # The baseline was generated with the two entropy plugins off, and it is
-  # the baseline that governs which plugins run. That is a deliberate
-  # limit: with them on, the baseline grows from 398 entries in 2 files to
-  # 1829 in 5, and every new hex constant in any test fails the hook until
-  # someone regenerates it — in files made of nothing but 64-character hex
-  # strings, a new one is what a legitimate vector looks like, so the
-  # check would report the work rather than the risk.
-  # Adding a vector to those two files does require regenerating the
-  # baseline; see CONTRIBUTING.md
+  # published upstream and vendored here to be compared against. Nothing
+  # is excluded from the scan — an exclusion would make those files blind
+  # for good, and the difference is not theoretical: an AWS key planted in
+  # one of them was not seen while they were excluded, and is seen now.
+  #
+  # What differs between the two hooks below is the plugin set, and it is
+  # the baseline that governs it, one baseline each:
+  #
+  # - the tree runs every plugin, the two entropy detectors included. Those
+  #   are the ones worth having where the free plan gives no generic secret
+  #   scanning at all, and outside the vendored data they cost 38 findings,
+  #   reviewed once: 37 hex constants written inline in two test files, and
+  #   a CMake flag the base64 detector reads as a secret;
+  # - the vendored vector data runs the same plugins with the entropy pair
+  #   off. Those files are 64-character hex and nothing else, so with the
+  #   detectors on a new vector is indistinguishable from a new secret and
+  #   the check reports the work rather than the risk. The keyword, private
+  #   key and provider-token detectors — the ones that caught the planted
+  #   AWS key — keep running over them.
+  #
+  # The two hooks partition the tree: what the second matches, the first
+  # excludes, through the filter recorded in its own baseline rather than a
+  # second copy of the pattern here. That filter also names the second
+  # baseline file, which is 40-character hashes by the hundred:
+  # detect-secrets skips a baseline of its own accord, but only the one
+  # --baseline names. Adding a vector to a file the second hook matches
+  # requires regenerating that baseline; see CONTRIBUTING.md, which carries
+  # both commands
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         name: detect-secrets (credentials of other systems)
         args: [--baseline, .secrets.baseline]
+      - id: detect-secrets
+        name: detect-secrets (the vendored vector data)
+        args: [--baseline, .secrets.vectors.baseline]
+        files: ^tests/.*\.(csv|json)$
 
   # keep uv.lock in sync with pyproject.toml. The release workflow asserts
   # the same thing with uv lock --check, and every uv command in CI passes
