@@ -68,9 +68,15 @@ class CustomBuildHook(BuildHookInterface[Any]):
         An sdist returns at once, carrying sources and no build; a wheel
         gets `pure_python` cleared, every artifact force-included under its
         own name, and one of the two tags -- inferred for a static build,
-        `py3-none-<platform>` for a dynamic one. A wheel holding both kinds
-        is a build that went wrong in a way nothing downstream could
-        notice, so it is reported here rather than shipped quietly.
+        `py3-none-<platform>` for a dynamic one.
+
+        Raises RuntimeError unless the modules agree on which of the two it
+        is. The tag is a property of the whole wheel, so a wheel holding
+        both kinds has no tag that is true of it: `py3-none-<platform>`
+        over a `cpNN` extension is installable on any interpreter of that
+        platform and broken on most of them. Nothing downstream could
+        notice, and no configuration CI builds can produce it -- which is
+        why it is refused here rather than reported and shipped.
         """
         if self.target_name != "wheel":
             return
@@ -82,7 +88,12 @@ class CustomBuildHook(BuildHookInterface[Any]):
             shutil.rmtree(build_dir)
 
         build_data["pure_python"] = False
-        static = True
+        # one entry per module, True where libsecp256k1 is linked into the
+        # extension. A set rather than a running flag: the disagreement is
+        # what has to be caught, and a flag catches it in one order of the
+        # modules only -- a dynamic module after a static one used to leave
+        # the wheel tagged py3-none with no message at all
+        modes = set()
 
         for script, ext_name in cffi_config:
             ext = self.get_ext_object(script, ext_name)
@@ -93,18 +104,20 @@ class CustomBuildHook(BuildHookInterface[Any]):
             temp_dir.mkdir(parents=True)
 
             ffi, artifacts = ext.create_cffi(temp_dir)
-
-            if ffi._assigned_source[1]:  # static
-                if not static:
-                    msg = "Warning: this wheel contains both dynamic and static extensions"
-                    print(msg)
-            else:  # dynamic
-                static = False
+            modes.add(bool(ffi._assigned_source[1]))
 
             for artifact in artifacts:
                 build_data["force_include"][artifact] = artifact.name
 
-        if static:
+        # an empty set is the same failure seen from the other side: a
+        # wheel with pure_python cleared and no extension in it
+        if len(modes) != 1:
+            raise RuntimeError(
+                "the cffi modules disagree on static/dynamic, "
+                f"or there are none: {modes}"
+            )
+
+        if modes.pop():
             build_data["infer_tag"] = True
         else:
             build_data["tag"] = f"py3-none-{self.dynamic_platform_tag()}"
