@@ -61,19 +61,20 @@ the release it rehearses.
 
 ## Cutting a release
 
-Two of the sentinels are worth dispatching before the tag rather than
-waiting for their cron, because what they answer is cheaper to know before a
-version is consumed than after. Neither gates anything, so neither will stop
-you: reading them is the point.
+`latest` is worth dispatching before the tag rather than waiting for its
+cron, because what it answers is cheaper to know before a version is
+consumed than after. It gates nothing, so it will not stop you: reading
+it is the point. It resolves every dependency at its newest and then runs
+the suite, the lint gate and the packaging checks; a release ships what
+`uv.lock` pins, so a red run here does not make the release wrong — it
+says the next dependency bump is going to be work, and that is worth
+knowing before rather than during.
 
-- **`latest`**, which resolves every dependency at its newest and then runs
-  the suite, the lint gate and the packaging checks. A release ships what
-  `uv.lock` pins, so a red run here does not make the release wrong — it
-  says the next dependency bump is going to be work, and that is worth
-  knowing before rather than during
-- **`mutation`**, if the release added or changed a wrapper. A surviving
-  mutant is a test nobody has written, and the release is the last moment
-  at which adding it costs nothing
+`mutation` is not: it asks whether the suite would notice a wrong line,
+which a release does not change the answer to, and a session is measured
+in minutes to hours against a schedule already built for the weekend it
+runs on regardless. Dispatching it as part of cutting a release conflates
+two independent activities for no question a release-timing answers.
 
 Then:
 
@@ -137,16 +138,25 @@ Then:
    0.7.1 rehearsal did on TestPyPI, and a version survives a failed
    exchange: delete the tag, fix the registration, tag again
 6. check that what was published installs, in an environment of its own
-   rather than one that may already hold it:
+   rather than one that may already hold it, and run something with it —
+   installing being weaker than working where a compiled extension is
+   what was installed:
 
-       python -m pip install --upgrade btclib_libsecp256k1
+       uv run --isolated --no-project --with btclib_libsecp256k1==0.7.1 \
+         python -c "
+       from btclib_libsecp256k1 import ssa
+       msg = bytes(32)
+       pub = bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9')
+       sig = bytes.fromhex('E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0')
+       assert ssa.verify(msg, pub, sig)
+       "
 
-   then run something with it, and check the attestations, the two checks
-   the rehearsal makes and for the same reasons: a compiled extension can
-   install and not work, and the attestations are under
-   `/integrity/<project>/<version>/<filename>/provenance` rather than in
-   the JSON API, which answers `null` for `provenance` even where they
-   are
+   BIP340 vector 0, the same check `published` makes below. Then check
+   the attestations, the two checks the rehearsal makes and for the same
+   reasons: a compiled extension can install and not work, and the
+   attestations are under `/integrity/<project>/<version>/<filename>/provenance`
+   rather than in the JSON API, which answers `null` for `provenance`
+   even where they are
 7. run the `published` workflow from the Actions tab, and expect it green:
    it installs from PyPI what was just uploaded, on every platform and at
    both ends of the supported interpreter range, and verifies BIP340
@@ -165,10 +175,16 @@ Then:
    Rebase and merge replays `dev`'s commits with new SHAs, so the moment
    a release is merged the two branches hold the same tree through
    different histories, and the merge base between them stops advancing.
-   Left alone, the next release's pull request presents the whole of this
-   one as new, and asks the rebase to replay commits `master` already
-   carries. Archive what is about to become unreachable, then move the
-   branch:
+   Left alone this is not the cosmetic issue it looks like: it is what the
+   pull request that added this very step hit, during 0.7.1.1's own
+   release -- its branch built against `dev` before this step's own reset
+   ran, so once that reset moved `dev`, GitHub reported the pull request
+   `CONFLICTING` and `gh pr merge --rebase` on it refused with `the merge
+   commit cannot be cleanly created`. Reapplying "add this line" where a
+   rebase-and-merge already added it under a different SHA is a conflict,
+   not a no-op, and GitHub does not drop the commit the way a local
+   `git rebase` would. Archive what is about to become unreachable, then
+   move the branch:
 
        git fetch origin
        git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
@@ -297,19 +313,21 @@ without rebuilding anything.
    there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
    installs. The `version-check` job refuses a tag whose version is not
    digits and dots, so the mistake stops before anything is built
-2. approve it, then check that what was published installs. A re-run has
-   to be approved again, the protection applying to each deployment
-   attempt rather than once per run:
+2. approve it, then check that what was published installs, in an
+   environment of its own rather than one that may already hold it. A
+   re-run has to be approved again, the protection applying to each
+   deployment attempt rather than once per run:
 
-   <!-- markdownlint-disable MD013 -->
+       uv run --isolated --no-project \
+         --index-url https://test.pypi.org/simple/ \
+         --extra-index-url https://pypi.org/simple/ \
+         --index-strategy unsafe-best-match --prerelease allow \
+         --with btclib_libsecp256k1==0.7.1.dev1 \
+         python -c "import btclib_libsecp256k1 as m; print(m.__version__)"
 
-       pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre btclib_libsecp256k1
-
-   <!-- markdownlint-enable MD013 -->
-
-   the extra index being needed for `cffi`, which TestPyPI does not have.
-   The version installed carries the `.dev<run number>` suffix, and
-   `--pre` is what makes it resolvable
+   the extra index being needed for `cffi`, which TestPyPI does not have,
+   and `--prerelease allow` for the `.dev<run number>` suffix the version
+   installed carries
 3. run something with it, installing being weaker than working where a
    compiled extension is what was installed. The check the `published`
    workflow makes — BIP340 vector 0, and the round trip of a signature
@@ -370,9 +388,13 @@ next fork.
   round, the log itself warning that the claims are for debugging and
   not for configuring from
 - on GitHub, repository Settings, Environments: create the `pypi` and
-  `testpypi` environments, each with the required reviewers who approve.
-  Leaving `testpypi` without reviewers would be the one part of a
-  release that the rehearsal stops exercising
+  `testpypi` environments, each with the required reviewers who approve
+  -- `fametrano` on both. Self-review stays allowed on purpose: the
+  maintainer who pushes the tag is the reviewer, and forbidding it would
+  deadlock a one-maintainer release. The approval is a confirmation
+  step, not a second pair of eyes; it becomes one as soon as there is a
+  second reviewer to add. Leaving `testpypi` without reviewers would be
+  the one part of a release that the rehearsal stops exercising
 - `pypi` carries a deployment branch policy besides, a custom rule
   admitting the tag pattern `v*`, that environment being reachable only
   from a tag; `testpypi` has none, being reached from a branch by
