@@ -24,6 +24,14 @@ jobs:
   # that the tagged commit does not lint
   lint:
     uses: ./.github/workflows/lint.yml
+    with:
+      # what keeps this run out of the branch concurrency groups: inside a
+      # called workflow github.ref is the ref of this workflow's own run,
+      # so without it a rehearsal dispatched on a branch and a push to that
+      # branch share a group and cancel each other. The reasoning is in
+      # lint.yml, next to the group; the value only has to be a string no
+      # branch group can contain
+      concurrency-suffix: "-release"
 
   # what a version cannot survive being wrong about, checked before
   # anything is built and long before anything is uploaded: a version is
@@ -116,6 +124,8 @@ jobs:
       version-suffix: >-
         ${{ github.event_name == 'workflow_dispatch'
         && format('.dev{0}', github.run_number) || '' }}
+      # see the lint job above
+      concurrency-suffix: "-release"
 
   # the two publish jobs differ only in where they upload to, and are two
   # jobs rather than one parameterized by an expression on purpose. The

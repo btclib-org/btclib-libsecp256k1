@@ -209,7 +209,11 @@ findings.
 - `concurrency` groups are named literally (`test-${{ github.ref }}`),
   never through `github.workflow`: in a called workflow what that resolves
   to is undocumented, and if it is the caller's name the two workflows a
-  release calls would cancel each other
+  release calls would cancel each other. `github.ref` in a called workflow
+  is the *caller's* ref, so a reusable workflow also takes a
+  `concurrency-suffix` input, and `release.yml` passes one: without it a
+  rehearsal dispatched on a branch shares a group with a push to that
+  branch, and one cancels the other
 - `actions/checkout` passes `persist-credentials: false`, so the token
   does not stay in `.git/config` where an artifact upload could carry it
 - uv commands pass `--locked`, never `--frozen`: the second takes

@@ -23,6 +23,13 @@ on:
   pull_request:
   # allows the release workflow to reuse this gate
   workflow_call:
+    inputs:
+      concurrency-suffix:
+        description: >
+          Appended to the concurrency group, and the release workflow is
+          the only caller that passes one. See the group below.
+        type: string
+        default: ""
   # the escape hatch: a run on demand for a branch whose pull request is
   # not open yet
   workflow_dispatch:
@@ -41,9 +48,21 @@ permissions:
 # compute the same group when the release workflow calls both, and
 # cancel-in-progress would have the second cancel the first: a release
 # losing either its lint gate or its whole build matrix, on a path that
-# runs once per release and where nobody is watching for a cancellation
+# runs once per release and where nobody is watching for a cancellation.
+#
+# github.ref has the same shape of problem one level down, and it is why
+# the suffix is there. Inside a called workflow that context is the
+# caller's ref, so a rehearsal -- a workflow_dispatch of release.yml on a
+# branch, which is what RELEASING.md prescribes -- computes
+# lint-refs/heads/<branch>, the very group a push to that branch or a
+# direct dispatch of this workflow computes. One then kills the other:
+# either the rehearsal dies mid-build, or it cancels the run of the push.
+# A tag run is unaffected, refs/tags/v* being a ref nothing else uses.
+# release.yml passes a suffix of its own, which keeps the release path
+# out of the branch groups while still letting a second rehearsal of the
+# same branch supersede the first
 concurrency:
-  group: lint-${{ github.ref }}
+  group: lint-${{ github.ref }}${{ inputs.concurrency-suffix }}
   cancel-in-progress: true
 
 jobs:
