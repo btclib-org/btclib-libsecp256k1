@@ -1,4 +1,12 @@
 ---
+# TEMPORARY: every matrix in this file is cut to ubuntu-latest and CPython
+# 3.14, and build-cibuildwheel to the cp314 identifiers, so that a series of
+# pull requests can be turned around while GitHub is degraded and the full
+# matrix is neither fast nor trustworthy. Each site says so and carries the
+# list it was cut from; the commit that did it is one `git revert` away, and
+# reverting it is what restores them all. Nothing here is a statement about
+# what the package supports: the eleven kinds of wheel are unchanged, and no
+# release may be cut while this note stands
 name: test
 
 on:
@@ -96,6 +104,12 @@ jobs:
     # off, an interpreter that is missing is a job that fails instead
     env:
       UV_PYTHON_DOWNLOADS: never
+      # TEMPORARY, see the note at the top of this file: the interpreters
+      # cibuildwheel builds for are not a matrix of this workflow but a
+      # `skip` in [tool.cibuildwheel], so cutting them to 3.14 is an
+      # override here rather than an edit to pyproject.toml, which a
+      # release reads. Unset, this job builds seven wheels per platform
+      CIBW_BUILD: "cp314-*"
     strategy:
       # as for the test matrices, and here it costs more: with the
       # default, one platform failing (or one flaky runner) cancels the
@@ -113,16 +127,11 @@ jobs:
         # everywhere, provisioned as a build requirement: no runner needs
         # a toolchain installed by hand.
         # Actions drops x86_64 macOS in August 2027, after which no runner
-        # can build a macosx x86_64 wheel at all
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-          ]
+        # can build a macosx x86_64 wheel at all.
+        # TEMPORARY, see the note at the top of this file. The full list is
+        #   [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest,
+        #    windows-latest, windows-11-arm]
+        os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,8 +195,10 @@ jobs:
       fail-fast: false
       matrix:
         # ubuntu-latest/macos-26-intel are x86_64,
-        # ubuntu-24.04-arm/macos-latest are arm64
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest]
+        # ubuntu-24.04-arm/macos-latest are arm64.
+        # TEMPORARY, see the note at the top of this file. The full list is
+        #   [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest]
+        os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -312,7 +323,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # TEMPORARY, see the note at the top of this file. The full list is
+        #   [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
         # the wheel jobs all build with an interpreter of the runner's own
         # architecture, so nothing else exercises a build whose target is
         # not the host: an emulated x86-64 interpreter on Windows arm64,
@@ -320,10 +333,15 @@ jobs:
         # taking the host architecture left every libsecp256k1 symbol
         # unresolved at link time. This is the platform where an
         # architecture can be requested that is not the runner's, and the
-        # sdist is the path that compiles on the user's machine
-        include:
-          - os: windows-11-arm
-            architecture: x64
+        # sdist is the path that compiles on the user's machine.
+        # TEMPORARY, see the note at the top of this file. The entry is
+        #   include:
+        #     - os: windows-11-arm
+        #       architecture: x64
+        # and the empty value below stands in for it: two expressions read
+        # matrix.architecture, and actionlint rejects a property no entry
+        # of the matrix defines
+        architecture: [""]
     needs: build-sdist
 
     steps:
@@ -500,30 +518,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-          ]
+        # TEMPORARY, see the note at the top of this file. The full list is
+        #   [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest,
+        #    windows-latest]
+        os: [ubuntu-latest]
         # 3.14t, the free-threaded interpreter, matters here in particular:
         # the dynamic wheel is tagged py3-none, so it is what a
         # free-threaded interpreter installs, and unlike the static wheels
         # nothing else exercises it (cibuildwheel tests every wheel it
-        # builds, including cp314t; this job has no such counterpart)
-        python-version:
-          [
-            "3.10",
-            "3.11",
-            "3.12",
-            "3.13",
-            "3.14",
-            "3.14t",
-            "pypy-3.10",
-            "pypy-3.11",
-          ]
+        # builds, including cp314t; this job has no such counterpart).
+        # TEMPORARY, see the note at the top of this file. The full list is
+        #   ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.10",
+        #    "pypy-3.11"]
+        python-version: ["3.14"]
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
@@ -574,17 +581,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-          ]
-        python-version:
-          ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
+        # TEMPORARY, see the note at the top of this file. The full lists are
+        #   os: [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel,
+        #        macos-latest, windows-latest, windows-11-arm]
+        #   python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t",
+        #                    "pypy-3.11"]
+        os: [ubuntu-latest]
+        python-version: ["3.14"]
         # cibuildwheel already runs the suite against every wheel it
         # builds, cp314t included: what this job adds is that pip, given a
         # directory holding all of them, selects the right one, which for
@@ -592,14 +595,15 @@ jobs:
         # PyPy wheels are not built on Windows, on either architecture.
         # CPython has no Windows arm64 build before 3.11, so there is no
         # interpreter to test a win_arm64 wheel against and cibuildwheel
-        # does not produce one
-        exclude:
-          - os: windows-latest
-            python-version: "pypy-3.11"
-          - os: windows-11-arm
-            python-version: "pypy-3.11"
-          - os: windows-11-arm
-            python-version: "3.10"
+        # does not produce one.
+        # TEMPORARY, see the note at the top of this file. The entries are
+        #   exclude:
+        #     - os: windows-latest
+        #       python-version: "pypy-3.11"
+        #     - os: windows-11-arm
+        #       python-version: "pypy-3.11"
+        #     - os: windows-11-arm
+        #       python-version: "3.10"
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       OS_NAME: ${{ matrix.os }}
