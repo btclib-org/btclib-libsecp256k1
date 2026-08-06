@@ -153,10 +153,19 @@ repos:
     rev: 0.1.1
     hooks:
       - id: copyright-notice
-        args: [--notice=COPYRIGHT]
-        # "python" as a filename pattern never matched anything: the
-        # notice was checked on no file at all
-        files: \.py$
+        # --enforce-all, because without it the hook intersects the files
+        # pre-commit hands it with `git diff --staged --diff-filter=A` and
+        # checks the notice on newly *added* staged files alone. On a clean
+        # checkout that set is empty, so the run in the lint workflow --
+        # `pre-commit run --all-files`, the one that gates a pull request --
+        # was checking no file at all, whatever the pattern below matched
+        args: [--notice=COPYRIGHT, --enforce-all]
+        # "python" as a filename pattern never matched anything either. The
+        # optional i is the same miss one extension over:
+        # stubs/_btclib_libsecp256k1.pyi is a source file of this project,
+        # named in mypy_path and force-included in the sdist, and its header
+        # was the pre-MIT one for as long as nothing read it
+        files: \.pyi?$
   # ruff replaces black, isort, flake8, autoflake, pyupgrade, bandit,
   # pydocstringformatter and yesqa: one tool, one config section in
   # pyproject.toml, and a fraction of the runtime. The rule selection
