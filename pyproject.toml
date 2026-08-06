@@ -470,6 +470,9 @@ max-complexity = 10
 # says happened, the issue it opens or closes being the same report a
 # second way; matching btclib's own T201 exemption for the same script
 ".github/scripts/check_vendored_vectors.py" = ["T201"]
+# and the mutation counter, whose one line of output is what the workflow
+# step exists to put in the log: same exemption, same reason
+".github/scripts/mutation_counts.py" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
