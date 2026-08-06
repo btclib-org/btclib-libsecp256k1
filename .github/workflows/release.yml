@@ -43,6 +43,8 @@ jobs:
     name: Check the declared versions
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      version-suffix: ${{ steps.suffix.outputs.version-suffix }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,6 +109,36 @@ jobs:
             exit 1
           fi
 
+      # a release ships the version the tree declares; a rehearsal cannot,
+      # TestPyPI refusing a version it has already seen, so it appends a
+      # .dev segment -- which sorts before the release it rehearses
+      # whatever the number, PEP 440 ordering every dev release below the
+      # release itself.
+      #
+      # The number is the run number and the attempt together, and the
+      # attempt is the whole reason this is a step and not the expression
+      # it used to be. A re-run keeps the run id *and* the run number of
+      # the run it repeats; only run_attempt rises. So .dev<run number>
+      # was unique per dispatch and identical across the re-runs of one,
+      # and the collision surfaced as a TestPyPI 400 after the
+      # three-quarters of an hour the matrix takes. Expressions have no
+      # arithmetic, and concatenating the two numbers is unique only while
+      # their digit counts happen to line up -- so the arithmetic happens
+      # here, where the two digits reserved for the attempt can be
+      # checked rather than assumed. The job that needs the value runs
+      # after this one already
+      - name: Compute the rehearsal version suffix
+        id: suffix
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "$GITHUB_RUN_ATTEMPT" -gt 99 ]; then
+            echo "::error::attempt $GITHUB_RUN_ATTEMPT exceeds the two digits reserved for it"
+            exit 1
+          fi
+          suffix=".dev$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))"
+          echo "run $GITHUB_RUN_NUMBER attempt $GITHUB_RUN_ATTEMPT: $suffix"
+          echo "version-suffix=$suffix" >> "$GITHUB_OUTPUT"
+
   # reuse the whole build/test pipeline: every artifact the release ships
   # is built and tested here, by the very matrices that run on a push
   build:
@@ -115,15 +147,10 @@ jobs:
     needs: version-check
     uses: ./.github/workflows/test.yml
     with:
-      # a release ships the version the tree declares; a rehearsal cannot,
-      # because TestPyPI refuses a version it has already seen, so it
-      # appends .dev<run number>: unique per dispatch, and sorted before
-      # the release it rehearses (PEP 440). Re-running a finished
-      # rehearsal reuses its run number and would collide, so dispatch a
-      # fresh run instead
-      version-suffix: >-
-        ${{ github.event_name == 'workflow_dispatch'
-        && format('.dev{0}', github.run_number) || '' }}
+      # empty on the tag path, where the step computing it is skipped and
+      # a skipped step's output is the empty string: a release ships the
+      # version the tree declares
+      version-suffix: ${{ needs.version-check.outputs.version-suffix }}
       # see the lint job above
       concurrency-suffix: "-release"
 
