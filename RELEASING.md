@@ -61,19 +61,20 @@ the release it rehearses.
 
 ## Cutting a release
 
-Two of the sentinels are worth dispatching before the tag rather than
-waiting for their cron, because what they answer is cheaper to know before a
-version is consumed than after. Neither gates anything, so neither will stop
-you: reading them is the point.
+`latest` is worth dispatching before the tag rather than waiting for its
+cron, because what it answers is cheaper to know before a version is
+consumed than after. It gates nothing, so it will not stop you: reading
+it is the point. It resolves every dependency at its newest and then runs
+the suite, the lint gate and the packaging checks; a release ships what
+`uv.lock` pins, so a red run here does not make the release wrong — it
+says the next dependency bump is going to be work, and that is worth
+knowing before rather than during.
 
-- **`latest`**, which resolves every dependency at its newest and then runs
-  the suite, the lint gate and the packaging checks. A release ships what
-  `uv.lock` pins, so a red run here does not make the release wrong — it
-  says the next dependency bump is going to be work, and that is worth
-  knowing before rather than during
-- **`mutation`**, if the release added or changed a wrapper. A surviving
-  mutant is a test nobody has written, and the release is the last moment
-  at which adding it costs nothing
+`mutation` is not: it asks whether the suite would notice a wrong line,
+which a release does not change the answer to, and a session is measured
+in minutes to hours against a schedule already built for the weekend it
+runs on regardless. Dispatching it as part of cutting a release conflates
+two independent activities for no question a release-timing answers.
 
 Then:
 
