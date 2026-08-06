@@ -88,6 +88,29 @@ jobs:
             exit 1
           fi
 
+      # the fourth invariant, and the last one that was checked only
+      # after the point of no return: github-release reads the tag's
+      # section out of HISTORY.md for the release notes, and a section
+      # that is not there is a ::warning:: with generated notes as the
+      # fallback -- correct there, PyPI having accepted the upload
+      # already, and no use at all as the place the omission is found.
+      # The same awk, on the same push path as the tag comparison, so
+      # release day starts with all four green. The fallback downstream
+      # stays: it covers the release deleted by hand and recreated
+      - name: Check that HISTORY.md has a section for the tag
+        if: github.event_name == 'push'
+        run: |
+          notes=$(awk -v tag="$GITHUB_REF_NAME" '
+            $0 ~ "^## " tag "( |$)" {found=1; next}
+            /^## / && found {exit}
+            found {print}
+          ' HISTORY.md)
+          if [ -z "$notes" ]; then
+            echo "::error::HISTORY.md has no $GITHUB_REF_NAME section to release with"
+            exit 1
+          fi
+          echo "HISTORY.md documents $GITHUB_REF_NAME"
+
       # the version of the wrapped library is a second thing this package
       # declares twice: the tag named in README.md, and the commit the
       # submodule is pinned to. The tag is resolved at the source rather
