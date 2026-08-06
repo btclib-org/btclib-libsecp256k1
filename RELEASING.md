@@ -180,7 +180,47 @@ Then:
    start with `v`, `release.yml` triggering on `tags: ["v*"]`. Nothing in
    the working tree changes, the two trees being identical, and
    `git diff origin/master origin/dev` is how to say so rather than
-   assume it. Every branch still open against `dev` has had its base
+   assume it.
+
+   That last push can fail on its own, distinctly from everything above
+   it: `dev`'s branch protection blocking force pushes is not one of the
+   rules `enforce_admins` being off exempts an administrator from. That
+   toggle covers required reviews, required status checks, required
+   signatures and required linear history -- what a *pull request*
+   enforces -- and force-push protection is a rule of its own that GitHub
+   applies to every push over the git protocol regardless of who is
+   pushing, admin included. 0.7.1.1 is where this was learned: the
+   maintainer's own push, run by hand, came back
+   `remote: - Cannot force-push to this branch`, and no `--admin`-like
+   flag on `git push` exists to ask around it. What worked instead was
+   flipping the one setting that governs it, immediately before the push
+   and immediately after:
+
+       gh api repos/<owner>/<repo>/branches/dev/protection --jq \
+         '{required_status_checks, enforce_admins: .enforce_admins.enabled,
+           required_pull_request_reviews, restrictions,
+           required_linear_history: .required_linear_history.enabled,
+           allow_force_pushes: true, allow_deletions: .allow_deletions.enabled,
+           block_creations: .block_creations.enabled,
+           required_conversation_resolution: .required_conversation_resolution.enabled,
+           lock_branch: .lock_branch.enabled,
+           allow_fork_syncing: .allow_fork_syncing.enabled}' \
+         | gh api -X PUT repos/<owner>/<repo>/branches/dev/protection --input -
+
+   read the four nullable fields back first (`required_status_checks`,
+   `required_pull_request_reviews`, `restrictions`, and `required_signatures`,
+   which is its own endpoint and this PUT does not touch) and carry
+   whatever they hold into the payload unchanged -- a PUT that drops one
+   silently disables it, the same warning the master section above makes
+   about reviews and signatures. On `dev` today all three are unset, which
+   is what makes the jq filter above safe to run as shown; a `dev` with
+   any of them configured needs its current values read and kept, not
+   assumed absent. Push, then set `allow_force_pushes` back to `false`
+   through the same PUT at once: the setting, not only this one push, is
+   what stands open in between, and every other push to `dev` shares that
+   window while it is.
+
+   Every branch still open against `dev` has had its base
    moved out from under it, and reports the whole release as its own diff
    until it is rebased:
 
