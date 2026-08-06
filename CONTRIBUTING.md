@@ -316,11 +316,27 @@ Explanatory detail is wanted; decoration is not.
 
 **A docstring states the contract.** What the function takes, what it
 returns or raises, and the rule the behaviour comes from — not a
-restatement of the name. A test's docstring states what it verifies: the
-property, the published vector, the failure mode, and which side of the
-assertion is the independent one. That last part is why a docstring is
-required of a test at all — the name says which call is under test, which
-is not the same as what is being claimed about it.
+restatement of the name. In the package the first two are enforced:
+`pydoclint` requires an `Args` entry per parameter and a `Returns`
+section, in the Google style napoleon renders, so a new argument that
+nobody documented fails the gate. `Raises` is not enforced and is still
+required — these wrappers raise mostly through what they call, so the
+check that compares a `Raises` section with the body's own `raise`
+statements would ask the docstrings to be wrong; `pyproject.toml` says
+so where it turns that check off.
+
+A test's docstring states what it verifies: the property, the published
+vector, the failure mode, and which side of the assertion is the
+independent one. That last part is why a docstring is required of a test
+at all — the name says which call is under test, which is not the same as
+what is being claimed about it.
+
+**An example is executed.** Anything written as a doctest, in a docstring
+or in README.md, is run by `tests/test_examples.py` on every interpreter
+and every kind of wheel. That constrains an example to be deterministic —
+fixed keys, and a verification rather than a signature wherever the value
+depends on randomness that is not pinned — which is the price of the one
+form of documentation this repository can gate like a test.
 
 **A comment carries the reasoning, including the negative result.** Say
 why the code is as it is and why *not* the obvious alternative. The second
