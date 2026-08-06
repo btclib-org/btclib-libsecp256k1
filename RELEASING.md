@@ -14,8 +14,9 @@ them, and runs before anything is built: a `v0.7.1` tag on a tree still
 reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
 The same job checks that `uv.lock` carries the version the tree declares,
 that the libsecp256k1 release named in `README.md` is the commit the
-submodule is pinned to, and that `HISTORY.md` has a section for the tag —
-four invariants, all of them before the point of no return.
+submodule is pinned to, that `HISTORY.md` has a section for the tag, and
+that the tagged commit is on `master`. Every invariant a release rests on
+is checked there, before the point of no return.
 
 ## Which version string is which
 
@@ -360,8 +361,9 @@ metadata, which is more than `twine check --strict` can say. What it
 cannot cover is the trusted publisher on PyPI itself, a separate
 registration that can be wrong on its own, nor the deployment branch
 policy of the `pypi` environment, which the environment a rehearsal does
-reach has none of, nor the two checks of `version-check` that need a tag:
-the version comparison and the `HISTORY.md` section.
+reach has none of, nor the checks of `version-check` that need a tag: the
+version comparison, the `HISTORY.md` section, and the ancestry on
+`master`.
 
 ## When a release turns out to be broken
 
@@ -411,3 +413,10 @@ next fork.
   the whole matrix had been built:
 
       gh api repos/{owner}/{repo}/environments/pypi/deployment-branch-policies
+
+  What that rule constrains is the *name* of the ref, and nothing else: a
+  `v*` tag pushed on a branch head, on an old `dev` state or on a
+  fork-synced commit satisfies it exactly as the release tag does, and
+  the reviewer approving sees the tag name rather than its ancestry.
+  The ancestry is checked in `version-check` instead, which fails a tag
+  that is not on `master` before the matrix builds anything
