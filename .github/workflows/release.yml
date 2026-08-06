@@ -50,6 +50,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # the whole history, and every branch with it: the ancestry
+          # check below has nothing to read in the single commit the
+          # default shallow clone fetches
+          fetch-depth: 0
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
@@ -87,6 +91,26 @@ jobs:
             echo "::error::$version is not a final version; $hint"
             exit 1
           fi
+
+      # CONTRIBUTING.md and RELEASING.md both say a release is a tag on
+      # the merge commit on master; nothing enforced it. The deployment
+      # tag policy of the pypi environment constrains the *name* of the
+      # ref and nothing else, so a v* tag on a branch head, on an old dev
+      # state or on a fork-synced commit reaches the environment exactly
+      # as the release tag does -- and the reviewer approving sees the
+      # tag name, not its ancestry. This is the ancestry, before the
+      # matrix builds anything.
+      # origin/master rather than a fetch of its own: the checkout above
+      # takes the whole history, remote-tracking branches included, and a
+      # missing origin/master fails the step, which is the safe way round
+      - name: Check that the tag is on master
+        if: github.event_name == 'push'
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which is not on master"
+            exit 1
+          fi
+          echo "$GITHUB_SHA is on master"
 
       # the fourth invariant, and the last one that was checked only
       # after the point of no return: github-release reads the tag's
