@@ -26,6 +26,7 @@ import os
 import pathlib
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 from subprocess import PIPE, Popen
@@ -192,6 +193,24 @@ class FFIExtension:
         The interpreter's own configuration decides the compiler, the
         flags and the extension suffix, so that the result matches the ABI
         of the interpreter that will import it.
+
+        CC, CFLAGS and CCSHARED in that order is what `customize_compiler`
+        composes for the extensions the interpreter builds for itself, and
+        composing anything else here is how the two come apart. Dropping
+        CFLAGS was two bugs at once: the glue was compiled with no
+        optimization at all, unlike everything CMake builds beside it, and
+        on a universal2 interpreter the `-arch x86_64 -arch arm64` it
+        carries went to the link (LDSHARED has them too) but not to the
+        compile, so a single-arch object was linked dual-arch -- the one
+        macOS configuration target_architecture_options exists to support.
+
+        Nothing is filtered out of them: on macOS `sysconfig` has already
+        run the flags through `_osx_support`, which is what rewrites an
+        `-arch` the toolchain cannot build and an `-isysroot` pointing at
+        an SDK that is not installed. What was missing here was the
+        splitting -- CCSHARED went in as one argv element, which is empty
+        on a mac (clang tolerates it, gcc reads it as a missing input
+        file) and wrong the day it carries two flags.
         """
         c_filename = f"{self.name}.c"
         o_filename = f"{self.name}.o"
@@ -201,19 +220,21 @@ class FFIExtension:
 
         ffi.emit_c_code(str(c_path))
         compile_command = [
-            *get_config_var("CC").split(),
+            *shlex.split(get_config_var("CC")),
+            *shlex.split(get_config_var("CFLAGS") or ""),
+            *shlex.split(get_config_var("CCSHARED") or ""),
             f"-I{get_path('include')}",
             f"-I{get_path('platinclude')}",
-            get_config_var("CCSHARED"),
             "-c",
             str(c_filename),
             "-o",
             str(o_filename),
         ]
+        ldshared = shlex.split(get_config_var("LDSHARED"))
         link_command = [
-            get_config_var("LDSHARED").split()[0],
+            ldshared[0],
             str(o_filename),
-            *get_config_var("LDSHARED").split()[1:],
+            *ldshared[1:],
             *[f"-L{libs_dir}" for libs_dir in self.library_dirs],
             *[f"-l{lib}" for lib in self.libraries],
             "-o",
