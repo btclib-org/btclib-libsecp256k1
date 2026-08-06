@@ -86,7 +86,18 @@ Then:
    submodule has moved since
 2. add the release notes to `HISTORY.md`; if the vendored libsecp256k1
    moved, update the version named at the top of `README.md` too
-3. merge `dev` into `master` with a green CI, using **Rebase and merge**.
+3. give the pull request its title and its body before merging it, not
+   after. The title is the version; the body says what the release is —
+   what moved, what did not, and which of the two a user would notice.
+   A rebase leaves no merge commit, so none of that reaches `master`'s
+   history: the pull request is where it stays, and where a reader of
+   any commit in it arrives. A template left unfilled, or a bot's
+   summary of the diff, is not a substitute — the summary can stay, but
+   what the diff cannot say has to be written, and what a reader should
+   not have to discover at the button belongs there too.
+
+   Then merge `dev` into `master` with a green CI, using **Rebase and
+   merge** and never *Squash and merge*.
    Which button that is has to be read before it is pressed: all three
    methods are enabled on this repository, and GitHub preselects the one
    used last. *Squash and merge* is what 0.7.1 got, and it left a single
