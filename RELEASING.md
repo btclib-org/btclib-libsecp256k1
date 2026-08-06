@@ -13,8 +13,9 @@ decides which index is reached. The `version-check` job cross-checks
 them, and runs before anything is built: a `v0.7.1` tag on a tree still
 reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
 The same job checks that `uv.lock` carries the version the tree declares,
-and that the libsecp256k1 release named in `README.md` is the commit the
-submodule is pinned to.
+that the libsecp256k1 release named in `README.md` is the commit the
+submodule is pinned to, and that `HISTORY.md` has a section for the tag —
+four invariants, all of them before the point of no return.
 
 ## Which version string is which
 
@@ -359,8 +360,8 @@ metadata, which is more than `twine check --strict` can say. What it
 cannot cover is the trusted publisher on PyPI itself, a separate
 registration that can be wrong on its own, nor the deployment branch
 policy of the `pypi` environment, which the environment a rehearsal does
-reach has none of, nor the tag comparison of `version-check`, there
-being no tag.
+reach has none of, nor the two checks of `version-check` that need a tag:
+the version comparison and the `HISTORY.md` section.
 
 ## When a release turns out to be broken
 
