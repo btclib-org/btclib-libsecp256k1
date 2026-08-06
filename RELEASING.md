@@ -242,6 +242,16 @@ Then:
     A fourth number below the published one would be worse than no bump
     at all: `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever
     resolve it, and `version-check` accepts it, being digits and dots
+11. open a draft pull request from `dev` to `master` for the version step
+    10 just opened, title included, and leave its body for what step 3
+    already asked for: written before the release is cut, not
+    reconstructed from the diff at the last minute. A draft one is
+    exactly what step 3 could not be until now — everything that lands on
+    `dev` between one release and the next has a place to be described as
+    it lands, rather than a promise kept only if someone remembers to keep
+    it. Marking it ready and pressing **Rebase and merge** is what step 3
+    still is; this step is what makes reaching it with a body already
+    written the ordinary case rather than the exception
 
 ## Rehearsing on TestPyPI
 
