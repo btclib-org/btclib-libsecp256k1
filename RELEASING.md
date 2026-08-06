@@ -138,16 +138,25 @@ Then:
    0.7.1 rehearsal did on TestPyPI, and a version survives a failed
    exchange: delete the tag, fix the registration, tag again
 6. check that what was published installs, in an environment of its own
-   rather than one that may already hold it:
+   rather than one that may already hold it, and run something with it —
+   installing being weaker than working where a compiled extension is
+   what was installed:
 
-       python -m pip install --upgrade btclib_libsecp256k1
+       uv run --isolated --no-project --with btclib_libsecp256k1==0.7.1 \
+         python -c "
+       from btclib_libsecp256k1 import ssa
+       msg = bytes(32)
+       pub = bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9')
+       sig = bytes.fromhex('E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0')
+       assert ssa.verify(msg, pub, sig)
+       "
 
-   then run something with it, and check the attestations, the two checks
-   the rehearsal makes and for the same reasons: a compiled extension can
-   install and not work, and the attestations are under
-   `/integrity/<project>/<version>/<filename>/provenance` rather than in
-   the JSON API, which answers `null` for `provenance` even where they
-   are
+   BIP340 vector 0, the same check `published` makes below. Then check
+   the attestations, the two checks the rehearsal makes and for the same
+   reasons: a compiled extension can install and not work, and the
+   attestations are under `/integrity/<project>/<version>/<filename>/provenance`
+   rather than in the JSON API, which answers `null` for `provenance`
+   even where they are
 7. run the `published` workflow from the Actions tab, and expect it green:
    it installs from PyPI what was just uploaded, on every platform and at
    both ends of the supported interpreter range, and verifies BIP340
@@ -298,19 +307,21 @@ without rebuilding anything.
    there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
    installs. The `version-check` job refuses a tag whose version is not
    digits and dots, so the mistake stops before anything is built
-2. approve it, then check that what was published installs. A re-run has
-   to be approved again, the protection applying to each deployment
-   attempt rather than once per run:
+2. approve it, then check that what was published installs, in an
+   environment of its own rather than one that may already hold it. A
+   re-run has to be approved again, the protection applying to each
+   deployment attempt rather than once per run:
 
-   <!-- markdownlint-disable MD013 -->
+       uv run --isolated --no-project \
+         --index-url https://test.pypi.org/simple/ \
+         --extra-index-url https://pypi.org/simple/ \
+         --index-strategy unsafe-best-match --prerelease allow \
+         --with btclib_libsecp256k1==0.7.1.dev1 \
+         python -c "import btclib_libsecp256k1 as m; print(m.__version__)"
 
-       pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre btclib_libsecp256k1
-
-   <!-- markdownlint-enable MD013 -->
-
-   the extra index being needed for `cffi`, which TestPyPI does not have.
-   The version installed carries the `.dev<run number>` suffix, and
-   `--pre` is what makes it resolvable
+   the extra index being needed for `cffi`, which TestPyPI does not have,
+   and `--prerelease allow` for the `.dev<run number>` suffix the version
+   installed carries
 3. run something with it, installing being weaker than working where a
    compiled extension is what was installed. The check the `published`
    workflow makes — BIP340 vector 0, and the round trip of a signature
