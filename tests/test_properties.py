@@ -79,7 +79,10 @@ def test_serialization_round_trips() -> None:
     `mult` is checked to agree with the serialization it is derived from,
     and negating the private key is checked to flip the y while leaving
     the x alone -- which is the point-level meaning of the scalar
-    operation, asserted rather than assumed.
+    operation, asserted rather than assumed. What
+    `keys.pubkey_from_prvkey` serializes in C is checked against the
+    compression composed here, over a sweep in which both parities occur:
+    a fixed key exercises one of them.
     """
     for prvkey in derived(b"serialization"):
         uncompressed = mult.mult_(prvkey)
@@ -88,6 +91,10 @@ def test_serialization_round_trips() -> None:
         # either form parses, and serializes back to either form
         assert keys.serialize(keys.parse(uncompressed)) == compressed
         assert keys.serialize(keys.parse(compressed), False) == uncompressed
+        # and both are what pubkey_from_prvkey answers, whose compressed
+        # form libsecp256k1 writes where this file composes it
+        assert keys.pubkey_from_prvkey(prvkey) == compressed
+        assert keys.pubkey_from_prvkey(prvkey, False) == uncompressed
         # mult agrees with the serialization it is derived from
         assert mult.mult(prvkey) == (
             int.from_bytes(uncompressed[1:33], "big"),

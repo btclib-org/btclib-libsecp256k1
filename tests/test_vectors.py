@@ -45,7 +45,17 @@ from typing import Any
 
 import pytest
 
-from btclib_libsecp256k1 import CData, dsa, ellswift, ffi, lib, mult, recovery, ssa
+from btclib_libsecp256k1 import (
+    CData,
+    dsa,
+    ellswift,
+    ffi,
+    keys,
+    lib,
+    mult,
+    recovery,
+    ssa,
+)
 from btclib_libsecp256k1.context import ctx
 
 # secp256k1 group order
@@ -131,7 +141,10 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
 
     The verification verdict is the vector's own. A vector carrying a
     secret key is also signed and the signature compared byte for byte,
-    which the fixed aux_rand makes possible. Which function signs it is
+    which the fixed aux_rand makes possible, and the public key of that
+    secret key is checked against the vector's -- the published anchor
+    for `keys.pubkey_from_prvkey`, whose compressed answer carries that
+    x and a parity octet BIP340 drops. Which function signs it is
     the length of the message: `ssa.sign` is BIP340's 32-byte signing, and
     `ssa.sign_custom` is the arbitrary-length one, so the four vectors
     added in 2022 -- messages of 0, 1, 17 and 100 octets -- are the only
@@ -147,6 +160,9 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
     if vector["secret key"]:
         seckey = bytes.fromhex(vector["secret key"])
         aux_rand = bytes.fromhex(vector["aux_rand"])
+        # the vector's public key is x(dG), which is the compressed
+        # serialization of the same point without its first octet
+        assert keys.pubkey_from_prvkey(seckey)[1:] == pubkey
         assert ssa.sign_custom(msg, seckey, aux_rand) == sig
         # sign_custom answers a 32-byte message with the signature sign
         # returns, which is what makes the two comparable at all

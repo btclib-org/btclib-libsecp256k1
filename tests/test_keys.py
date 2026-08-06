@@ -64,6 +64,46 @@ def test_prvkey_algebra() -> None:
         keys.prvkey_tweak_add(a, N - a)
 
 
+def test_pubkey_from_prvkey() -> None:
+    """The public key of 1 is the generator, in both serializations.
+
+    The generator is the one published in SEC 2 v.2 section 2.4.1, so
+    neither form is compared with a second computation of this package's.
+    Both parities are exercised, the y of 1G being even and that of 6G
+    odd: the first octet of the compressed form is what carries it, and
+    the uncompressed form drops the 32 bytes it is read from. `mult_` is
+    checked to be the uncompressed case of this function, which is what
+    keeps its 65-byte answer true.
+    """
+    generator = bytes.fromhex(
+        "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"
+    )
+    assert keys.pubkey_from_prvkey(1, False) == generator
+    assert keys.pubkey_from_prvkey(1) == b"\x02" + generator[1:33]
+    # the same key given as bytes and as an int
+    assert keys.pubkey_from_prvkey((1).to_bytes(32, "big")) == b"\x02" + generator[1:33]
+
+    # the odd y, which 1G cannot exhibit
+    assert mult.mult(6)[1] & 1
+    assert keys.pubkey_from_prvkey(6) == b"\x03" + mult.mult_(6)[1:33]
+
+    # mult_ is this function with the compressed flag off
+    for prvkey in (1, 6, N - 1):
+        assert mult.mult_(prvkey) == keys.pubkey_from_prvkey(prvkey, False)
+        assert keys.pubkey_from_prvkey(prvkey) == compress(mult.mult_(prvkey))
+
+    # zero is no private key, and neither is the group order
+    with pytest.raises(ValueError, match="private key"):
+        keys.pubkey_from_prvkey(0)
+    with pytest.raises(ValueError, match="private key"):
+        keys.pubkey_from_prvkey(N)
+    with pytest.raises(ValueError, match="fit in 32 bytes"):
+        keys.pubkey_from_prvkey(2**256)
+    with pytest.raises(ValueError, match="private key must be 32 bytes"):
+        keys.pubkey_from_prvkey(b"\x01" * 31)
+
+
 def test_pubkey_algebra() -> None:
     """Tweaking a public key matches tweaking the private key under it.
 
