@@ -388,9 +388,13 @@ next fork.
   round, the log itself warning that the claims are for debugging and
   not for configuring from
 - on GitHub, repository Settings, Environments: create the `pypi` and
-  `testpypi` environments, each with the required reviewers who approve.
-  Leaving `testpypi` without reviewers would be the one part of a
-  release that the rehearsal stops exercising
+  `testpypi` environments, each with the required reviewers who approve
+  -- `fametrano` on both. Self-review stays allowed on purpose: the
+  maintainer who pushes the tag is the reviewer, and forbidding it would
+  deadlock a one-maintainer release. The approval is a confirmation
+  step, not a second pair of eyes; it becomes one as soon as there is a
+  second reviewer to add. Leaving `testpypi` without reviewers would be
+  the one part of a release that the rehearsal stops exercising
 - `pypi` carries a deployment branch policy besides, a custom rule
   admitting the tag pattern `v*`, that environment being reachable only
   from a tag; `testpypi` has none, being reached from a branch by
