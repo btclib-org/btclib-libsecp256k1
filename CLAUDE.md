@@ -128,8 +128,9 @@ copy is for — `cp file file.bak`, then put it back.
     # after touching pyproject.toml; the uv-lock hook does it too
     uv lock
 
-    # after adding to tests/ecdsa*_sig.json, whose known findings are
-    # recorded rather than excluded
+    # after adding a hex constant to a test module; the vendored vector
+    # data has a baseline of its own, whose command is in CONTRIBUTING.md.
+    # Neither file is excluded from the scan, only recorded as reviewed
     uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
 
 ## The workflows that gate, and the four that do not
@@ -244,9 +245,11 @@ findings.
   `PYTHONDONTWRITEBYTECODE=1`, with a passing baseline run before and a
   passing control run after, is what makes a hand verification mean
   anything. cosmic-ray does not have the problem
-- **adding to the json vector files fails the `detect-secrets` hook**
-  until `.secrets.baseline` is regenerated; the command is in
-  CONTRIBUTING.md, and reading its diff is the point of the baseline
+- **`detect-secrets` runs twice, over two baselines**: the tree with the
+  entropy detectors on, and `tests/*.csv`/`tests/*.json` with them off,
+  those files being hex and nothing else. Adding to either side fails its
+  hook until that baseline is regenerated; both commands are in
+  CONTRIBUTING.md, and reading the diff is the point of a baseline
 - **the `published` workflow went green with 0.7.1**, on 4 August 2026,
   nineteen cells out of nineteen, having been nineteen out of nineteen red
   the day before: 0.4.0 had no arm64 wheel and its sdist no longer built,

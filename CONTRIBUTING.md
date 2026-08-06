@@ -244,14 +244,27 @@ release.
   something, so new code arrives with the tests that cover its branches
 - **the secret-scanning baseline follows the vectors.** The test data is
   private keys, so `detect-secrets` would report all of it; the known
-  findings live in `.secrets.baseline`, reviewed once. Adding to
-  `tests/ecdsa_sig.json` or `tests/ecdsa_custom_nonce_sig.json` therefore
-  fails that hook until the baseline is regenerated:
+  findings are recorded as reviewed rather than excluded, in two baselines
+  that differ only in whether the entropy detectors run. Adding a hex
+  constant to a test module, or a vector to a file under `tests/` matching
+  `*.csv` or `*.json`, fails the corresponding hook until its baseline is
+  regenerated:
 
+      # the tree, entropy detectors on; the vendored vector data is
+      # excluded by a filter the baseline itself records
       uvx --from detect-secrets detect-secrets scan \
           --baseline .secrets.baseline
 
-  read the diff before committing it, which is the whole point of the
+      # the vendored vector data, entropy detectors off: these files are
+      # 64-character hex and nothing else, so a new vector would read as a
+      # new secret. The paths are the hook's `files` pattern spelled out
+      uvx --from detect-secrets detect-secrets scan \
+          --disable-plugin HexHighEntropyString \
+          --disable-plugin Base64HighEntropyString \
+          tests/*.csv tests/*.json \
+          > .secrets.vectors.baseline
+
+  read the diff before committing it, which is the whole point of a
   baseline: what appears there is what nobody has looked at yet
 - **new wrapped functionality is validated against external vectors.**
   A test that compares these bindings against themselves proves nothing.
