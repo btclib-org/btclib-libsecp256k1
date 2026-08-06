@@ -153,9 +153,16 @@ dispatch:
 The asymmetry is worth reading rather than assuming: a policy admitting
 branches alone would refuse the deployment *after* the whole matrix had
 been built, and no rehearsal would reveal it, reaching the other
-environment. [RELEASING.md](RELEASING.md) has the rest, including what a
-mismatched trusted publisher looks like and why self-review stays
-allowed.
+environment.
+
+What that rule constrains is the *name* of the ref and nothing else. A
+`v*` tag pushed on a branch head, on an old `dev` state or on a
+fork-synced commit satisfies it exactly as the release tag does, so it is
+not the check that a release is a release: the `version-check` job of
+`release.yml` fails a tag that is not an ancestor of `master`, before the
+matrix builds anything. [RELEASING.md](RELEASING.md) has the rest,
+including what a mismatched trusted publisher looks like and why
+self-review stays allowed.
 
 **On TestPyPI the project is not ours.** The name carries an unrelated
 `0.0.1` from 2021, and a trusted publisher can only be registered by an
