@@ -55,11 +55,11 @@ homepage = "https://btclib.org"
 # of docs/source, the README included in its toctree rather than left as
 # the whole of the documentation
 documentation = "https://btclib-libsecp256k1.readthedocs.io"
-repository = "https://github.com/btclib-org/btclib_libsecp256k1"
-download = "https://github.com/btclib-org/btclib_libsecp256k1/releases"
-changelog = "https://github.com/btclib-org/btclib_libsecp256k1/blob/master/HISTORY.md"
-issues = "https://github.com/btclib-org/btclib_libsecp256k1/issues"
-pull_requests = "https://github.com/btclib-org/btclib_libsecp256k1/pulls"
+repository = "https://github.com/btclib-org/btclib-libsecp256k1"
+download = "https://github.com/btclib-org/btclib-libsecp256k1/releases"
+changelog = "https://github.com/btclib-org/btclib-libsecp256k1/blob/master/HISTORY.md"
+issues = "https://github.com/btclib-org/btclib-libsecp256k1/issues"
+pull_requests = "https://github.com/btclib-org/btclib-libsecp256k1/pulls"
 
 [build-system]
 # cmake builds the vendored library: it is a build requirement, not a

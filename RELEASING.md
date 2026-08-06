@@ -352,7 +352,7 @@ The PyPI side is already done; this is here for the next index, or the
 next fork.
 
 - on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
-  trusted publisher for `btclib-org/btclib_libsecp256k1`, workflow
+  trusted publisher for `btclib-org/btclib-libsecp256k1`, workflow
   `release.yml`, environment `pypi` and `testpypi` respectively. The two
   indexes are separate accounts and separate registrations, and separate
   credentials with them, TestPyPI being its own deployment of Warehouse
