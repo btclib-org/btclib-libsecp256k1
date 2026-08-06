@@ -156,6 +156,20 @@ the runner, and that is worth knowing before trying.
 
       BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
 
+  on macOS the job exports a deployment target first, and reproducing it
+  means exporting the same one:
+
+      export MACOSX_DEPLOYMENT_TARGET=11.0    # 10.13 on x86_64
+
+  a dynamic wheel compiles no extension, so nothing derives its platform
+  tag from a toolchain: without that variable `hatch_build.py` falls back
+  to `platform.mac_ver()`, and the wheel comes out `macosx_26_0_arm64` on
+  a macOS 26 machine — a tag `pip` refuses on every older macOS the file
+  would in fact have loaded on. CMake reads the same variable, so the
+  vendored library is built for the floor the tag then claims; the two
+  values and the reasoning behind them are in `test.yml`, next to the
+  step that exports them
+
 - `Build sdist`, and `Test sdist install on <os>` after it
 
       uv build --sdist
