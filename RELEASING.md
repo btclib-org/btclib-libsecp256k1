@@ -175,10 +175,16 @@ Then:
    Rebase and merge replays `dev`'s commits with new SHAs, so the moment
    a release is merged the two branches hold the same tree through
    different histories, and the merge base between them stops advancing.
-   Left alone, the next release's pull request presents the whole of this
-   one as new, and asks the rebase to replay commits `master` already
-   carries. Archive what is about to become unreachable, then move the
-   branch:
+   Left alone this is not the cosmetic issue it looks like: it is what the
+   pull request that added this very step hit, during 0.7.1.1's own
+   release -- its branch built against `dev` before this step's own reset
+   ran, so once that reset moved `dev`, GitHub reported the pull request
+   `CONFLICTING` and `gh pr merge --rebase` on it refused with `the merge
+   commit cannot be cleanly created`. Reapplying "add this line" where a
+   rebase-and-merge already added it under a different SHA is a conflict,
+   not a no-op, and GitHub does not drop the commit the way a local
+   `git rebase` would. Archive what is about to become unreachable, then
+   move the branch:
 
        git fetch origin
        git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
