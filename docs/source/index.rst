@@ -12,6 +12,7 @@ btclib_libsecp256k1 documentation
    CONTRIBUTING <contributing_link.md>
    SECURITY <security_link.md>
    HISTORY <history_link.md>
+   CHANGELOG <changelog_link.md>
 
 Indices and tables
 ==================
