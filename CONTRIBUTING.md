@@ -220,9 +220,13 @@ them run locally.
       uv run --locked --no-default-groups --group test --group mutation \
           cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
       uv run --locked --no-default-groups --group test --group mutation \
+          cr-filter-operators bindings.sqlite .github/mutation/bindings.toml
+      uv run --locked --no-default-groups --group test --group mutation \
           cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
       uv run --locked --no-default-groups --group test --group mutation \
           cr-report --surviving-only --show-diff bindings.sqlite
+      uv run --locked --no-default-groups \
+          python .github/scripts/mutation_counts.py bindings.sqlite
 
   `baseline` first, always: it runs the configured test command against the
   unmutated tree, and without it a stale command fails every mutant
@@ -232,16 +236,29 @@ them run locally.
   it runs: no second session, no `pytest` in another shell, and a
   `git status` in the middle is a working tree with a mutant in it. `exec`
   is resumable, so interrupting one costs only the mutant it was on, and the
-  `.sqlite` is the artifact the workflow uploads — `cr-report`, `cr-html`
-  and `cr-rate` all read one.
+  `.sqlite` is what the workflow uploads beside the reports — `cr-report`,
+  `cr-html` and the counter all read one.
+
+  `cr-filter-operators` marks as skipped what the configuration excludes by
+  operator, which here is every mutant of a `|` in an annotation: none of
+  them is reachable by any test, and an unreachable mutant costs a whole run
+  of the suite to survive. Skipping them is what leaves a survivor list
+  somebody reads to the end — the comment in `bindings.toml` carries the
+  grep that keeps the exclusion honest.
 
   `--surviving-only` is the whole of what anybody acts on, a killed mutant
-  being the suite doing its job. Read the list expecting two shapes that are
-  not holes: `core/ReplaceBinaryOperator` on a signature line is an
-  annotation, which `from __future__ import annotations` leaves unevaluated,
-  and an output buffer or a piece of internally generated randomness has a
-  size nothing observable depends on. Anything else is a test nobody has
-  written yet.
+  being the suite doing its job. Read the list expecting one shape that is
+  not a hole: an output buffer, or a piece of internally generated
+  randomness, whose size nothing observable depends on. Anything else is a
+  test nobody has written yet.
+
+  The counter last, and not `cr-rate`: that tool reads anything that is not
+  SURVIVED as a kill, so it counts the skipped mutants among them and
+  divides by the whole session. `mutation_counts.py` prints killed, survived
+  and skipped with the rate over what actually ran, and exits non-zero on an
+  outcome that is no verdict at all — an INCOMPETENT mutant, or a worker
+  that raised, which is Cosmic Ray not having measured rather than a test
+  that is missing.
 
 ## What a change has to satisfy
 

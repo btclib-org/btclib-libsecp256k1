@@ -46,8 +46,8 @@ on:
   workflow_dispatch:
   # no pull_request trigger, unlike links.yml, which does run itself when
   # its own configuration changes. The difference is what the two cost: a
-  # link sweep is a few hundred requests, and a session is 771 runs of the
-  # suite. check-toml parses this configuration on every commit, and
+  # link sweep is a few hundred requests, and a session is one run of the
+  # suite per mutant. check-toml parses this configuration on every commit, and
   # `cosmic-ray baseline` below fails the run before any mutant if the test
   # command has gone stale, which is what that trigger would have caught
 
@@ -67,8 +67,11 @@ jobs:
   mutation:
     name: Mutate the bindings
     runs-on: ubuntu-latest
-    # 771 mutants at a suite that runs in well under a second, so what this
-    # bounds is a session gone wrong rather than a session gone long
+    # a few hundred mutants at a suite that runs in about a second, the
+    # operator filter having taken out the family that could only survive,
+    # so what this bounds is a session gone wrong rather than one gone long.
+    # Not tight: the ceiling cancels the job, and a cancelled job takes the
+    # reports and the artifact with it
     timeout-minutes: 90
 
     steps:
@@ -97,6 +100,18 @@ jobs:
           uv run --locked --no-default-groups --group test --group mutation
           cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
 
+      # marks as skipped whatever the configuration excludes by operator,
+      # which here is the annotation family and most of the session: a mutant
+      # of an unevaluated `bytes | int` cannot be killed by any test, and one
+      # that cannot be killed costs the whole test command to survive. The
+      # decision stays in the toml -- this is a no-op for a configuration
+      # that excludes nothing -- and the comment there carries the grep that
+      # keeps it true
+      - name: Skip the mutants no test can reach
+        run: >
+          uv run --locked --no-default-groups --group test --group mutation
+          cr-filter-operators bindings.sqlite .github/mutation/bindings.toml
+
       # resumable: it runs whatever the session still has pending, so a
       # cancelled run costs only the mutant it was on, and the artifact
       # below can be finished locally
@@ -105,21 +120,52 @@ jobs:
           uv run --locked --no-default-groups --group test --group mutation
           cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
 
-      # --surviving-only, which is the whole of what anybody acts on: a
-      # killed mutant is the suite doing its job, and printing all 771 of
-      # them buries the few that are not
+      # always(), because the reports are the whole product: a session whose
+      # exec died still holds every verdict reached before that, and those
+      # are what somebody reads on Monday.
+      #
+      # --surviving-only with the diff, which is the whole of what anybody
+      # acts on: a killed mutant is the suite doing its job, and printing
+      # every one of them buries the few that are not. Not --show-output,
+      # which is the pytest run of each mutant, megabytes of it; the html
+      # beside it has the full picture.
+      #
+      # The counter and not `cr-rate`: that tool's `is_killed` is
+      # `test_outcome != SURVIVED`, so a mutant the filter skipped counts as
+      # a kill and the rate divides by every result -- on this profile most
+      # of the session, and on one nothing has run yet a perfect 0.00%,
+      # which is the failure mode a mutation run has that looks like good
+      # news. mutation_counts.py prints the counts as well as the rate, a
+      # rate alone being unable to say whether the session finished, and its
+      # docstring says why it reads the session file rather than
+      # `cosmic-ray dump`.
+      #
+      # No threshold on that rate: a survivor is a test nobody has written
+      # yet, and this workflow is not allowed to be red about one. An outcome
+      # that is no verdict -- INCOMPETENT, or a worker that raised -- is the
+      # other thing, and the counter exits non-zero for it
       - name: Report the survivors
+        if: always()
         run: |
           uv run --locked --no-default-groups --group test --group mutation \
-            cr-rate --estimate bindings.sqlite
+            cr-report --surviving-only --show-diff bindings.sqlite \
+            > bindings-survivors.txt
           uv run --locked --no-default-groups --group test --group mutation \
-            cr-report --surviving-only --show-diff bindings.sqlite
+            cr-html bindings.sqlite > bindings-report.html
+          uv run --locked --no-default-groups \
+            python .github/scripts/mutation_counts.py bindings.sqlite bindings
 
-      # the session is the artifact: cr-report, cr-html and cr-rate all read
-      # one, so a downloaded session answers a question the log did not
+      # the session as well as the reports: a .sqlite is what cr-report and
+      # cr-html are re-run against, and what a later `cosmic-ray exec`
+      # resumes, so a downloaded one answers a question the log did not
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: mutation-session
-          path: bindings.sqlite
+          path: |
+            bindings.sqlite
+            bindings-survivors.txt
+            bindings-report.html
+          # an empty upload is another way for a broken run to look green
+          if-no-files-found: error
           retention-days: 30
