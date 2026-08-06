@@ -14,10 +14,62 @@ release-notes length in the first place, and are still in
 Grouped, and the order runs from what a caller sees to what only
 maintainers do. Nothing here breaks a caller: the wrapped
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
-is the same 0.7.1 (1a53f49), no wrapper changed behaviour, and nothing in
-the public API moved. Neither file counts its entries: `grep -c '^- '`
-does that, whereas a stated number is a line every open branch has to
-edit.
+is the same 0.7.1 (1a53f49), nothing in the public API moved, and what it
+gained is one function. One wrapper changed behaviour, in the text of an
+error message, and the entry below says which and why. Neither file
+counts its entries: `grep -c '^- '` does that, whereas a stated number is
+a line every open branch has to edit.
+
+### What the boundary answers
+
+- **`keys.pubkey_from_prvkey` is the public key of a private key, in
+  either serialization** (#41, #68). One `secp256k1_ec_pubkey_create`
+  plus one `keys.serialize`, which is the shape `pubkey_negate`,
+  `pubkey_tweak_add`, `pubkey_tweak_mul`, `pubkey_combine` and
+  `pubkey_sort` already had — a C operation on a `secp256k1_pubkey`, then
+  the serialization with its flag as an argument. Generator
+  multiplication was the exception: `mult.mult_` wrote that serialize
+  inline with the flag as the literal `2`, so the one producer whose
+  input is a private key rather than a point was also the one that could
+  not answer the compressed form `keys`' own docstring promises. Put
+  structurally, the package could create a `secp256k1_pubkey` from a
+  private key, and could serialize one compressed, and never let the same
+  caller do both: `serialize` takes a pointer only `parse` hands out,
+  that is, bytes already serialized. `mult_` is the `compressed=False`
+  case of the new function now and has lost the inline serialize, the one
+  duplication of `serialize` the package had, so the API gains a name
+  while the code at the cffi boundary shrinks. What it saves a caller who
+  had been composing it, measured per call over 2000 random keys, best of
+  nine: 7.67 µs, against 7.75 for the byte slice btclib ships, 8.13 for
+  `keys.serialize(keys.parse(mult_(q)))` — which pays a
+  `secp256k1_ec_pubkey_parse` to undo a serialization the same library
+  has just done — and 8.90 for the composition through the coordinates,
+  which turns 64 bytes into two ints and re-proves on curve a point
+  libsecp256k1 had just produced. Against the slice that is 0.8%, and it
+  was not treated as the argument: the argument, with its alternatives,
+  is in #41 — the compressed encoding stops being written outside the
+  wrapper. btclib reads `sec[64]` rather than `sec[-1]` so that a 33-byte
+  answer raises instead of passing off a byte of x as a parity, and keeps
+  a test pinning this package's 65-byte serialization from outside it;
+  making `mult_` the uncompressed case of one function is what keeps that
+  contract true by construction rather than by a downstream test.
+  Validated against what is published rather than against the bindings:
+  the BIP340 vectors' *public key* column is the x of this call for every
+  vector carrying a secret key, 1G is pinned in both forms against the
+  generator of SEC 2 v.2 section 2.4.1 and 6G for the odd y no smaller
+  key exhibits, and the 128-key sweep compares what libsecp256k1
+  serializes with the compression `tests/test_properties.py` composes
+  itself, both parities occurring across it. The README quickstart, which
+  had been composing `keys.serialize(keys.parse(mult.mult_(prvkey)))` on
+  the package's own front page, is the one call now.
+- **The `ValueError` of a generator multiplication names a private key**
+  where it said scalar, which is the one behaviour a caller can see
+  change. `secp256k1_ec_pubkey_create` calls its argument a seckey and is
+  what refuses anything outside `[1, n-1]`, so the message names what the
+  library refused rather than what the mult module calls it; `mult_`
+  answers exactly the 65 bytes it did, opening with `0x04`, and
+  `tests/test_core.py` asserts the new text so that the next change to it
+  is deliberate.
 
 ### The documented boundary
 

@@ -36,11 +36,11 @@ test suite, on every interpreter and every kind of wheel, so an example
 that stops working fails a build rather than sitting here:
 
     >>> import hashlib
-    >>> from btclib_libsecp256k1 import dsa, keys, mult, ssa, xonly
+    >>> from btclib_libsecp256k1 import dsa, keys, ssa, xonly
 
     >>> # BIP340 test vector 1; yours comes from os.urandom or a wallet
     >>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
-    >>> pubkey = keys.serialize(keys.parse(mult.mult_(prvkey)))
+    >>> pubkey = keys.pubkey_from_prvkey(prvkey)
     >>> msg = hashlib.sha256(b"hello").digest()
 
 ECDSA, over the 32-byte hash, with the deterministic RFC6979 nonce:
@@ -197,7 +197,9 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `musig`             | raw `lib` bindings, by decision           |
 | `ellswift`          | `ellswift` (BIP324)                       |
 
-`keys` provides the scalar and point algebra (tweaking, negation,
+`keys` provides the public key of a private key (`pubkey_from_prvkey`,
+compressed by default, of which `mult.mult_` is the uncompressed
+spelling) and the scalar and point algebra (tweaking, negation,
 combination, arbitrary point multiplication) underlying BIP32 key
 derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,
 `pubkey_sort`) that BIP67 and MuSig2 key aggregation call for; `xonly`
