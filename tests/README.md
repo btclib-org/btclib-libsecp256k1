@@ -1,12 +1,12 @@
 # Vendored test vectors
 
-Where the three files under `tests/` that are not this package's own
-tests came from, and whether the copy here still matches it. The
-docstring of `test_vectors.py` already cites the same three upstreams,
-against `master`: a citation like `bitcoin/bips/blob/master/bip-0340/
-test-vectors.csv` names a file that changes under us and says nothing
-about the revision that was actually copied. Here each citation is
-pinned to a commit, and the two blobs are compared.
+Where the files under `tests/` that are not this package's own tests
+came from, and whether the copy here still matches it. The docstring of
+`test_vectors.py` already cites the same upstreams, against `master`: a
+citation like `bitcoin/bips/blob/master/bip-0340/test-vectors.csv` names
+a file that changes under us and says nothing about the revision that
+was actually copied. Here each citation is pinned to a commit, and each
+blob is compared.
 
 Nothing in this file restates what a vector tests -- `test_vectors.py`
 already says that. This says which revision of it is held, and for the
@@ -39,11 +39,11 @@ gh api repos/bitcoin/bips/git/trees/<commit>:bip-0340 \
 
 The comparison is on git blob SHA-1, not sha256: it is what a tree
 entry already carries, so nothing has to be downloaded twice. Where
-upstream is CRLF and this comparison still holds -- `bip340_test_vectors.csv`
-is the case -- the entry says so, this repository not being LF
-throughout the way btclib's is: `.pre-commit-config.yaml`'s
-`mixed-line-ending` hook excludes that one file by name, byte for byte
-against `bitcoin/bips` being the point.
+upstream is CRLF and this comparison still holds -- every csv here from
+`bitcoin/bips` is the case -- the entry says so, this repository not
+being LF throughout the way btclib's is: `.pre-commit-config.yaml`'s
+`mixed-line-ending` hook excludes `tests/bip3(40|24)_*.csv`, byte for
+byte against `bitcoin/bips` being the point.
 
 ## bitcoin/bips
 
@@ -69,6 +69,49 @@ answering a 32-byte message with the signature `sign` returns is itself
 part of what is checked. btclib's own copy of this file takes the
 pure-Python path for the same four, having the fallback this package
 does not.
+
+### `tests/bip324_ellswift_decode_test_vectors.csv`
+
+```text
+repo    bitcoin/bips
+path    bip-0324/ellswift_decode_test_vectors.csv
+commit  cc177ab7bc5abcdcdf9c956ee88afd1052053328  2023-01-11
+blob    1bab96b721e2f3ab90142c318523551eb520f753
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**, CRLF included. Every vector, all three columns.
+The `comment` column names the degenerate case each one is -- `u%p=0`,
+`t%p=0`, `u^3+t^2+7=0`, and which of x1, x2, x3 the map lands on -- and
+`test_vectors.py` uses it as the test id, so a failure says which case
+broke.
+
+### `tests/bip324_packet_encoding_test_vectors.csv`
+
+```text
+repo    bitcoin/bips
+path    bip-0324/packet_encoding_test_vectors.csv
+commit  713f000a20421a54b29cd8ab89e711eef1fbccb9  2025-10-23
+blob    1588b066b4792d0b03f30d4f7f18e57ccde1f525
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**, CRLF included. Vendored whole, and read in part:
+this is BIP324's packet encoding suite, whose later columns are the
+ciphers built on top of the handshake. What these bindings compute is
+the `in_priv_ours`/`in_ellswift_ours`/`in_ellswift_theirs` inputs
+through `ellswift.xdh` to `mid_shared_secret`, plus `mid_x_ours` and
+`mid_x_theirs` through `ellswift.decode`. The whole file is held rather
+than the six columns, so that the pin above is a pin on something
+anybody can fetch and diff.
+
+Not vendored: `xswiftec_inv_test_vectors.csv`, from the same directory.
+It pins the inverse map, and libsecp256k1 exposes no entry point for it
+-- `secp256k1_ellswift_encode` chooses a case from the 32 bytes of
+randomness it is given, and the case is not an argument -- so there is
+nothing here those vectors could be compared against.
 
 ## rustyrussell/secp256k1-py
 
@@ -110,7 +153,9 @@ Against a pinned upstream blob, in the tree today:
 git ls-files 'tests/*.csv' 'tests/*.json'
 ```
 
-- identical byte for byte, CRLF included: `bip340_test_vectors.csv`.
+- identical byte for byte, CRLF included: `bip340_test_vectors.csv`,
+  `bip324_ellswift_decode_test_vectors.csv`,
+  `bip324_packet_encoding_test_vectors.csv`.
 - JSON-equal, reformatted: `ecdsa_sig.json`, `ecdsa_custom_nonce_sig.json`.
 
 Not vendored, and outside the scope of this file: `test_vectors.py`
