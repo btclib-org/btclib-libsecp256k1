@@ -2,6 +2,52 @@
 
 Notable changes to the codebase are documented here.
 
+## v0.7.1.1
+
+The same
+[libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
+(1a53f49) as v0.7.1, and the same bindings: no wrapper changed
+behaviour, and nothing in the public API moved. What a fourth number
+carries here is the floor the package is built on, its documentation,
+and the gate around both.
+
+- Dropped support for Python 3.9 (minimum is now 3.10): it reached end
+  of life in October 2025, and keeping it held `uv.lock` at a second
+  resolution of its own, cffi 2.1 requiring 3.10 and cffi 2.0 staying
+  pinned for 3.9 alone. It also cost the build matrix its widest cell,
+  CPython having no Windows arm64 build before 3.11
+- Published documentation: a Sphinx build under `docs/`, served at
+  [Read the Docs](https://btclib-libsecp256k1.readthedocs.io), which the
+  `documentation` metadata url now names instead of the README
+- The distribution names The btclib developers as its author and ships
+  `AUTHORS.md` beside `LICENSE` and `COPYRIGHT`. The licence header of
+  every source file is the short MIT one, so the three no longer state
+  the same holder and the same terms three different ways
+- Three scheduled workflows join `published`, each asking on a morning
+  of its own a question no pull request can: whether the urls in the
+  prose still resolve (`links`), whether the tree survives every
+  dependency at its newest (`latest`), and whether the suite would
+  notice a wrong line (`mutation`). None of them gates a merge, and that
+  is the design: what they report is the outside world moving, or a test
+  nobody has written, and neither is something a branch can act on
+- Each vendored test vector is pinned to a commit and a blob SHA-1 in
+  `tests/README.md`, so a citation names the revision actually copied
+  rather than a file that changes underneath it, and a monthly workflow
+  opens an issue when upstream moves one
+- New `REPOSITORY.md`: the branch rules, required checks, token
+  permissions, publishing environments and scanning settings that live
+  outside the tree and cannot be recovered by reading it, each with the
+  API call that reads it back
+- The pre-commit gate, which is the one definition of clean and what CI
+  runs rather than a second list of its own, now also measures the yaml,
+  the prose and the packaging metadata, and checks itself. mypy runs
+  with more of its optional error codes and ruff with more rule-sets,
+  every one of which the tree already satisfied
+- More tests, and what each one verifies is now stated in its docstring
+  and gated as such: the callbacks, the copyright headers, the
+  documentation build and the vendored data are covered where they were
+  not
+
 ## v0.7.1
 
 Major changes include:
