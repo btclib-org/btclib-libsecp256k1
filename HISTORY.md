@@ -1,6 +1,58 @@
 # Release notes
 
-Notable changes to the codebase are documented here.
+Notable changes to the codebase are documented here. Every entry of a
+release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
+has to act on and what a user gains, and it is what the GitHub release of
+a tag is generated from.
+
+## v0.7.1.2 (work in progress, not released yet)
+
+The same
+[libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
+(1a53f49) as v0.7.1, and the same bindings: **no breaking changes** — no
+wrapper changed behaviour, and nothing in the public API moved. What a
+fourth number carries here is the contract of each function where a
+caller reads it, a static extension compiled the way the interpreter
+compiles its own, and metadata that says what the wheels are.
+
+- **Every function documents its arguments, its return value and what it
+  raises.** That contract used to be prose in the README, several hundred
+  lines from the functions it applies to, which for a package shipped as
+  a compiled wheel is all a reader of `help()` or of an IDE tooltip
+  could have had. `mult.mult_` and `mult.mult`, which shared a docstring
+  verbatim while returning 65 uncompressed bytes and a pair of ints, now
+  each say which. A `pydoclint` hook keeps it that way.
+- **The README opens with a Quickstart** — sign and verify, ECDSA and
+  BIP340 — and every example in it, and in every docstring, is executed
+  by the suite on each interpreter and each kind of wheel. An example
+  that stops working fails a build instead of sitting there.
+- **The static extension is faster on Unix**, and correct on universal2.
+  It was compiled without the interpreter's own `CFLAGS`: no
+  optimization at all, unlike everything CMake builds beside it, and on
+  a universal2 interpreter a single-arch object inside a dual-arch
+  bundle.
+- **A wheel whose extensions disagree on static or dynamic is refused**
+  rather than reported. It would have been tagged `py3-none-<platform>`
+  while holding an ABI-specific extension: installable on any
+  interpreter of that platform, and broken on most of them.
+- **The classifiers say what the package is**: the three systems the
+  wheels are built for instead of `OS Independent`, and `Typing ::
+  Typed`, which is the classifier PyPI users filter on.
+- **More of the library is held to published vectors**: BIP324 for
+  ellswift encoding and the `ellswift_xdh` shared secret, BIP327 for
+  every step of MuSig2 aggregation, the four long BIP340 messages
+  through `ssa.sign_custom`, and recovery ids 2 and 3, which no test had
+  ever reached.
+- **Two hooks that were passing without reading a file now read one.**
+  The copyright notice hook was checking only newly added staged files,
+  so on a clean checkout — every run in CI — it checked nothing; the
+  entropy detectors of `detect-secrets` were off for the whole tree
+  rather than for the vector files that motivated it.
+- **The release path checks before it builds what it used to discover
+  after uploading**: that the tag is on `master`, and that this file has
+  a section for it. A rehearsal re-run gets a version of its own instead
+  of colliding with itself on TestPyPI, and no longer shares a
+  concurrency group with a push to the branch it was dispatched from.
 
 ## v0.7.1.1
 
