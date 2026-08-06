@@ -12,6 +12,10 @@
   https://github.com/bitcoin/bips/tree/master/bip-0324; the second is
   the packet encoding suite, of which the ellswift/private key inputs
   and the shared secret are what these bindings compute
+- BIP327: bip327_key_agg_vectors.json, bip327_nonce_agg_vectors.json,
+  bip327_sign_verify_vectors.json and bip327_sig_agg_vectors.json,
+  vendored from
+  https://github.com/bitcoin/bips/tree/master/bip-0327/vectors
 - ECDSA RFC6979: (k, r, s) vectors published in
   https://bitcointalk.org/index.php?topic=285142.msg3300992
   as vendored by trezor-firmware (crypto/tests/test_check.c,
@@ -37,10 +41,12 @@ import csv
 import hashlib
 import json
 import pathlib
+from typing import Any
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, ellswift, mult, recovery, ssa
+from btclib_libsecp256k1 import CData, dsa, ellswift, ffi, lib, mult, recovery, ssa
+from btclib_libsecp256k1.context import ctx
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -220,6 +226,298 @@ def test_bip324_ellswift_xdh_vector(vector: dict[str, str]) -> None:
     # x each party ends up multiplying
     assert ellswift.decode(ours)[1:].hex() == vector["mid_x_ours"]
     assert ellswift.decode(theirs)[1:].hex() == vector["mid_x_theirs"]
+
+
+def bip327_vectors(name: str) -> dict[str, Any]:
+    """Read one of the BIP327 vector json files, vendored from bitcoin/bips."""
+    path = pathlib.Path(__file__).parent / f"bip327_{name}_vectors.json"
+    with path.open(encoding="utf-8") as json_file:
+        loaded: dict[str, Any] = json.load(json_file)
+        return loaded
+
+
+def musig_pubkey(serialized: str) -> CData | None:
+    """Parse a public key of a BIP327 vector, None where it is refused."""
+    pubkey = ffi.new("secp256k1_pubkey *")
+    data = bytes.fromhex(serialized)
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, data, len(data)):
+        return None
+    return pubkey
+
+
+def musig_pubnonce(serialized: str) -> CData | None:
+    """Parse a 66-byte public nonce, None where it is refused."""
+    pubnonce = ffi.new("secp256k1_musig_pubnonce *")
+    if not lib.secp256k1_musig_pubnonce_parse(ctx, pubnonce, bytes.fromhex(serialized)):
+        return None
+    return pubnonce
+
+
+def musig_partial_sig(serialized: str) -> CData | None:
+    """Parse a 32-byte partial signature, None where it is refused."""
+    partial_sig = ffi.new("secp256k1_musig_partial_sig *")
+    data = bytes.fromhex(serialized)
+    if not lib.secp256k1_musig_partial_sig_parse(ctx, partial_sig, data):
+        return None
+    return partial_sig
+
+
+def musig_keyagg(
+    pubkeys: list[CData], tweaks: list[tuple[bytes, bool]]
+) -> CData | None:
+    """Aggregate keys and apply the tweaks, None where a step is refused.
+
+    Returns the keyagg cache, which is what every later call reads.
+    """
+    cache = ffi.new("secp256k1_musig_keyagg_cache *")
+    aggregate = ffi.new("secp256k1_xonly_pubkey *")
+    if not lib.secp256k1_musig_pubkey_agg(
+        ctx, aggregate, cache, ffi.new("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
+    ):
+        return None
+    for tweak, is_xonly in tweaks:
+        tweak_add = (
+            lib.secp256k1_musig_pubkey_xonly_tweak_add
+            if is_xonly
+            else lib.secp256k1_musig_pubkey_ec_tweak_add
+        )
+        if not tweak_add(ctx, ffi.NULL, cache, tweak):
+            return None
+    return cache
+
+
+def musig_xonly(cache: CData) -> str:
+    """Serialize the aggregate key of a cache, as BIP327 writes it."""
+    pubkey = ffi.new("secp256k1_pubkey *")
+    assert lib.secp256k1_musig_pubkey_get(ctx, pubkey, cache)
+    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
+    parity = ffi.new("int *")
+    assert lib.secp256k1_xonly_pubkey_from_pubkey(ctx, xonly_pubkey, parity, pubkey)
+    output = ffi.new("char[32]")
+    assert lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey)
+    return ffi.unpack(output, 32).hex().upper()
+
+
+def musig_tweaks(
+    vectors: dict[str, Any], case: dict[str, Any]
+) -> list[tuple[bytes, bool]]:
+    """Pair each tweak of a case with the flag saying how it is applied."""
+    return [
+        (bytes.fromhex(vectors["tweaks"][index]), is_xonly)
+        for index, is_xonly in zip(
+            case.get("tweak_indices", []), case.get("is_xonly", []), strict=True
+        )
+    ]
+
+
+def musig_session(cache: CData, aggnonce: CData, msg: bytes) -> CData:
+    """Start the signing session a partial signature is made or checked in."""
+    assert len(msg) == 32, "libsecp256k1 signs a 32-byte message"
+    session = ffi.new("secp256k1_musig_session *")
+    assert lib.secp256k1_musig_nonce_process(ctx, session, aggnonce, msg, cache)
+    return session
+
+
+KEY_AGG = bip327_vectors("key_agg")
+NONCE_AGG = bip327_vectors("nonce_agg")
+SIGN_VERIFY = bip327_vectors("sign_verify")
+SIG_AGG = bip327_vectors("sig_agg")
+
+# libsecp256k1 signs the 32-byte message BIP340 does, and nothing else:
+# secp256k1_musig_nonce_process takes a msg32. Two of the sign/verify
+# vectors are an empty message and a 38-byte one, which BIP327 allows and
+# no entry point here can be handed at all
+SIGNABLE = [
+    case
+    for case in SIGN_VERIFY["valid_test_cases"]
+    if len(bytes.fromhex(SIGN_VERIFY["msgs"][case["msg_index"]])) == 32
+]
+
+
+@pytest.mark.parametrize(
+    "case", KEY_AGG["valid_test_cases"], ids=lambda c: c["expected"][:8]
+)
+def test_bip327_key_agg_vector(case: dict[str, Any]) -> None:
+    """Aggregate the keys of one BIP327 vector into the key it publishes.
+
+    The MuSig2 test in test_modules.py verifies an aggregate signature
+    against an aggregate key these bindings computed, which is a round
+    trip: a wrong-but-self-consistent aggregation passes it. This is the
+    aggregation itself, against the published value -- the coefficients,
+    the ordering, and the second-key special case among them.
+    """
+    pubkeys = [musig_pubkey(KEY_AGG["pubkeys"][i]) for i in case["key_indices"]]
+    assert None not in pubkeys
+    cache = musig_keyagg(pubkeys, musig_tweaks(KEY_AGG, case))
+    assert cache is not None
+    assert musig_xonly(cache) == case["expected"]
+
+
+@pytest.mark.parametrize(
+    "case", KEY_AGG["error_test_cases"], ids=lambda c: c["comment"]
+)
+def test_bip327_key_agg_error_vector(case: dict[str, Any]) -> None:
+    """Refuse a key aggregation BIP327 says has to fail.
+
+    Where it fails is not the vector's business: an unparsable key stops
+    at the parse, an out-of-range tweak at the tweak, and the reference
+    implementation reports both as one error. What is pinned is that
+    nothing comes out the other end.
+    """
+    pubkeys = [musig_pubkey(KEY_AGG["pubkeys"][i]) for i in case["key_indices"]]
+    if None in pubkeys:
+        return
+    assert musig_keyagg(pubkeys, musig_tweaks(KEY_AGG, case)) is None
+
+
+@pytest.mark.parametrize(
+    "case", NONCE_AGG["valid_test_cases"], ids=lambda c: c["expected"][:8]
+)
+def test_bip327_nonce_agg_vector(case: dict[str, Any]) -> None:
+    """Aggregate public nonces into the 66 bytes BIP327 publishes."""
+    pubnonces = [
+        musig_pubnonce(NONCE_AGG["pnonces"][i]) for i in case["pnonce_indices"]
+    ]
+    assert None not in pubnonces
+
+    aggnonce = ffi.new("secp256k1_musig_aggnonce *")
+    assert lib.secp256k1_musig_nonce_agg(
+        ctx,
+        aggnonce,
+        ffi.new("secp256k1_musig_pubnonce *[]", pubnonces),
+        len(pubnonces),
+    )
+    serialized = ffi.new("char[66]")
+    assert lib.secp256k1_musig_aggnonce_serialize(ctx, serialized, aggnonce)
+    assert ffi.unpack(serialized, 66).hex().upper() == case["expected"]
+
+
+@pytest.mark.parametrize(
+    "case", NONCE_AGG["error_test_cases"], ids=lambda c: c["comment"]
+)
+def test_bip327_nonce_agg_error_vector(case: dict[str, Any]) -> None:
+    """Refuse a public nonce BIP327 says is invalid, at the parse."""
+    pubnonces = [
+        musig_pubnonce(NONCE_AGG["pnonces"][i]) for i in case["pnonce_indices"]
+    ]
+    assert None in pubnonces
+
+
+@pytest.mark.parametrize("case", SIGNABLE, ids=lambda c: c["expected"][:8])
+def test_bip327_partial_sig_verify_vector(case: dict[str, Any]) -> None:
+    """Verify the partial signature BIP327 publishes for one signer.
+
+    The signing direction cannot be driven from these vectors:
+    libsecp256k1 has no parser for a serialized secret nonce, by design
+    -- a secnonce that can be loaded is a secnonce that can be reused --
+    so the `sk` and `secnonces` of this file have no entry point. What is
+    checkable is the verification, which reads the same equation from the
+    other side: a partial signature verifies against its signer's public
+    nonce and public key only if the coefficients, the aggregate nonce
+    and the challenge are the ones BIP327 defines.
+    """
+    pubkeys = [musig_pubkey(SIGN_VERIFY["pubkeys"][i]) for i in case["key_indices"]]
+    assert None not in pubkeys
+    cache = musig_keyagg(pubkeys, [])
+    assert cache is not None
+
+    aggnonce = ffi.new("secp256k1_musig_aggnonce *")
+    aggnonce_bytes = bytes.fromhex(SIGN_VERIFY["aggnonces"][case["aggnonce_index"]])
+    assert lib.secp256k1_musig_aggnonce_parse(ctx, aggnonce, aggnonce_bytes)
+    msg = bytes.fromhex(SIGN_VERIFY["msgs"][case["msg_index"]])
+    session = musig_session(cache, aggnonce, msg)
+
+    signer = case["signer_index"]
+    pubnonce = musig_pubnonce(SIGN_VERIFY["pnonces"][case["nonce_indices"][signer]])
+    partial_sig = musig_partial_sig(case["expected"])
+    assert lib.secp256k1_musig_partial_sig_verify(
+        ctx, partial_sig, pubnonce, pubkeys[signer], cache, session
+    )
+
+
+@pytest.mark.parametrize(
+    "case", SIGN_VERIFY["verify_fail_test_cases"], ids=lambda c: c["comment"]
+)
+def test_bip327_partial_sig_verify_fail_vector(case: dict[str, Any]) -> None:
+    """Refuse a partial signature BIP327 says does not verify."""
+    pubkeys = [musig_pubkey(SIGN_VERIFY["pubkeys"][i]) for i in case["key_indices"]]
+    assert None not in pubkeys
+    cache = musig_keyagg(pubkeys, [])
+    assert cache is not None
+
+    pubnonces = [
+        musig_pubnonce(SIGN_VERIFY["pnonces"][i]) for i in case["nonce_indices"]
+    ]
+    assert None not in pubnonces
+    aggnonce = ffi.new("secp256k1_musig_aggnonce *")
+    assert lib.secp256k1_musig_nonce_agg(
+        ctx,
+        aggnonce,
+        ffi.new("secp256k1_musig_pubnonce *[]", pubnonces),
+        len(pubnonces),
+    )
+    msg = bytes.fromhex(SIGN_VERIFY["msgs"][case["msg_index"]])
+    session = musig_session(cache, aggnonce, msg)
+
+    signer = case["signer_index"]
+    partial_sig = musig_partial_sig(case["sig"])
+    # a signature out of range is refused by the parse; one in range and
+    # wrong, by the verification
+    assert partial_sig is None or not lib.secp256k1_musig_partial_sig_verify(
+        ctx, partial_sig, pubnonces[signer], pubkeys[signer], cache, session
+    )
+
+
+@pytest.mark.parametrize(
+    "case", SIG_AGG["valid_test_cases"], ids=lambda c: c["expected"][:8]
+)
+def test_bip327_sig_agg_vector(case: dict[str, Any]) -> None:
+    """Aggregate partial signatures into the BIP340 signature BIP327 publishes.
+
+    The tweaked cases are the taproot ones, and they are why this is
+    worth pinning separately from the round trip: the tweak enters the
+    aggregate signature through the session, and an aggregation that got
+    it wrong would still produce something self-consistent.
+    """
+    pubkeys = [musig_pubkey(SIG_AGG["pubkeys"][i]) for i in case["key_indices"]]
+    assert None not in pubkeys
+    cache = musig_keyagg(pubkeys, musig_tweaks(SIG_AGG, case))
+    assert cache is not None
+
+    aggnonce = ffi.new("secp256k1_musig_aggnonce *")
+    assert lib.secp256k1_musig_aggnonce_parse(
+        ctx, aggnonce, bytes.fromhex(case["aggnonce"])
+    )
+    msg = bytes.fromhex(SIG_AGG["msg"])
+    session = musig_session(cache, aggnonce, msg)
+
+    partial_sigs = [
+        musig_partial_sig(SIG_AGG["psigs"][i]) for i in case["psig_indices"]
+    ]
+    assert None not in partial_sigs
+    signature = ffi.new("char[64]")
+    assert lib.secp256k1_musig_partial_sig_agg(
+        ctx,
+        signature,
+        session,
+        ffi.new("secp256k1_musig_partial_sig *[]", partial_sigs),
+        len(partial_sigs),
+    )
+    aggregate = ffi.unpack(signature, 64)
+    assert aggregate.hex().upper() == case["expected"]
+    # and it is a BIP340 signature of the aggregate key, tweaks included
+    assert ssa.verify(msg, bytes.fromhex(musig_xonly(cache)), aggregate)
+
+
+@pytest.mark.parametrize(
+    "case", SIG_AGG["error_test_cases"], ids=lambda c: c["comment"]
+)
+def test_bip327_sig_agg_error_vector(case: dict[str, Any]) -> None:
+    """Refuse a partial signature BIP327 says cannot be aggregated."""
+    partial_sigs = [
+        musig_partial_sig(SIG_AGG["psigs"][i]) for i in case["psig_indices"]
+    ]
+    assert None in partial_sigs
 
 
 # A signature whose nonce point has an x coordinate above the group

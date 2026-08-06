@@ -107,9 +107,82 @@ through `ellswift.xdh` to `mid_shared_secret`, plus `mid_x_ours` and
 than the six columns, so that the pin above is a pin on something
 anybody can fetch and diff.
 
-Not vendored: `xswiftec_inv_test_vectors.csv`, from the same directory.
-It pins the inverse map, and libsecp256k1 exposes no entry point for it
--- `secp256k1_ellswift_encode` chooses a case from the 32 bytes of
+### `tests/bip327_key_agg_vectors.json`
+
+```text
+repo    bitcoin/bips
+path    bip-0327/vectors/key_agg_vectors.json
+commit  87394eaeb436d02e0a68b38a1e94bc526d50056e  2023-03-27
+blob    b2e623de60f302c4004a6d656581bdba1f4e1e05
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**. Every case, the error ones included: an
+unparsable key, a key whose x exceeds the field size, a tweak out of
+range, and a tweaking that lands on the point at infinity.
+
+### `tests/bip327_nonce_agg_vectors.json`
+
+```text
+repo    bitcoin/bips
+path    bip-0327/vectors/nonce_agg_vectors.json
+commit  87394eaeb436d02e0a68b38a1e94bc526d50056e  2023-03-27
+blob    1c04b8818f340a5fe2e10eaf73c17a2c9e020f46
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**. Every case; the error ones are all refused at
+the parse of the public nonce, which is where libsecp256k1 puts that
+check.
+
+### `tests/bip327_sign_verify_vectors.json`
+
+```text
+repo    bitcoin/bips
+path    bip-0327/vectors/sign_verify_vectors.json
+commit  508e3a6a40a6e73c73cbfa8a33aa18a2bc7b9d91  2024-05-14
+blob    f71c8dd9d935c8c5f398e6a3888943e1e68b729d
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**. Read in part, and the part is the verification:
+libsecp256k1 has no parser for a serialized secret nonce, by design, so
+the `sk` and `secnonces` of this file have no entry point to be fed to
+and the signing direction cannot be driven from it. The `expected`
+partial signatures are verified instead, which reads the same equation
+from the other side. Two of the valid cases -- an empty message and a
+38-byte one -- are skipped as well: BIP327 allows a message of any
+length and `secp256k1_musig_nonce_process` takes a `msg32`.
+
+### `tests/bip327_sig_agg_vectors.json`
+
+```text
+repo    bitcoin/bips
+path    bip-0327/vectors/sig_agg_vectors.json
+commit  1c6ac0c4cf1f39ea806b8594d6060b6d52fd1439  2024-07-19
+blob    519562c343b6e4bf686ba6e3eda8cee5c8e8b55d
+pulled  2026-08-06
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**. Every case, the tweaked ones included: the
+aggregate signature is compared with the published value and then
+verified as a plain BIP340 signature of the tweaked aggregate key.
+
+Not vendored from `bip-0327/vectors/`: `key_sort_vectors.json`,
+`nonce_gen_vectors.json`, `tweak_vectors.json` and
+`det_sign_vectors.json`. The first two and the last pin functions
+libsecp256k1 either does not expose or does not take the inputs of
+(`secp256k1_musig_nonce_gen` generates its own randomness rather than
+reproducing a published nonce); `tweak_vectors.json` drives signing,
+which is the same secret-nonce obstacle as above.
+
+Not vendored from `bip-0324/`: `xswiftec_inv_test_vectors.csv`. It pins
+the inverse map, and libsecp256k1 exposes no entry point for it --
+`secp256k1_ellswift_encode` chooses a case from the 32 bytes of
 randomness it is given, and the case is not an argument -- so there is
 nothing here those vectors could be compared against.
 
@@ -156,10 +229,13 @@ git ls-files 'tests/*.csv' 'tests/*.json'
 - identical byte for byte, CRLF included: `bip340_test_vectors.csv`,
   `bip324_ellswift_decode_test_vectors.csv`,
   `bip324_packet_encoding_test_vectors.csv`.
+- identical byte for byte: `bip327_key_agg_vectors.json`,
+  `bip327_nonce_agg_vectors.json`, `bip327_sign_verify_vectors.json`,
+  `bip327_sig_agg_vectors.json`.
 - JSON-equal, reformatted: `ecdsa_sig.json`, `ecdsa_custom_nonce_sig.json`.
 
 Not vendored, and outside the scope of this file: `test_vectors.py`
 also self-checks the RFC6979 `(k, r, s)` triples in its own docstring
 against `r == x(k*G)`, which is not a citation to a vendored file, and
-the BIP327 constants any MuSig2 code answers to, which this package
-does not implement.
+constructs the recovery id 2 and 3 signature published nowhere, holding
+it to arithmetic it does itself.
