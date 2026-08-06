@@ -31,8 +31,12 @@ What it does with the result:
 - the wheel tag is set from the extension mode: `infer_tag` for a static
   extension, which is ABI-specific, and an explicit
   `py3-none-<platform>` for a dynamic one, which is not
-- a wheel mixing both modes is reported as a warning, not an error; it
-  cannot arise from the configurations CI builds
+- a wheel mixing both modes raises, and so does one with no extension at
+  all. Neither can arise from the configurations CI builds, which is the
+  argument for refusing them rather than for reporting them: nothing
+  downstream inspects a wheel's tag against its contents, so a `py3-none`
+  wheel carrying a `cpNN` extension would install on any interpreter of
+  the platform and fail to import on most of them
 
 `dynamic_platform_tag()` is the one place that has to name the target
 platform itself, since a dynamic wheel gets no tag from the interpreter
