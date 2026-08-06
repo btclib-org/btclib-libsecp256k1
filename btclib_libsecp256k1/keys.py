@@ -112,6 +112,40 @@ def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     return ffi.unpack(prvkey_buffer, 32)
 
 
+def pubkey_from_prvkey(prvkey: bytes | int, compressed: bool = True) -> bytes:
+    """Return the public key of a private key, i.e. the point kG.
+
+    This is the generator multiplication of `mult.mult_`, with the
+    serialization flag this module's other producers all take: `mult_`
+    is its `compressed=False` case, and every private-to-public
+    conversion that wants the compressed form -- BIP32 neutering, a
+    fingerprint, an address -- is this call and nothing after it.
+
+    Args:
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        compressed: whether to return 33 bytes rather than 65.
+
+    Returns:
+        The serialized point kG: 33 bytes whose first octet carries the
+        parity of y, or the 65 bytes of 0x04 || x || y.
+
+    Raises:
+        ValueError: if the private key is not 32 bytes, does not fit in
+            them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to serialize the point,
+            which no valid key can make it do.
+
+    Example:
+        >>> from btclib_libsecp256k1 import keys
+        >>> keys.pubkey_from_prvkey(1).hex()[:10]
+        '0279be667e'
+    """
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_create(ctx, pubkey, scalar(prvkey, "private key")):
+        raise ValueError("invalid private key: not in [1, n-1]")
+    return serialize(pubkey, compressed)
+
+
 def pubkey_negate(pubkey_bytes: bytes, compressed: bool = True) -> bytes:
     """Negate a public key.
 

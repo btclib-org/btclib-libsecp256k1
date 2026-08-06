@@ -176,7 +176,9 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="fit in 32 bytes"):
         mult.mult(-1)
 
-    with pytest.raises(ValueError, match="scalar"):
+    # generator multiplication is keys.pubkey_from_prvkey, so what its
+    # message names is the private key the scalar of it is
+    with pytest.raises(ValueError, match="private key"):
         mult.mult(0)
 
 

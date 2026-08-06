@@ -3,13 +3,18 @@
 # Distributed under the MIT software license, see the accompanying
 # LICENSE file or https://opensource.org/license/mit for the full text.
 
-"""Secp256k1 point multiplication."""
+"""Secp256k1 point multiplication.
+
+The two spellings of generator multiplication for a caller who thinks of
+it as an operation on a scalar rather than as the public key of a private
+key: serialized uncompressed, and as a pair of coordinates. The C call is
+`keys.pubkey_from_prvkey`, which is the same multiplication answering in
+either serialization.
+"""
 
 from __future__ import annotations
 
-from . import ffi, lib
-from ._scalar import scalar
-from .context import ctx
+from .keys import pubkey_from_prvkey
 
 
 def mult_(num: bytes | int) -> bytes:
@@ -21,11 +26,14 @@ def mult_(num: bytes | int) -> bytes:
 
     Returns:
         The resulting point, uncompressed: 65 bytes opening with 0x04.
-        `keys.serialize(keys.parse(...))` is the compressed form of it.
+        This is `keys.pubkey_from_prvkey(num, compressed=False)`, whose
+        default is the compressed form of the same point.
 
     Raises:
         ValueError: if the scalar is not 32 bytes or does not fit in
-            them, or if it is not in [1, n-1].
+            them, or if it is not in [1, n-1]. The message names a
+            private key, that being what the scalar of a generator
+            multiplication is to libsecp256k1.
         RuntimeError: if libsecp256k1 fails to serialize the point,
             which no input can make it do.
 
@@ -34,17 +42,7 @@ def mult_(num: bytes | int) -> bytes:
         >>> mult.mult_(1).hex()[:10]
         '0479be667e'
     """
-    num_bytes = scalar(num, "scalar")
-    point = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_create(ctx, point, num_bytes):
-        raise ValueError("invalid scalar: not in [1, n-1]")
-
-    output = ffi.new("char[65]")
-    length = ffi.new("size_t *", 65)
-
-    if lib.secp256k1_ec_pubkey_serialize(ctx, output, length, point, 2):
-        return ffi.unpack(output, 65)
-    raise RuntimeError("point serialization failed")
+    return pubkey_from_prvkey(num, compressed=False)
 
 
 def mult(num: bytes | int) -> tuple[int, int]:
@@ -57,7 +55,8 @@ def mult(num: bytes | int) -> tuple[int, int]:
     Returns:
         The affine coordinates (x, y) of the resulting point, as ints.
         This is `mult_` with the two halves of its output read as big
-        endian integers; a caller that wants bytes wants `mult_`.
+        endian integers; a caller that wants bytes wants `mult_`, or
+        `keys.pubkey_from_prvkey` for the compressed form.
 
     Raises:
         ValueError: if the scalar is not 32 bytes or does not fit in

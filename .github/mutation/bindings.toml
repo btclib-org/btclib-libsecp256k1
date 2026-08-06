@@ -52,7 +52,7 @@
 [cosmic-ray]
 # the package, not one module: it is small enough that scoping it further
 # would be excluding code from the question rather than dividing the work.
-# 771 mutants, which `cosmic-ray init` enumerates in under a second.
+# 777 mutants, which `cosmic-ray init` enumerates in under a second.
 # The vendored C is not in it and cannot be -- libsecp256k1 is upstream's,
 # and what this repository is answerable for is how the bindings drive it
 module-path = "btclib_libsecp256k1"

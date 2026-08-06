@@ -9,12 +9,24 @@ a tag is generated from.
 
 The same
 [libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
-(1a53f49) as v0.7.1, and the same bindings: **no breaking changes** — no
-wrapper changed behaviour, and nothing in the public API moved. What a
-fourth number carries here is the contract of each function where a
-caller reads it, a static extension compiled the way the interpreter
-compiles its own, and metadata that says what the wheels are.
+(1a53f49) as v0.7.1: **no breaking changes** — nothing in the public API
+moved, and the one wrapper whose behaviour changed changed the text of an
+error message. What a fourth number carries here is one new function, the
+contract of every function where a caller reads it, a static extension
+compiled the way the interpreter compiles its own, and metadata that says
+what the wheels are.
 
+- **`keys.pubkey_from_prvkey` is the public key of a private key**,
+  compressed by default, and the 65 bytes of `mult.mult_` with
+  `compressed=False` — which is what `mult_` now is. Generator
+  multiplication was the one producer here that could not answer the
+  compressed form, so a caller who wanted the 33 bytes had to parse and
+  re-serialize what libsecp256k1 had just serialized, or slice the parity
+  out of the 65 bytes themselves. `mult_` answers exactly what it did;
+  the one thing to know is that the `ValueError` of a scalar outside
+  `[1, n-1]` now names a private key, which is what
+  `secp256k1_ec_pubkey_create` calls its argument, so code matching on
+  that message matches on the new text.
 - **Every function documents its arguments, its return value and what it
   raises.** That contract used to be prose in the README, several hundred
   lines from the functions it applies to, which for a package shipped as
