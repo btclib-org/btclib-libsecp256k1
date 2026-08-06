@@ -7,6 +7,11 @@
 
 - BIP340: bip340_test_vectors.csv, vendored from
   https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv
+- BIP324: bip324_ellswift_decode_test_vectors.csv and
+  bip324_packet_encoding_test_vectors.csv, vendored from
+  https://github.com/bitcoin/bips/tree/master/bip-0324; the second is
+  the packet encoding suite, of which the ellswift/private key inputs
+  and the shared secret are what these bindings compute
 - ECDSA RFC6979: (k, r, s) vectors published in
   https://bitcointalk.org/index.php?topic=285142.msg3300992
   as vendored by trezor-firmware (crypto/tests/test_check.c,
@@ -35,7 +40,7 @@ import pathlib
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, mult, recovery, ssa
+from btclib_libsecp256k1 import dsa, ellswift, mult, recovery, ssa
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -148,6 +153,73 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
         # structurally invalid inputs raise instead of returning false
         result = False
     assert result == expected, vector["comment"]
+
+
+def bip324_vectors(name: str) -> list[dict[str, str]]:
+    """Read one of the BIP324 vector csv files, vendored from bitcoin/bips."""
+    path = pathlib.Path(__file__).parent / f"bip324_{name}_test_vectors.csv"
+    with path.open(newline="") as csv_file:
+        return list(csv.DictReader(csv_file))
+
+
+@pytest.mark.parametrize(
+    "vector",
+    bip324_vectors("ellswift_decode"),
+    ids=lambda v: f"ellswift-decode-{v['comment']}",
+)
+def test_bip324_ellswift_decode_vector(vector: dict[str, str]) -> None:
+    """Decode one ElligatorSwift encoding to the x coordinate BIP324 gives.
+
+    The suite's own ellswift tests encode and decode and agree with
+    themselves, which says nothing about the map being the one BIP324
+    defines. These are the published pairs, the degenerate cases among
+    them: u or t zero, u**3 + t**2 + 7 zero, x2 or x3 chosen rather than
+    x1.
+
+    Only x is compared. BIP324 defines the map into a field element, so
+    the y libsecp256k1 recovers with it -- the prefix of the compressed
+    key this returns, which is 02 for some vectors and 03 for others --
+    is a fact about the library rather than about the vector.
+    """
+    decoded = ellswift.decode(bytes.fromhex(vector["ellswift"]))
+    assert decoded[1:].hex() == vector["x"]
+    assert decoded[0] in (2, 3)
+
+
+@pytest.mark.parametrize(
+    "vector",
+    bip324_vectors("packet_encoding"),
+    ids=lambda v: f"ellswift-xdh-{v['in_idx']}",
+)
+def test_bip324_ellswift_xdh_vector(vector: dict[str, str]) -> None:
+    """Reproduce the BIP324 shared secret of one packet encoding vector.
+
+    `ellswift.xdh` is the whole reason the ellswift module is wrapped,
+    and nothing independent checked it: the suite gave both parties the
+    same secret, which two wrong implementations of one function also
+    do.
+
+    The vectors come from the packet encoding suite, whose later columns
+    are the ciphers BIP324 builds on top and are no business of these
+    bindings; `mid_shared_secret` is where this package's part ends. The
+    two encodings go in the order BIP324 hashes them, initiator first,
+    which is what `party` says: 0 when the private key is the
+    initiator's, 1 when it is the responder's.
+    """
+    prvkey = bytes.fromhex(vector["in_priv_ours"])
+    ours = bytes.fromhex(vector["in_ellswift_ours"])
+    theirs = bytes.fromhex(vector["in_ellswift_theirs"])
+    initiating = vector["in_initiating"] == "1"
+
+    ell_a, ell_b, party = (ours, theirs, 0) if initiating else (theirs, ours, 1)
+    assert (
+        ellswift.xdh(ell_a, ell_b, prvkey, party).hex() == vector["mid_shared_secret"]
+    )
+
+    # the same vector pins the decoding of both encodings, which is the
+    # x each party ends up multiplying
+    assert ellswift.decode(ours)[1:].hex() == vector["mid_x_ours"]
+    assert ellswift.decode(theirs)[1:].hex() == vector["mid_x_theirs"]
 
 
 # A signature whose nonce point has an x coordinate above the group
