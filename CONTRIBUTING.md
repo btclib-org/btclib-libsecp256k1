@@ -33,10 +33,10 @@ A vulnerability is never an issue: see the
 
 ## Opening an issue
 
-Search the [issues](https://github.com/btclib-org/btclib_libsecp256k1/issues)
-and [pull requests](https://github.com/btclib-org/btclib_libsecp256k1/pulls)
+Search the [issues](https://github.com/btclib-org/btclib-libsecp256k1/issues)
+and [pull requests](https://github.com/btclib-org/btclib-libsecp256k1/pulls)
 first, then use one of the
-[forms](https://github.com/btclib-org/btclib_libsecp256k1/issues/new/choose).
+[forms](https://github.com/btclib-org/btclib-libsecp256k1/issues/new/choose).
 The bug form asks which of the three artifacts is installed — a static
 wheel, a dynamic one, or a build from the sdist — because they differ in
 how libsecp256k1 is linked and a bug is rarely in all three.
@@ -362,4 +362,4 @@ Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.
 
 Once merged, your contribution is visible on the
-[contributors page](https://github.com/btclib-org/btclib_libsecp256k1/graphs/contributors).
+[contributors page](https://github.com/btclib-org/btclib-libsecp256k1/graphs/contributors).
