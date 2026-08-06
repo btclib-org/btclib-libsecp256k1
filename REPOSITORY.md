@@ -25,7 +25,7 @@ nothing.
 `checks` with an `app_id` rather than the bare `contexts` list, so nothing
 else can satisfy one:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/branches/master/protection \
+    gh api repos/btclib-org/btclib-libsecp256k1/branches/master/protection \
       --jq '.required_status_checks'
 
 | Check | Produced by |
@@ -34,14 +34,14 @@ else can satisfy one:
 | `Lint and type-check` | `lint.yml`, its only job |
 | `CodeQL` | code scanning's default setup |
 
-    gh api repos/btclib-org/btclib_libsecp256k1/commits/<sha>/check-runs \
+    gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
       --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
 
 **CodeQL is code scanning's default setup, not a workflow of this
 repository** — `state: configured`, python and actions, the default query
 suite, weekly — so there is no file here to read its triggers off:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/code-scanning/default-setup
+    gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
 
 That absence of a file is also why the check was first left out of the
 rule, on a measurement that was the wrong one: every ordinary pull
@@ -53,7 +53,7 @@ matters there is the other kind, `dev` into `master`; #21, the 0.7.1
 release merge, has CodeQL analyses under `refs/pull/21/head`. That is
 the pull request this rule actually gates, and CodeQL runs on it:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/code-scanning/analyses \
+    gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
       --jq '.[] | {ref, category, created_at}'
 
 `Dependency Graph` is not a candidate either: its runs are `dynamic`,
@@ -84,7 +84,7 @@ self-approval, so the review is a stop rather than a speed bump, and the
 admin bypass is the only way past it without a second maintainer to add.
 
     gh api -X DELETE \
-      repos/btclib-org/btclib_libsecp256k1/branches/master/protection/enforce_admins
+      repos/btclib-org/btclib-libsecp256k1/branches/master/protection/enforce_admins
 
 Turned off after being on through the 0.7.1 release, whose squash merge
 (see RELEASING.md) is what the previous setting actually cost: with
@@ -98,7 +98,7 @@ next incident has the same escape hatch btclib already keeps.
 
 `dev` is protected too, minimally and identically to btclib's own:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/branches/dev/protection \
+    gh api repos/btclib-org/btclib-libsecp256k1/branches/dev/protection \
       --jq '{required_linear_history, allow_force_pushes, allow_deletions,
         enforce_admins, required_conversation_resolution}'
 
@@ -125,7 +125,7 @@ instead of closing.
 **The default `GITHUB_TOKEN` is read-only repository-wide**, so a job
 needing more declares it:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/actions/permissions/workflow \
+    gh api repos/btclib-org/btclib-libsecp256k1/actions/permissions/workflow \
       --jq '.default_workflow_permissions'   # "read"
 
 Only `release.yml` asks for more: `contents: write` on `github-release`,
@@ -138,7 +138,7 @@ readable where the job is.
 
 Both environments require a review, so an upload waits for a person:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/environments \
+    gh api repos/btclib-org/btclib-libsecp256k1/environments \
       --jq '.environments[] | {name, protection_rules}'
 
 `pypi` and `testpypi` each have `fametrano` as the required reviewer.
@@ -182,7 +182,7 @@ saying nothing. Dependabot security updates are on.
 
 Some settings cannot be enabled and fail silently:
 
-    gh api repos/btclib-org/btclib_libsecp256k1 --jq '.security_and_analysis'
+    gh api repos/btclib-org/btclib-libsecp256k1 --jq '.security_and_analysis'
 
 Secret scanning and push protection are enabled;
 `secret_scanning_non_provider_patterns` and
@@ -197,7 +197,7 @@ carries what maintaining its baseline costs.
 Unlike btclib, this repository serves no GitHub Pages site, so no file in
 its root is a URL anywhere:
 
-    gh api repos/btclib-org/btclib_libsecp256k1/pages   # 404
+    gh api repos/btclib-org/btclib-libsecp256k1/pages   # 404
 
 btclib.org is built from the btclib repository's `master` root, which is
 why that project's README is also a web page and this one's is not.

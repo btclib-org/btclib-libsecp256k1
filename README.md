@@ -4,18 +4,18 @@
 [![pypi](https://img.shields.io/pypi/v/btclib_libsecp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
 [![downloads](https://static.pepy.tech/badge/btclib_libsecp256k1)](https://pepy.tech/project/btclib_libsecp256k1)
 [![status](https://img.shields.io/pypi/status/btclib_libsecp256k1.svg)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
-[![license](https://img.shields.io/github/license/btclib-org/btclib_libsecp256k1.svg)](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/LICENSE)
+[![license](https://img.shields.io/github/license/btclib-org/btclib-libsecp256k1.svg)](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/LICENSE)
 [![lint and format: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![type-check: mypy](https://img.shields.io/badge/type--check-mypy-yellowgreen.svg?logo=mypy)](http://mypy-lang.org/)
-[![lint](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/lint.yml)
-[![test](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib_libsecp256k1/actions/workflows/test.yml)
+[![lint](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml)
+[![test](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml)
 [![docs](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
 
 [![Follow on Twitter](https://img.shields.io/twitter/follow/btclib?style=social&logo=twitter)](https://twitter.com/intent/follow?screen_name=btclib)
 
 ---
 
-[Browse GitHub Code Repository](https://github.com/btclib-org/btclib_libsecp256k1/)
+[Browse GitHub Code Repository](https://github.com/btclib-org/btclib-libsecp256k1/)
 
 ---
 
@@ -142,7 +142,7 @@ type, a length, or a magnitude, all of which the caller knows already —
 so the constant-time guarantee is the C call's, and it is intact. What
 python cannot give back is what happens on either side of that call:
 `bytes` is not zeroized either, and
-[SECURITY.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/SECURITY.md)
+[SECURITY.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/SECURITY.md)
 records both limits as inherent.
 
 And there is a way past all of it: `lib` and `ffi` are exported, and a
@@ -237,7 +237,7 @@ attributes a message to the right caller.
 
 What is not protected is the secret material itself, which lives in
 Python objects for as long as the interpreter keeps them: see
-[SECURITY.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/SECURITY.md).
+[SECURITY.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/SECURITY.md).
 
 ## The vendored library is not optional
 
@@ -315,7 +315,7 @@ x86_64 only.
 How to get the submodule, set up the development environment, run the
 suite and the benchmarks, reproduce each CI job locally, and what a
 change is expected to satisfy are in
-[CONTRIBUTING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/CONTRIBUTING.md).
 
 ## Release process
 
@@ -328,4 +328,4 @@ their provenance can be verified on PyPI.
 
 The steps to cut a release, to rehearse one on TestPyPI, and the
 one-time setup each index needs are in
-[RELEASING.md](https://github.com/btclib-org/btclib_libsecp256k1/blob/master/RELEASING.md).
+[RELEASING.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/RELEASING.md).
