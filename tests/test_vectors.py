@@ -74,22 +74,27 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
 
     The verification verdict is the vector's own. A vector carrying a
     secret key is also signed and the signature compared byte for byte,
-    which the fixed aux_rand makes possible -- but only for a 32-octet
-    message, `ssa.sign` exposing BIP340's 32-byte signing alone and the
-    longer messages being `ssa.sign_custom`'s. A structurally invalid input
-    raises where the vector says false, so the exception is read as that
-    verdict rather than as an error.
+    which the fixed aux_rand makes possible. Which function signs it is
+    the length of the message: `ssa.sign` is BIP340's 32-byte signing, and
+    `ssa.sign_custom` is the arbitrary-length one, so the four vectors
+    added in 2022 -- messages of 0, 1, 17 and 100 octets -- are the only
+    published values `sign_custom` can be held against. A structurally
+    invalid input raises where the vector says false, so the exception is
+    read as that verdict rather than as an error.
     """
     msg = bytes.fromhex(vector["message"])
     pubkey = bytes.fromhex(vector["public key"])
     sig = bytes.fromhex(vector["signature"])
     expected = vector["verification result"] == "TRUE"
 
-    # the bindings expose the 32-byte message BIP340 signing only
-    if vector["secret key"] and len(msg) == 32:
+    if vector["secret key"]:
         seckey = bytes.fromhex(vector["secret key"])
         aux_rand = bytes.fromhex(vector["aux_rand"])
-        assert ssa.sign(msg, seckey, aux_rand) == sig
+        assert ssa.sign_custom(msg, seckey, aux_rand) == sig
+        # sign_custom answers a 32-byte message with the signature sign
+        # returns, which is what makes the two comparable at all
+        if len(msg) == 32:
+            assert ssa.sign(msg, seckey, aux_rand) == sig
 
     try:
         result = bool(ssa.verify(msg, pubkey, sig))

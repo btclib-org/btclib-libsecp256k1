@@ -59,11 +59,16 @@ behind  0 revisions; that commit is the tip of the path
 ```
 
 Verdict: **identical**, CRLF included. All 19 vectors, all eight
-columns. Four of the 19 are messages of 0, 1, 17 and 100 bytes: BIP340
-accepts a message of any size, and `ssa.sign`/`ssa.verify` insist on a
-32-byte hash (issue 169), so `test_vectors.py` skips these four rather
-than failing them -- the same four btclib's own copy of this file takes
-the pure-Python path for, having the fallback this package does not.
+columns. Four of the 19 are messages of 0, 1, 17 and 100 bytes, which
+BIP340 accepts and `ssa.sign` does not: those four are what
+`ssa.sign_custom` is signed against, the only published values it can be
+held to, while `ssa.sign` takes the 32-byte rows. Every row carrying a
+secret key is therefore signed and compared byte for byte, and the
+32-byte ones twice, once through each function -- `sign_custom`
+answering a 32-byte message with the signature `sign` returns is itself
+part of what is checked. btclib's own copy of this file takes the
+pure-Python path for the same four, having the fallback this package
+does not.
 
 ## rustyrussell/secp256k1-py
 
