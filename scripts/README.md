@@ -41,7 +41,15 @@ What it does with the result:
 `dynamic_platform_tag()` is the one place that has to name the target
 platform itself, since a dynamic wheel gets no tag from the interpreter
 that built it. On Linux the tag it produces is a plain `linux_*`, which
-`auditwheel repair` later upgrades to a manylinux one.
+`auditwheel repair` later upgrades to a manylinux one. On macOS it reads
+`MACOSX_DEPLOYMENT_TARGET`, and falls back to `platform.mac_ver()` when
+nothing set one — which is honest, CMake having built the library for
+that same host default, and narrow: the wheel is then one only the build
+machine's macOS accepts. Every wheel that ships is built with the
+variable exported, by `test.yml` for the dynamic ones and by
+`cibuildwheel` for the static ones; a local build reproducing either has
+to export it too, and CONTRIBUTING.md says so where it gives the
+command.
 
 ## cffi_build.py
 
