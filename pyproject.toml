@@ -31,10 +31,19 @@ classifiers=[
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
         "Natural Language :: English",
-        "Operating System :: OS Independent",
+        # the three systems the wheels are built for, and not
+        # "OS Independent": this package is platform-specific compiled
+        # wheels, eleven kinds of them, and the classifier PyPI filters on
+        # should say so rather than the opposite
+        "Operating System :: POSIX",
+        "Operating System :: MacOS",
+        "Operating System :: Microsoft :: Windows",
         "Topic :: Security :: Cryptography",
         "Topic :: Scientific/Engineering",
         "Topic :: Software Development :: Libraries :: Python Modules",
+        # btclib_libsecp256k1/py.typed is in the wheel, and the typed cffi
+        # boundary is the design point README.md leads with
+        "Typing :: Typed",
     ]
 # the wrappers call ffi.unpack on every path, which cffi grew in 1.6;
 # below 3.13 any cffi new enough to compile for the interpreter already
