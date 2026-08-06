@@ -25,7 +25,35 @@ EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
 def sign(
     msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
 ) -> bytes:
-    """Create a Schnorr signature of a 32-byte message hash."""
+    """Create a Schnorr signature of a 32-byte message hash.
+
+    Args:
+        msg_bytes: the 32-byte message hash.
+        prvkey: the private key, 32 bytes or an int below 2**256. The
+            signature is of its x-only public key, so the key is negated
+            first where its y is odd, as BIP340 prescribes.
+        aux_rand32: the 32 bytes of auxiliary randomness BIP340 defines,
+            or None for fresh randomness. Never a shorter value: BIP340
+            defines a 32-byte a, and padding a short one would make a
+            caller mistake a valid argument.
+
+    Returns:
+        The 64-byte signature.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if aux_rand32
+            is given and is not 32 bytes, or if the private key is not
+            32 bytes, does not fit in them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to sign, which no input can
+            make it do.
+
+    Example:
+        >>> from btclib_libsecp256k1 import ssa, xonly, mult
+        >>> msg, prvkey = bytes(32), 1
+        >>> pubkey, _ = xonly.from_pubkey(mult.mult_(prvkey))
+        >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
+        True
+    """
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
     keypair = _keypair(prvkey)
@@ -49,6 +77,22 @@ def sign_custom(
     (hashes.tagged_sha256) and sign that instead, so that a signature
     cannot be read as one of a different protocol. For a 32-byte message
     the signature is the one sign returns.
+
+    Args:
+        msg_bytes: the message, of any length.
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        aux_rand32: the 32 bytes of auxiliary randomness, or None for
+            fresh randomness.
+
+    Returns:
+        The 64-byte signature.
+
+    Raises:
+        ValueError: if aux_rand32 is given and is not 32 bytes, or if
+            the private key is not 32 bytes, does not fit in them, or is
+            not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to sign, which no input can
+            make it do.
     """
     keypair = _keypair(prvkey)
 
@@ -75,6 +119,21 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
     that: dropping the y coordinate of a full public key is a decision
     of the caller, `xonly.from_pubkey` being the conversion, because a
     key with odd y verifies as the point that is not the one passed.
+
+    Args:
+        msg_bytes: the message, of any length. It is the 32-byte hash
+            for a signature made by `sign`.
+        pubkey_bytes: the 32-byte x-only public key, and only that.
+        signature_bytes: the 64-byte signature.
+
+    Returns:
+        True if the signature is valid for that key and message.
+
+    Raises:
+        ValueError: if the signature is not 64 bytes, if the public key
+            is not 32 bytes, or if it is not a valid x coordinate. A
+            well-formed signature that simply does not verify is False,
+            not an exception.
     """
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")
@@ -94,7 +153,18 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
 
 
 def _keypair(prvkey: bytes | int) -> CData:
-    """Create a keypair from a private key."""
+    """Create a keypair from a private key.
+
+    Args:
+        prvkey: the private key, 32 bytes or an int below 2**256.
+
+    Returns:
+        The libsecp256k1 keypair object.
+
+    Raises:
+        ValueError: if the key is not 32 bytes, does not fit in them, or
+            is not in [1, n-1].
+    """
     keypair = ffi.new("secp256k1_keypair *")
     if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
         raise ValueError("invalid private key")
@@ -109,6 +179,15 @@ def _aux_rand32(aux_rand32: bytes | None) -> bytes:
     the entropy of a nonce and not a serialization: a shorter value is a
     caller mistake rather than a small number, and padding it here would
     turn one into a valid argument.
+
+    Args:
+        aux_rand32: the 32 bytes given by the caller, or None.
+
+    Returns:
+        Those 32 bytes, or 32 freshly generated ones.
+
+    Raises:
+        ValueError: if a value is given and is not 32 bytes.
     """
     if aux_rand32 is None:
         return secrets.token_bytes(32)

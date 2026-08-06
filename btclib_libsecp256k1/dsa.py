@@ -13,7 +13,37 @@ from .context import ctx
 
 
 def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> bytes:
-    """Create an ECDSA signature."""
+    """Create an ECDSA signature.
+
+    The nonce is the deterministic RFC6979 one, so the signature is a
+    function of the message and the key alone unless ndata is given.
+
+    Args:
+        msg_bytes: the 32-byte hash of the message.
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        ndata: 32 bytes of extra entropy mixed into the nonce, or None
+            for the RFC6979 nonce alone. Never a shorter value: entropy
+            is not a serialization, and padding one would make a caller
+            mistake a valid argument.
+
+    Returns:
+        The signature in DER encoding, in the lower-s form libsecp256k1
+        always produces.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if ndata is
+            given and is not 32 bytes, or if the private key is not 32
+            bytes, does not fit in them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to serialize the signature,
+            which no input can make it do.
+
+    Example:
+        >>> import hashlib
+        >>> from btclib_libsecp256k1 import dsa
+        >>> msg = hashlib.sha256(b"hello").digest()
+        >>> dsa.is_low_s(dsa.sign(msg, 1))
+        True
+    """
     prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
@@ -39,6 +69,27 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
 
     A signature which is not in the normalized lower-s form is rejected;
     normalize it first if it comes from a system not enforcing it.
+
+    Args:
+        msg_bytes: the 32-byte hash of the message.
+        pubkey_bytes: the public key, 33 or 65 bytes.
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        True if the signature is valid for that key and message.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if the DER
+            signature is malformed, or if the public key is not a valid
+            point. A well-formed signature that simply does not verify
+            is False, not an exception.
+
+    Example:
+        >>> import hashlib
+        >>> from btclib_libsecp256k1 import dsa, mult
+        >>> msg = hashlib.sha256(b"hello").digest()
+        >>> dsa.verify(msg, mult.mult_(1), dsa.sign(msg, 1))
+        True
     """
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
@@ -53,7 +104,21 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
 
 
 def normalize(signature_bytes: bytes) -> bytes:
-    """Convert a DER signature to its normalized lower-s form."""
+    """Convert a DER signature to its normalized lower-s form.
+
+    Args:
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        The same signature with s replaced by n - s where s was the
+        higher of the two, in DER encoding. A signature already
+        normalized is returned unchanged.
+
+    Raises:
+        ValueError: if the DER signature is malformed.
+        RuntimeError: if libsecp256k1 fails to serialize the result,
+            which no input can make it do.
+    """
     signature = _parse_der(signature_bytes)
     normalized = ffi.new("secp256k1_ecdsa_signature *")
     lib.secp256k1_ecdsa_signature_normalize(ctx, normalized, signature)
@@ -66,6 +131,16 @@ def is_low_s(signature_bytes: bytes) -> bool:
     ECDSA signatures are malleable: negating s modulo the group order
     yields a second valid signature of the same message, which the
     lower-s requirement rules out.
+
+    Args:
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        True if s is the lower of the two, which is what `verify`
+        requires and what `sign` always produces.
+
+    Raises:
+        ValueError: if the DER signature is malformed.
     """
     signature = _parse_der(signature_bytes)
     # a NULL output only checks the input, which is reported as
@@ -74,7 +149,19 @@ def is_low_s(signature_bytes: bytes) -> bool:
 
 
 def to_compact(signature_bytes: bytes) -> bytes:
-    """Convert a DER signature into its 64-byte compact form."""
+    """Convert a DER signature into its 64-byte compact form.
+
+    Args:
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        The 64 bytes of r and s, each big endian and zero padded.
+
+    Raises:
+        ValueError: if the DER signature is malformed.
+        RuntimeError: if libsecp256k1 fails to serialize it, which no
+            input can make it do.
+    """
     signature = _parse_der(signature_bytes)
     sig_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ecdsa_signature_serialize_compact(ctx, sig_bytes, signature):
@@ -83,7 +170,22 @@ def to_compact(signature_bytes: bytes) -> bytes:
 
 
 def to_der(signature_bytes: bytes) -> bytes:
-    """Convert a 64-byte compact signature into its DER form."""
+    """Convert a 64-byte compact signature into its DER form.
+
+    Args:
+        signature_bytes: the 64 bytes of r and s.
+
+    Returns:
+        The same signature in DER encoding. s is not normalized: a
+        high-s input gives a DER signature `verify` refuses, which
+        `normalize` is for.
+
+    Raises:
+        ValueError: if the input is not 64 bytes, or if r or s is not
+            below the group order.
+        RuntimeError: if libsecp256k1 fails to serialize it, which no
+            input can make it do.
+    """
     if len(signature_bytes) != 64:
         raise ValueError("the compact signature must be 64 bytes")
 
@@ -94,7 +196,17 @@ def to_der(signature_bytes: bytes) -> bytes:
 
 
 def _parse_der(signature_bytes: bytes) -> CData:
-    """Parse a DER signature into its internal representation."""
+    """Parse a DER signature into its internal representation.
+
+    Args:
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        The libsecp256k1 signature object.
+
+    Raises:
+        ValueError: if the DER signature is malformed.
+    """
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_der(
         ctx, signature, signature_bytes, len(signature_bytes)
@@ -104,7 +216,18 @@ def _parse_der(signature_bytes: bytes) -> CData:
 
 
 def _serialize_der(sig: CData) -> bytes:
-    """Serialize an internal signature in DER form."""
+    """Serialize an internal signature in DER form.
+
+    Args:
+        sig: the libsecp256k1 signature object.
+
+    Returns:
+        Its DER encoding, at most 72 bytes.
+
+    Raises:
+        RuntimeError: if libsecp256k1 fails, which the 73-byte buffer
+            makes unreachable.
+    """
     sig_bytes = ffi.new("char[73]")
     length = ffi.new("size_t *", 73)
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, sig):

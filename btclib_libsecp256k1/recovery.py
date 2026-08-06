@@ -21,7 +21,24 @@ def sign(
 ) -> tuple[bytes, int]:
     """Create a recoverable ECDSA signature.
 
-    Return the 64-byte compact signature and its recovery id.
+    Args:
+        msg_bytes: the 32-byte hash of the message.
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        ndata: 32 bytes of extra entropy mixed into the nonce, or None
+            for the RFC6979 nonce alone.
+
+    Returns:
+        The 64-byte compact signature and its recovery id. The id is 0
+        or 1 for any signature this function produces; 2 and 3 exist for
+        a nonce point whose x exceeded the group order, which no key
+        reaches in practice.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if ndata is
+            given and is not 32 bytes, or if the private key is not 32
+            bytes, does not fit in them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to serialize the signature,
+            which no input can make it do.
     """
     prvkey_bytes = scalar(prvkey, "private key")
     if len(msg_bytes) != 32:
@@ -50,7 +67,26 @@ def sign(
 
 
 def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
-    """Recover the compressed public key from a recoverable ECDSA signature."""
+    """Recover the compressed public key from a recoverable ECDSA signature.
+
+    Args:
+        msg_bytes: the 32-byte hash the signature was made over.
+        signature_bytes: the 64-byte compact signature.
+        recid: the recovery id, 0 to 3. A wrong one recovers a different
+            key rather than failing, so it is part of the signature and
+            not a guess.
+
+    Returns:
+        The 33-byte compressed public key.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if the
+            signature is not 64 bytes or has r or s at or above the
+            group order, if recid is outside 0 to 3, or if no key can be
+            recovered.
+        RuntimeError: if libsecp256k1 fails to serialize the key, which
+            no input can make it do.
+    """
     if len(msg_bytes) != 32:
         raise ValueError("the message hash must be 32 bytes")
     if len(signature_bytes) != 64:
@@ -78,6 +114,21 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
     Beware: the conversion does not normalize the signature, so a
     high-s input is rejected by dsa.verify; signatures produced by
     sign are always low-s.
+
+    Args:
+        signature_bytes: the 64-byte compact signature.
+        recid: the recovery id, 0 to 3. It is required because
+            libsecp256k1 parses the pair before dropping the id, and
+            refuses one out of range.
+
+    Returns:
+        The same signature in DER encoding, s unchanged.
+
+    Raises:
+        ValueError: if the signature is not 64 bytes or has r or s at or
+            above the group order, or if recid is outside 0 to 3.
+        RuntimeError: if libsecp256k1 fails to convert or serialize the
+            signature, which no input can make it do.
     """
     if len(signature_bytes) != 64:
         raise ValueError("the signature must be 64 bytes")
@@ -98,7 +149,18 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
 
 
 def _parse(signature_bytes: bytes, recid: int) -> CData:
-    """Parse a compact signature and its recovery id."""
+    """Parse a compact signature and its recovery id.
+
+    Args:
+        signature_bytes: the 64-byte compact signature.
+        recid: the recovery id, 0 to 3.
+
+    Returns:
+        The libsecp256k1 recoverable signature object.
+
+    Raises:
+        ValueError: if r or s is at or above the group order.
+    """
     signature = ffi.new("secp256k1_ecdsa_recoverable_signature *")
     if not lib.secp256k1_ecdsa_recoverable_signature_parse_compact(
         ctx, signature, signature_bytes, recid

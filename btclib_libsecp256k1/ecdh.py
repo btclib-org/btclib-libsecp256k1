@@ -25,6 +25,19 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
     being available as keys.pubkey_tweak_mul(pubkey_bytes, prvkey),
     itself constant time. A protocol needing another derivation applies
     it to that: SHA256 of it is what this function returns.
+
+    Args:
+        pubkey_bytes: the other party's public key, 33 or 65 bytes.
+        prvkey: this party's private key, 32 bytes or an int below
+            2**256.
+
+    Returns:
+        The 32-byte shared secret.
+
+    Raises:
+        ValueError: if the public key is not a valid point, if the
+            private key is not 32 bytes or does not fit in them, or if
+            it is not a valid scalar.
     """
     prvkey_bytes = scalar(prvkey, "private key")
 
