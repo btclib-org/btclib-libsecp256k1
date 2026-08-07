@@ -129,7 +129,7 @@ def compressed(point: Point) -> bytes:
 def bip340_vectors() -> list[dict[str, str]]:
     """Read the BIP340 vector csv, vendored from bitcoin/bips."""
     path = pathlib.Path(__file__).parent / "bip340_test_vectors.csv"
-    with path.open(newline="") as csv_file:
+    with path.open(newline="", encoding="utf-8") as csv_file:
         return list(csv.DictReader(csv_file))
 
 
@@ -180,7 +180,7 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
 def bip324_vectors(name: str) -> list[dict[str, str]]:
     """Read one of the BIP324 vector csv files, vendored from bitcoin/bips."""
     path = pathlib.Path(__file__).parent / f"bip324_{name}_test_vectors.csv"
-    with path.open(newline="") as csv_file:
+    with path.open(newline="", encoding="utf-8") as csv_file:
         return list(csv.DictReader(csv_file))
 
 
