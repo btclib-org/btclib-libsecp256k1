@@ -71,10 +71,33 @@ _error_callback = ffi.callback("void(*)(const char *, void *)", _record_error)
 lib.secp256k1_context_set_illegal_callback(ctx, _illegal_callback, ffi.NULL)
 lib.secp256k1_context_set_error_callback(ctx, _error_callback, ffi.NULL)
 
-# re-blind the signing precomputation, protecting against side-channel
-# leakage, as recommended by libsecp256k1
-if not lib.secp256k1_context_randomize(ctx, secrets.token_bytes(32)):
-    raise RuntimeError("libsecp256k1 context randomization failed")
+
+def _randomize(context: CData) -> None:
+    """Re-blind the signing precomputation of that context.
+
+    Protects against side-channel leakage, as libsecp256k1 recommends,
+    and is called below on the shared context at import time. A caller
+    of its own may repeat it whenever it wants fresh blinding.
+
+    The context is an argument rather than the module-level `ctx` for
+    the same reason `_load_lib` takes the module: a line called once, at
+    import, is a line no test can reach afterwards -- and what is worth
+    reaching here is the 32, an entropy requirement of
+    secp256k1_context_randomize that no answer this package returns
+    would reveal if it were wrong.
+
+    Args:
+        context: the libsecp256k1 context to re-blind.
+
+    Raises:
+        RuntimeError: if libsecp256k1 fails, which a 32-octet seed
+            cannot make it do.
+    """
+    if not lib.secp256k1_context_randomize(context, secrets.token_bytes(32)):
+        raise RuntimeError("libsecp256k1 context randomization failed")
+
+
+_randomize(ctx)
 
 
 def check() -> None:

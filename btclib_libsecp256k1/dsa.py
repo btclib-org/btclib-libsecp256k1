@@ -166,7 +166,7 @@ def to_compact(signature_bytes: bytes) -> bytes:
     sig_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ecdsa_signature_serialize_compact(ctx, sig_bytes, signature):
         raise RuntimeError("signature serialization failed")
-    return ffi.unpack(sig_bytes, 64)
+    return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes))
 
 
 def to_der(signature_bytes: bytes) -> bytes:
@@ -237,7 +237,10 @@ def _serialize_der(sig: CData) -> bytes:
     #
     # The number is written once and the rest is derived from it: the
     # length passed in is the buffer's own size, so the two cannot drift
-    # apart, and what comes out is what libsecp256k1 says it wrote
+    # apart, and what comes out is what libsecp256k1 says it wrote --
+    # this being the one serialization here whose length varies, 70 to 72
+    # depending on how many octets r and s need. Where the length is
+    # fixed the buffer is unpacked instead, and keys.serialize says why
     sig_bytes = ffi.new("char[72]")
     length = ffi.new("size_t *", ffi.sizeof(sig_bytes))
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, sig):

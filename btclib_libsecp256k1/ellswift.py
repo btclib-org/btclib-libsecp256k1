@@ -52,7 +52,7 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_create(ctx, ell_bytes, prvkey_bytes, aux_rand32):
         raise ValueError("invalid private key")
-    return ffi.unpack(ell_bytes, 64)
+    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
 def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
@@ -89,7 +89,7 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
         raise RuntimeError("ElligatorSwift encoding failed")
-    return ffi.unpack(ell_bytes, 64)
+    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
 def decode(ell_bytes: bytes) -> bytes:
@@ -115,11 +115,13 @@ def decode(ell_bytes: bytes) -> bytes:
     if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
         raise RuntimeError("ElligatorSwift decoding failed")
 
+    # one length per flag, so the buffer is what is unpacked: see the
+    # comment in keys.serialize
     output = ffi.new("char[33]")
     length = ffi.new("size_t *", ffi.sizeof(output))
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, COMPRESSED):
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, length[0])
+    return ffi.unpack(output, ffi.sizeof(output))
 
 
 def xdh(
@@ -167,4 +169,4 @@ def xdh(
         ffi.NULL,
     ):
         raise ValueError("invalid private key")
-    return ffi.unpack(output, 32)
+    return ffi.unpack(output, ffi.sizeof(output))

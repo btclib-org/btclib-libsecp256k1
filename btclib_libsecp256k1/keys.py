@@ -62,7 +62,7 @@ def prvkey_negate(prvkey: bytes | int) -> bytes:
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     if not lib.secp256k1_ec_seckey_negate(ctx, prvkey_buffer):
         raise ValueError("invalid private key")
-    return ffi.unpack(prvkey_buffer, 32)
+    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
 
 
 def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
@@ -87,7 +87,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_add(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return ffi.unpack(prvkey_buffer, 32)
+    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
 
 
 def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
@@ -109,7 +109,7 @@ def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_mul(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return ffi.unpack(prvkey_buffer, 32)
+    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
 
 
 def pubkey_from_prvkey(prvkey: bytes | int, compressed: bool = True) -> bytes:
@@ -355,10 +355,18 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
         >>> keys.serialize(keys.parse(mult.mult_(1))).hex()[:10]
         '0279be667e'
     """
+    # the size is written once and the capacity derived from it. What is
+    # unpacked is the buffer, not the length libsecp256k1 reports back:
+    # this serialization has one length per flag, so a buffer of the
+    # wrong size has to reach the caller to be caught -- reading the
+    # reported length instead would quietly accept an oversized one,
+    # which a mutation session measured directly (`size = 34` survived
+    # that spelling, and dies in this one). The DER serialization is the
+    # other case, and reads `length[0]` for the reason given there
     size = 33 if compressed else 65
     output = ffi.new(f"char[{size}]")
     length = ffi.new("size_t *", ffi.sizeof(output))
     flags = COMPRESSED if compressed else UNCOMPRESSED
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, flags):
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, length[0])
+    return ffi.unpack(output, ffi.sizeof(output))

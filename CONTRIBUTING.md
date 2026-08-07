@@ -247,10 +247,12 @@ them run locally.
   grep that keeps the exclusion honest.
 
   `--surviving-only` is the whole of what anybody acts on, a killed mutant
-  being the suite doing its job. Read the list expecting one shape that is
-  not a hole: an output buffer, or a piece of internally generated
-  randomness, whose size nothing observable depends on. Anything else is a
-  test nobody has written yet.
+  being the suite doing its job. Read the list expecting nothing: the two
+  shapes that used to be in it — an output buffer sized twice, and
+  generated randomness whose length no answer reveals — were answered in
+  the code rather than excused in a comment, and the session that measured
+  that reported no survivor at all. So whatever is in the list is a test
+  nobody has written yet.
 
   The counter last, and not `cr-rate`: that tool reads anything that is not
   SURVIVED as a kill, so it counts the skipped mutants among them and
