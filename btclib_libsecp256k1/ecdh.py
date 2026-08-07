@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from . import ffi, lib
 from ._scalar import octets, scalar
+from ._secret import take
 from .context import ctx
 
 
@@ -51,4 +52,4 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
     # which writes 32 bytes to output
     if not lib.secp256k1_ecdh(ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL):
         raise ValueError("invalid private key")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return take(output)

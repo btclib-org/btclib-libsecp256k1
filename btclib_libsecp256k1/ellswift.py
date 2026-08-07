@@ -14,6 +14,7 @@ import secrets
 
 from . import ffi, lib
 from ._scalar import octets, scalar
+from ._secret import take
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -169,4 +170,4 @@ def xdh(
         ffi.NULL,
     ):
         raise ValueError("invalid private key")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return take(output)

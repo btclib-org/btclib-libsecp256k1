@@ -19,6 +19,7 @@ from collections.abc import Sequence
 
 from . import CData, ffi, lib
 from ._scalar import octets, scalar
+from ._secret import take
 from .context import check, ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
@@ -62,7 +63,7 @@ def prvkey_negate(prvkey: bytes | int) -> bytes:
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     if not lib.secp256k1_ec_seckey_negate(ctx, prvkey_buffer):
         raise ValueError("invalid private key")
-    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
+    return take(prvkey_buffer)
 
 
 def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
@@ -87,7 +88,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_add(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
+    return take(prvkey_buffer)
 
 
 def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
@@ -109,7 +110,7 @@ def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_mul(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
+    return take(prvkey_buffer)
 
 
 def pubkey_from_prvkey(prvkey: bytes | int, compressed: bool = True) -> bytes:

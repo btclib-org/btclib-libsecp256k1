@@ -18,6 +18,11 @@ be a second source of truth that nothing keeps honest.
 `unpack` is narrowed to bytes. In general it returns bytes, str or a
 list, depending on the cdata type; the package only ever unpacks
 `char[]`, which is the bytes case.
+
+`buffer` answers a writable view of what a cdata owns, and its length is
+that of the memory rather than of a pointer to it: `_secret` reads both
+from it. `memoryview` is what it is used as -- sliced, assigned to, and
+measured -- so that is what it is declared to return.
 """
 
 from typing import Any
@@ -26,6 +31,7 @@ class _FFI:
     NULL: Any
     def new(self, cdecl: str, init: Any = ...) -> Any: ...
     def sizeof(self, cdecl_or_cdata: Any) -> int: ...
+    def buffer(self, cdata: Any, size: int = ...) -> memoryview: ...
     def unpack(self, cdata: Any, length: int) -> bytes: ...
     def string(self, cdata: Any) -> bytes: ...
     def callback(self, cdecl: str, python_callable: Any) -> Any: ...
