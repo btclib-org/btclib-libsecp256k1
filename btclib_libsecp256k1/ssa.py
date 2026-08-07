@@ -14,7 +14,7 @@ from __future__ import annotations
 import secrets
 
 from . import CData, ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 # SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
@@ -54,8 +54,7 @@ def sign(
         >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
         True
     """
-    if len(msg_bytes) != 32:
-        raise ValueError("the message hash must be 32 bytes")
+    octets(msg_bytes, "message hash", 32)
     keypair = _keypair(prvkey)
 
     sig = ffi.new("char[64]")
@@ -94,6 +93,7 @@ def sign_custom(
         RuntimeError: if libsecp256k1 fails to sign, which no input can
             make it do.
     """
+    octets(msg_bytes, "message")
     keypair = _keypair(prvkey)
 
     ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
@@ -135,11 +135,10 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
             well-formed signature that simply does not verify is False,
             not an exception.
     """
-    if len(signature_bytes) != 64:
-        raise ValueError("the signature must be 64 bytes")
+    octets(msg_bytes, "message")
+    octets(signature_bytes, "signature", 64)
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    if len(pubkey_bytes) != 32:
-        raise ValueError("the x-only public key must be 32 bytes")
+    octets(pubkey_bytes, "x-only public key", 32)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
@@ -191,6 +190,4 @@ def _aux_rand32(aux_rand32: bytes | None) -> bytes:
     """
     if aux_rand32 is None:
         return secrets.token_bytes(32)
-    if len(aux_rand32) != 32:
-        raise ValueError("aux_rand32 must be 32 bytes")
-    return aux_rand32
+    return octets(aux_rand32, "aux_rand32", 32)

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from . import CData, ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -41,8 +41,7 @@ def sign(
             which no input can make it do.
     """
     prvkey_bytes = scalar(prvkey, "private key")
-    if len(msg_bytes) != 32:
-        raise ValueError("the message hash must be 32 bytes")
+    octets(msg_bytes, "message hash", 32)
 
     sig = ffi.new("secp256k1_ecdsa_recoverable_signature *")
 
@@ -50,8 +49,8 @@ def sign(
     # 32 bytes of entropy, or nothing: see the comment in dsa.sign
     if ndata is None:
         ndata = ffi.NULL
-    elif len(ndata) != 32:
-        raise ValueError("ndata must be 32 bytes")
+    else:
+        octets(ndata, "ndata", 32)
     if not lib.secp256k1_ecdsa_sign_recoverable(
         ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata
     ):
@@ -87,10 +86,8 @@ def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
         RuntimeError: if libsecp256k1 fails to serialize the key, which
             no input can make it do.
     """
-    if len(msg_bytes) != 32:
-        raise ValueError("the message hash must be 32 bytes")
-    if len(signature_bytes) != 64:
-        raise ValueError("the signature must be 64 bytes")
+    octets(msg_bytes, "message hash", 32)
+    octets(signature_bytes, "signature", 64)
     if recid not in (0, 1, 2, 3):
         raise ValueError("the recovery id must be 0, 1, 2, or 3")
 
@@ -132,8 +129,7 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             signature, which no input can make it do.
     """
-    if len(signature_bytes) != 64:
-        raise ValueError("the signature must be 64 bytes")
+    octets(signature_bytes, "signature", 64)
     if recid not in (0, 1, 2, 3):
         raise ValueError("the recovery id must be 0, 1, 2, or 3")
 

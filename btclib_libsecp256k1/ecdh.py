@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from . import ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 
@@ -40,6 +40,7 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
             it is not a valid scalar.
     """
     prvkey_bytes = scalar(prvkey, "private key")
+    octets(pubkey_bytes, "public key")
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
