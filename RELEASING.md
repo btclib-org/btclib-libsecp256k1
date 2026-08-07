@@ -79,7 +79,15 @@ knowing before rather than during.
 which a release does not change the answer to, and a session is measured
 in minutes to hours against a schedule already built for the weekend it
 runs on regardless. Dispatching it as part of cutting a release conflates
-two independent activities for no question a release-timing answers.
+two independent activities for no question a release-timing answers. A
+release pull request's own checklist is not exempt from that argument: an
+item asking whether a mutation run is "owed" before marking it ready
+reintroduces the same coupling under a different name, one more session
+gating a button it does not answer anything for. 0.7.1.2 ran one anyway,
+by hand and out of band — the weekly cron was days off and two merged
+pull requests had changed wrappers a survivor list had not seen since —
+and that is the right shape for it: read on its own terms, the sqlite
+kept or discarded on its own schedule, never a condition of the tag.
 
 Then:
 
