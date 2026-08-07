@@ -133,9 +133,10 @@ def test_scalar_algebra_matches_point_algebra() -> None:
         ) == keys.pubkey_tweak_mul(pubkey, tweak)
 
         # combining points is adding scalars
-        assert keys.pubkey_combine(
-            [pubkey, compress(mult.mult_(tweak))]
-        ) == keys.pubkey_tweak_add(pubkey, tweak)
+        assert keys.pubkey_combine([
+            pubkey,
+            compress(mult.mult_(tweak)),
+        ]) == keys.pubkey_tweak_add(pubkey, tweak)
 
 
 def test_ecdsa_signature_forms() -> None:
