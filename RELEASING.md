@@ -118,6 +118,15 @@ Then:
    what the diff cannot say has to be written, and what a reader should
    not have to discover at the button belongs there too.
 
+   The previous cycle's step 11 opened this pull request asking for the
+   body to fill in one merged pull request at a time, and says so itself:
+   "a promise kept only if someone remembers to keep it." Check it against
+   `git log v<previous version>..dev --oneline` regardless of how current
+   it looks, rather than trust that every line landed when it should have.
+   `latest`'s result belongs here too, a line rather than a screenshot: it
+   gates nothing, and a pull request that never mentions it having run
+   reads exactly like one that skipped it.
+
    Then merge `dev` into `master` with a green CI, using **Rebase and
    merge** and never *Squash and merge*.
    Which button that is has to be read before it is pressed: all three
