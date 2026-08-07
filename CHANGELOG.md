@@ -11,6 +11,25 @@ release-notes length in the first place, and are still in
 
 ## v0.7.1.3 (work in progress, not released yet)
 
+### Documentation
+
+- **The README badges are the ones that can turn red**, in the order the
+  reader asks for them: version, downloads, development status, license
+  and supported interpreters on the first line; test, lint, pre-commit.ci
+  and the documentation build on the second. The five that reported no
+  state — `uv`, `pre-commit enabled`, ruff, mypy and markdownlint-cli2 —
+  name a choice rather than measure anything, so they are in
+  CONTRIBUTING.md's "Building and testing", beside the prose that says how
+  each choice is enforced; the Slack badge is down with the repository
+  link, "where do I ask" being a question the reader has after reading.
+  The alternative text says what each badge means — "PyPI version",
+  "supported Python versions", "test workflow status" — rather than naming
+  the site that serves the image: it is the accessible name of the link,
+  and a flat list of badges has nothing else to carry the meaning. btclib
+  and bitcoin-core-rpc carry the same two lines, which is what makes the
+  three READMEs comparable; the badge sets differ only where the projects
+  do, this one having no calendar version to declare.
+
 ## v0.7.1.2
 
 Grouped, and the order runs from what a caller sees to what only
