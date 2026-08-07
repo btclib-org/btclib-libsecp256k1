@@ -45,6 +45,7 @@ that stops working fails a build rather than sitting here:
 >>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
 >>> pubkey = keys.pubkey_from_prvkey(prvkey)
 >>> msg = hashlib.sha256(b"hello").digest()
+
 ```
 
 ECDSA, over the 32-byte hash, with the deterministic RFC6979 nonce:
@@ -53,6 +54,7 @@ ECDSA, over the 32-byte hash, with the deterministic RFC6979 nonce:
 >>> signature = dsa.sign(msg, prvkey)
 >>> dsa.verify(msg, pubkey, signature)
 True
+
 ```
 
 BIP340 Schnorr, over the same hash, against the x-only key:
@@ -62,6 +64,7 @@ BIP340 Schnorr, over the same hash, against the x-only key:
 >>> signature = ssa.sign(msg, prvkey)
 >>> ssa.verify(msg, xonly_pubkey, signature)
 True
+
 ```
 
 Both take the private key as `bytes` or as an `int`, and both return

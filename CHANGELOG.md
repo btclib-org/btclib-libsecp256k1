@@ -381,6 +381,18 @@ branch has to edit.
 
 ### The gate
 
+- **The README quickstart is executed again** (#74). Fencing the
+  indented blocks put the closing ``` flush against the last line of
+  each example, and doctest reads the line after an example as the
+  output it expects: three of the ten stopped passing, two of them
+  expecting `True` followed by a fence. A blank line before each closing
+  fence is what says an example's output ends there. The suite caught
+  it, which is what it is for -- `test_the_readme_examples_run` was added
+  in this same release because *"an example nobody runs is documentation
+  that stops being true silently"* -- and this is the first thing it
+  caught. `markdownlint-cli2` stays clean over the result: a blank line
+  inside a fenced block is not a blank line around one.
+
 - **The entropy detectors of `detect-secrets` run over the tree.**
   `.secrets.baseline` was generated with `HexHighEntropyString` and
   `Base64HighEntropyString` off, and it is the baseline that decides
