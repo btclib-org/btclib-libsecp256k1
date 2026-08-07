@@ -54,7 +54,7 @@ class CustomBuildHook(BuildHookInterface[Any]):
         # the cffi build description is a module of this very repository,
         # named in pyproject.toml: exec() runs it without importing it,
         # so that the build backend needs no import path setup
-        src = Path(script).read_text()
+        src = Path(script).read_text(encoding="utf-8")
         code = compile(src, script, "exec")
         build_vars = {"__name__": "__cffi__", "__file__": script}
         exec(code, build_vars, build_vars)

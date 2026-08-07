@@ -389,9 +389,9 @@ class Secp256k1CFFIExtension(FFIExtension):
         """Build the vendored library with CMake, on every platform."""
         self.cmake_dir.mkdir(parents=True, exist_ok=True)
         callbacks = self.cmake_dir / "btclib_default_callbacks.c"
-        callbacks.write_text(CALLBACK_STUBS)
+        callbacks.write_text(CALLBACK_STUBS, encoding="utf-8")
         project_include = self.cmake_dir / "btclib_callbacks.cmake"
-        project_include.write_text(PROJECT_INCLUDE)
+        project_include.write_text(PROJECT_INCLUDE, encoding="utf-8")
 
         configure = [
             "cmake",
@@ -460,7 +460,7 @@ class Secp256k1CFFIExtension(FFIExtension):
         ffi_header = ""
         for h in self.headers:
             location = self.include_dir / h
-            with location.open() as f:
+            with location.open(encoding="utf-8") as f:
                 ffi_header += f.read() + "\n"
 
         ffi_header = re.sub(r"#include .*", "", ffi_header)
