@@ -75,12 +75,19 @@ def scalar(num: bytes | int, name: str) -> bytes:
         The scalar as 32 bytes, big endian.
 
     Raises:
-        TypeError: if the value is neither bytes nor an int.
+        TypeError: if the value is neither bytes nor an int, a bool
+            counting as neither although python makes it an int.
         ValueError: if bytes are not exactly 32 long, or if an int does
             not fit in 32 bytes. Whether the value is a valid scalar,
             i.e. in [1, n-1], is for libsecp256k1 to say.
     """
-    if isinstance(num, int):
+    # a bool is an int in python, and would be the scalar 1 or 0 without
+    # the second test: `prvkey_verify(False)` then answers False, which
+    # is the right verdict on a question nobody asked, and
+    # `pubkey_from_prvkey(True)` answers the generator. Neither can be
+    # told from the answer to the question that was meant, which is what
+    # makes this worth refusing where a `float` would only be a typo
+    if isinstance(num, int) and not isinstance(num, bool):
         # an int outside the 32-byte range is out of domain like any
         # other invalid argument, and must be reported the same way:
         # to_bytes would raise OverflowError instead. Whether the value
