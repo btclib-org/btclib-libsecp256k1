@@ -62,7 +62,7 @@ def sign(
     if lib.secp256k1_schnorrsig_sign32(
         ctx, sig, msg_bytes, keypair, _aux_rand32(aux_rand32)
     ):
-        return ffi.unpack(sig, 64)
+        return ffi.unpack(sig, ffi.sizeof(sig))
     raise RuntimeError("schnorr signing failed")
 
 
@@ -108,7 +108,7 @@ def sign_custom(
     if lib.secp256k1_schnorrsig_sign_custom(
         ctx, sig, msg_bytes, len(msg_bytes), keypair, extraparams
     ):
-        return ffi.unpack(sig, 64)
+        return ffi.unpack(sig, ffi.sizeof(sig))
     raise RuntimeError("schnorr signing failed")
 
 

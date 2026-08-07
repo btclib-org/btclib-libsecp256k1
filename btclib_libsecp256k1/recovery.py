@@ -63,7 +63,7 @@ def sign(
         ctx, sig_bytes, recid, sig
     ):
         raise RuntimeError("signature serialization failed")
-    return ffi.unpack(sig_bytes, 64), recid[0]
+    return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes)), recid[0]
 
 
 def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
@@ -100,11 +100,13 @@ def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
     if not lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes):
         raise ValueError("public key recovery failed")
 
+    # one length per flag, so the buffer is what is unpacked: see the
+    # comment in keys.serialize
     output = ffi.new("char[33]")
-    length = ffi.new("size_t *", 33)
+    length = ffi.new("size_t *", ffi.sizeof(output))
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, COMPRESSED):
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, 33)
+    return ffi.unpack(output, ffi.sizeof(output))
 
 
 def to_der(signature_bytes: bytes, recid: int) -> bytes:
@@ -141,8 +143,10 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
     if not lib.secp256k1_ecdsa_recoverable_signature_convert(ctx, dsa_sig, signature):
         raise RuntimeError("signature conversion failed")
 
-    sig_bytes = ffi.new("char[73]")
-    length = ffi.new("size_t *", 73)
+    # the buffer, its declared capacity and the length read back: see
+    # dsa._serialize_der, which is the same serialization and says why 72
+    sig_bytes = ffi.new("char[72]")
+    length = ffi.new("size_t *", ffi.sizeof(sig_bytes))
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, dsa_sig):
         raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, length[0])
