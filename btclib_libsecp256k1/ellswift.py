@@ -13,7 +13,7 @@ from __future__ import annotations
 import secrets
 
 from . import ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
@@ -46,8 +46,8 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     # rather than a small number, and is not padded into a valid argument
     if aux_rand32 is None:
         aux_rand32 = secrets.token_bytes(32)
-    elif len(aux_rand32) != 32:
-        raise ValueError("aux_rand32 must be 32 bytes")
+    else:
+        octets(aux_rand32, "aux_rand32", 32)
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_create(ctx, ell_bytes, prvkey_bytes, aux_rand32):
@@ -76,6 +76,7 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
+    octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -83,8 +84,8 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     # 32 bytes of entropy, or nothing: see the comment in create
     if rnd32 is None:
         rnd32 = secrets.token_bytes(32)
-    elif len(rnd32) != 32:
-        raise ValueError("rnd32 must be 32 bytes")
+    else:
+        octets(rnd32, "rnd32", 32)
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
@@ -108,8 +109,7 @@ def decode(ell_bytes: bytes) -> bytes:
         RuntimeError: if libsecp256k1 fails to decode or serialize,
             which no 64 bytes can make it do.
     """
-    if len(ell_bytes) != 64:
-        raise ValueError("the ElligatorSwift public key must be 64 bytes")
+    octets(ell_bytes, "ElligatorSwift public key", 64)
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
@@ -150,8 +150,8 @@ def xdh(
             0 or 1, or if the private key is not 32 bytes, does not fit
             in them, or is not a valid scalar.
     """
-    if len(ell_a_bytes) != 64 or len(ell_b_bytes) != 64:
-        raise ValueError("the ElligatorSwift public keys must be 64 bytes")
+    octets(ell_a_bytes, "ElligatorSwift public key of A", 64)
+    octets(ell_b_bytes, "ElligatorSwift public key of B", 64)
     if party not in (0, 1):
         raise ValueError("the party must be 0 (A) or 1 (B)")
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from . import CData, ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import check, ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
@@ -329,6 +329,7 @@ def parse(pubkey_bytes: bytes) -> CData:
         ValueError: if the bytes are not a valid point in either
             serialization.
     """
+    octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")

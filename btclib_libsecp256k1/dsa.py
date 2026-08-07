@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from . import CData, ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 
@@ -45,8 +45,7 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
         True
     """
     prvkey_bytes = scalar(prvkey, "private key")
-    if len(msg_bytes) != 32:
-        raise ValueError("the message hash must be 32 bytes")
+    octets(msg_bytes, "message hash", 32)
 
     sig = ffi.new("secp256k1_ecdsa_signature *")
 
@@ -57,8 +56,8 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
     # nonce is the RFC6979 one alone
     if ndata is None:
         ndata = ffi.NULL
-    elif len(ndata) != 32:
-        raise ValueError("ndata must be 32 bytes")
+    else:
+        octets(ndata, "ndata", 32)
     if not lib.secp256k1_ecdsa_sign(ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata):
         raise ValueError("invalid private key")
     return _serialize_der(sig)
@@ -91,11 +90,11 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
         >>> dsa.verify(msg, mult.mult_(1), dsa.sign(msg, 1))
         True
     """
-    if len(msg_bytes) != 32:
-        raise ValueError("the message hash must be 32 bytes")
+    octets(msg_bytes, "message hash", 32)
 
     signature = _parse_der(signature_bytes)
 
+    octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -186,8 +185,7 @@ def to_der(signature_bytes: bytes) -> bytes:
         RuntimeError: if libsecp256k1 fails to serialize it, which no
             input can make it do.
     """
-    if len(signature_bytes) != 64:
-        raise ValueError("the compact signature must be 64 bytes")
+    octets(signature_bytes, "compact signature", 64)
 
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_compact(ctx, signature, signature_bytes):
@@ -207,6 +205,7 @@ def _parse_der(signature_bytes: bytes) -> CData:
     Raises:
         ValueError: if the DER signature is malformed.
     """
+    octets(signature_bytes, "DER signature")
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_der(
         ctx, signature, signature_bytes, len(signature_bytes)

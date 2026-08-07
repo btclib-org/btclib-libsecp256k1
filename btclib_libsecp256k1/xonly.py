@@ -21,7 +21,7 @@ not inside an argument check.
 from __future__ import annotations
 
 from . import CData, ffi, lib
-from ._scalar import scalar
+from ._scalar import octets, scalar
 from .context import ctx
 
 
@@ -42,6 +42,7 @@ def from_pubkey(pubkey_bytes: bytes) -> tuple[bytes, int]:
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
+    octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -108,8 +109,7 @@ def tweak_add_check(
             coordinate, if the parity is not 0 or 1, or if the tweak is
             not 32 bytes or does not fit in them.
     """
-    if len(tweaked_pubkey_bytes) != 32:
-        raise ValueError("the tweaked x-only public key must be 32 bytes")
+    octets(tweaked_pubkey_bytes, "tweaked x-only public key", 32)
     if tweaked_parity not in (0, 1):
         raise ValueError("the parity must be 0 or 1")
 
@@ -170,8 +170,7 @@ def _parse(pubkey_bytes: bytes) -> CData:
         ValueError: if it is not 32 bytes, or not a valid x coordinate.
     """
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    if len(pubkey_bytes) != 32:
-        raise ValueError("the x-only public key must be 32 bytes")
+    octets(pubkey_bytes, "x-only public key", 32)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
