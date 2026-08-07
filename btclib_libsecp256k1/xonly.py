@@ -154,7 +154,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     prvkey_buffer = ffi.new("char[32]")
     if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair):
         raise RuntimeError("private key extraction failed")
-    return ffi.unpack(prvkey_buffer, 32)
+    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
 
 
 def _parse(pubkey_bytes: bytes) -> CData:
@@ -200,7 +200,7 @@ def _to_xonly(pubkey: CData) -> tuple[bytes, int]:
     output = ffi.new("char[32]")
     if not lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey):
         raise RuntimeError("x-only public key serialization failed")
-    return ffi.unpack(output, 32), parity[0]
+    return ffi.unpack(output, ffi.sizeof(output)), parity[0]
 
 
 def _keypair(prvkey: bytes | int) -> CData:

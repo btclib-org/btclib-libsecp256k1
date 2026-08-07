@@ -20,28 +20,32 @@
 # one, both loop mutants dead, and the four the second session still found
 # -- three recid bounds and one message-hash check -- killed by hand
 # afterwards, each mutation applied to the source and the suite watched to
-# fail. What is left, 13 on the session that measured the filter below, is
-# two shapes that cannot be killed by a test and are not holes:
+# fail. What that left, 13 on the session that measured the filter below,
+# was two shapes that no test could kill, and neither is there any more --
+# because each was a question about the code rather than about the suite:
 #
-#   ffi.new("size_t *", 73) -> 74 or 72, an output buffer for a
-#   serialization libsecp256k1 sizes itself, writing what it needs and
-#   updating the length: a buffer declared larger is harmless by design, and
-#   one declared smaller still holds every value the function produces
+#   ffi.new("size_t *", 73) -> 74 or 72, the capacity of an output buffer,
+#   written as a second copy of the buffer's own size. Six of the 13.
+#   `ffi.sizeof` now derives the capacity from the buffer and the buffer is
+#   what is unpacked, so a wrong size reaches the caller instead of being
+#   absorbed -- and the DER buffer, sized 73 for a serialization that
+#   cannot exceed 72, has a test for the octet that decides it
 #
 #   secrets.token_bytes(32) -> 31 or 33, randomness this package generates
-#   rather than accepts -- a BIP340 aux, an ellswift encoding, the context
-#   seed. Its length is not observable in any answer: the aux is hashed, so
-#   a shorter one produces a different signature that verifies just as well.
-#   Where the value is copied into a fixed-size array the longer half of
-#   that pair does die -- `ffi.new("char[32]", ...)` in ssa.sign_ refuses 33
-#   octets and takes 31 -- which is cffi's boundary rather than a test, and
-#   is why one line of this shape has one survivor and the others two
+#   rather than accepts: a BIP340 aux, an ellswift encoding, the context
+#   seed. Seven of the 13, and unkillable through any answer -- a shorter
+#   aux is hashed into a different signature that verifies just as well.
+#   What holds them now is what is *asked* of `secrets` rather than what
+#   comes back, so the context seed is randomized through a function taking
+#   the context as an argument, the way `_load_lib` takes the module
 #
-# So read a survivor list expecting those two shapes, and read anything else
-# as a test nobody has written. The list is that short because the filter
-# below skips the third shape before anything runs it. The settled rate is
-# whatever the next scheduled run reports; it is not restated here, a number
-# in a comment being a line every change to the suite would have to edit.
+# The session that measured that is in the pull request which made it true:
+# 385 mutants executed, none surviving, 352 skipped. So read a survivor
+# list expecting nothing, and read whatever is in it as a test nobody has
+# written -- there is no longer a shape to skip past first. That is a
+# statement about the shapes, not a promise about the rate: what the next
+# scheduled run reports is what it reports, and it is not restated here, a
+# number in a comment being a line every change to the suite would edit.
 #
 # Here rather than at the repository root: cosmic-ray takes the path of its
 # configuration as an argument, so nothing forces a name or a place, and

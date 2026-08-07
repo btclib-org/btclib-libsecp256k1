@@ -11,9 +11,20 @@ replaced by do-nothing stubs, instead of the abort()ing upstream ones
 that would take the hosting Python process down with them.
 """
 
+import secrets
+
 import pytest
 
-from btclib_libsecp256k1 import dsa, ffi, lib, mult, ssa
+from btclib_libsecp256k1 import (
+    context,
+    dsa,
+    ellswift,
+    ffi,
+    lib,
+    mult,
+    recovery,
+    ssa,
+)
 
 prvkey = 1
 pubkey_bytes = b"\x02y\xbef~\xf9\xdc\xbb\xacU\xa0b\x95\xce\x87\x0b\x07\x02\x9b\xfc\xdb-\xce(\xd9Y\xf2\x81[\x16\xf8\x17\x98"
@@ -221,3 +232,76 @@ def test_size_checks_refuse_both_sides() -> None:
     # the check and its mutant refuse that value
     with pytest.raises(ValueError, match="fit in 32 bytes"):
         dsa.sign(msg, 2**256 + 1)
+
+
+def test_der_reaches_all_72_octets() -> None:
+    """The longest DER this curve can encode is 72, and both paths reach it.
+
+    72 is structural: libsecp256k1 writes `6 + lenR + lenS`, and each of
+    those is at most 33 -- 32 octets of scalar, plus the leading zero DER
+    wants when the top bit is set. It is also what the output buffers of
+    `_serialize_der` and `recovery.to_der` are sized to, and nothing was
+    holding them to it.
+
+    The vendored vectors cannot: every signature libsecp256k1 *produces*
+    is low-s, so s stays below 2**255, its top bit is clear, and no
+    padding octet is added -- all 398 of them stop at 71. Only a
+    signature this package is *given* can be high-s, which is what
+    `to_der` documents itself as passing through, and it is the one way
+    the last octet of those buffers is ever written.
+
+    Held to the encoding rather than to itself: the expected bytes are
+    spelled out as BIP66 describes them -- 0x30, the length of what
+    follows, then each integer as 0x02, its length, the zero, the value.
+    """
+    # the top bit set, and below the group order, so DER pads it
+    high = b"\x80" + bytes(31)
+    integer = b"\x02\x21\x00" + high
+    expected = b"\x30" + bytes([2 * len(integer)]) + integer + integer
+
+    assert len(expected) == 72
+    assert dsa.to_der(high + high) == expected
+    # the same serialization, reached through the recoverable signature,
+    # where a second buffer of its own is what would come up short
+    for recid in (0, 1, 2, 3):
+        assert recovery.to_der(high + high, recid) == expected
+
+    # and what signing produces, for contrast: low-s, so one octet less
+    assert len(dsa.sign(b"\x01" * 32, 7)) < 72
+
+
+def test_generated_randomness_is_always_32_octets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every octet count this package asks `secrets` for is 32.
+
+    Four calls generate randomness rather than accept it: the context
+    seed, the BIP340 aux of a signature signed without one, and the two
+    ElligatorSwift ones. No answer reveals how long any of them was -- a
+    shorter aux is hashed into a different signature that verifies just
+    as well, and a context seeded with half the entropy behaves exactly
+    like one seeded with all of it -- which is why the mutation session
+    leaves every one of those lengths alive.
+
+    So this is the one thing that can hold them to it: what is asked of
+    `secrets`, rather than what comes back. 32 is
+    secp256k1_context_randomize's seed length and BIP340's aux_rand,
+    both required rather than conventional.
+    """
+    requested: list[int] = []
+    real_token_bytes = secrets.token_bytes
+
+    def recording(size: int) -> bytes:
+        requested.append(size)
+        return real_token_bytes(size)
+
+    monkeypatch.setattr(secrets, "token_bytes", recording)
+
+    msg = b"\x02" * 32
+    # re-blinding the shared context is what import time does once
+    context._randomize(context.ctx)
+    ssa.sign(msg, prvkey)
+    ellswift.create(prvkey)
+    ellswift.encode(pubkey_bytes)
+
+    assert requested == [32, 32, 32, 32]

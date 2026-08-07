@@ -41,4 +41,4 @@ def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
     output = ffi.new("char[32]")
     if not lib.secp256k1_tagged_sha256(ctx, output, tag, len(tag), msg, len(msg)):
         raise RuntimeError("tagged hashing failed")
-    return ffi.unpack(output, 32)
+    return ffi.unpack(output, ffi.sizeof(output))
