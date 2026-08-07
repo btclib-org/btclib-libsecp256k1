@@ -17,7 +17,33 @@ requires-python = ">=3.10"
 # above ships that file beside LICENSE so the pointer travels with the
 # distribution
 authors = [{ name = "The btclib developers", email = "devs@btclib.org" }]
-keywords=["bitcoin", "libsecp256k1"]
+# the GitHub repository topics, in the same order, and the order is by
+# relevance rather than alphabetical: PyPI shows keywords as the metadata
+# gives them, and GitHub sorts its own, so there the order decides only
+# which topic goes when the twenty it allows are full -- which this list
+# is well short of. Lowercase throughout, a GitHub topic being lowercase
+# or not a topic, so that one spelling serves both lists.
+#
+# Two absences are deliberate. musig2 is not wrapped, for the reason
+# README's Design section gives; and bip324 names a transport this package
+# does not implement, ellswift below being the module that is here -- the
+# encoding and the x-only ECDH BIP324 needs of its keys. elliptic-curves
+# is a third: this is one curve, and secp256k1 names it.
+keywords=[
+        "libsecp256k1",
+        "secp256k1",
+        "bitcoin",
+        "cryptography",
+        "python-bindings",
+        "cffi",
+        "ecdsa",
+        "schnorr",
+        "bip340",
+        "ecdh",
+        "ellswift",
+        "public-key-recovery",
+        "rfc-6979",
+]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.10",
