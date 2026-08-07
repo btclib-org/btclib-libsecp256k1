@@ -42,14 +42,12 @@ def sign(
 
     sig = ffi.new("secp256k1_ecdsa_recoverable_signature *")
 
-    noncefc = ffi.NULL
-    # 32 bytes of entropy, or nothing: see the comment in dsa.sign
-    if ndata is None:
-        ndata = ffi.NULL
-    else:
-        octets(ndata, "ndata", 32)
+    # the default nonce function, and 32 bytes of entropy or nothing:
+    # see the comment in dsa.sign
+    noncefp = ffi.NULL
+    ndata_ptr = ffi.NULL if ndata is None else octets(ndata, "ndata", 32)
     if not lib.secp256k1_ecdsa_sign_recoverable(
-        ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata
+        ctx, sig, msg_bytes, prvkey_bytes, noncefp, ndata_ptr
     ):
         raise ValueError("invalid private key")
 

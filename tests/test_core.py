@@ -116,15 +116,23 @@ def test_safe_abort() -> None:
     them with do-nothing stubs, compiled as a unit of their own rather
     than by editing the submodule. That the test returns at all is the
     assertion.
+
+    A context of its own, because the shared one has the recording
+    callbacks of `context` set on it and this is about the defaults --
+    and destroyed after, a context being an allocation that nothing else
+    frees. `1` is SECP256K1_CONTEXT_NONE, the flags naming SIGN and
+    VERIFY having been deprecated since libsecp256k1 0.2.
     """
+    default_callbacks_ctx = lib.secp256k1_context_create(1)
     lib.secp256k1_ecdsa_sign(
-        lib.secp256k1_context_create(769),
+        default_callbacks_ctx,
         ffi.new("secp256k1_ecdsa_signature *"),
         b"0" * 32,
         ffi.NULL,
         ffi.NULL,
         b"0" * 32,
     )
+    lib.secp256k1_context_destroy(default_callbacks_ctx)
 
 
 def test_mult() -> None:
