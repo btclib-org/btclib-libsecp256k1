@@ -326,6 +326,18 @@ extend-ignore-re = ['"[0-9a-fA-F]+"']
 # the vendored upstream sources are not ours to lint or reformat
 extend-exclude = ["secp256k1"]
 
+[tool.ruff.format]
+# one preview style is worth the instability: a call whose sole argument
+# is a collection keeps that collection's bracket on the call's own line,
+# rather than indenting it a level further in and closing it twice. It
+# reads as the single expression it is. Measured before being taken --
+# `ruff format --preview --diff .` reformats one hunk, in
+# tests/test_properties.py -- and that is the whole of the cost today.
+# The cost later is the point to remember: an unstable style is one the
+# next rev of the hook can change underneath the tree, so bumping
+# ruff-pre-commit is a `--diff` before it is a version number
+preview = true
+
 [tool.ruff.lint]
 # these two go together, and neither means what it says alone. Naming a
 # rule instead of coding it -- see the comment above `ignore` -- is itself
