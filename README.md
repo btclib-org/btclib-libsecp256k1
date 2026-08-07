@@ -1,12 +1,13 @@
 # btclib_libsecp256k1
 
 <!-- The badges are what the reader decides with: the first line says what
-this is and whether it can be used, the second whether it works. A badge
-that reports no state -- "we use ruff", "we use uv" -- reports a choice
-instead, and those are in CONTRIBUTING.md, beside the prose that says how
-the choice is enforced. One badge per line keeps a change to one line and
-every line inside MD013, whose 80 columns bind only where a space follows
-them. btclib and bitcoin-core-rpc carry the same two lines. -->
+this is and whether it can be used, the second whether it works, the third
+where the code is and where to ask about it. A badge that reports no state
+-- "we use ruff", "we use uv" -- reports a choice instead, and those are in
+CONTRIBUTING.md, beside the prose that says how the choice is enforced. One
+badge per line keeps a change to one line and every line inside MD013,
+whose 80 columns bind only where a space follows them. btclib and
+bitcoin-core-rpc carry the same three lines. -->
 [![PyPI version](https://img.shields.io/pypi/v/btclib_libsecp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
 [![downloads](https://static.pepy.tech/badge/btclib_libsecp256k1)](https://pepy.tech/project/btclib_libsecp256k1)
 [![development status](https://img.shields.io/pypi/status/btclib_libsecp256k1.svg)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
@@ -18,9 +19,7 @@ them. btclib and bitcoin-core-rpc carry the same two lines. -->
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib-libsecp256k1/master.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib-libsecp256k1/master)
 [![documentation build](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
 
----
-
-[Browse GitHub Code Repository](https://github.com/btclib-org/btclib-libsecp256k1/)
+[![GitHub repository: btclib-org/btclib-libsecp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-libsecp256k1/)
 [![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
 
 ---
