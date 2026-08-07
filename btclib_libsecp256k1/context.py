@@ -108,11 +108,16 @@ def check() -> None:
     same MuSig2 secret nonce, for one, is reported as the failed magic
     check of the nonce that the first signature zeroed.
 
-    The bindings validate their arguments before calling, so a violated
-    precondition is unreachable through them and none of them calls
-    this. It is meant for a call made through `lib` directly, as a
-    MuSig2 session is, and it reports what was last recorded: call it
-    right after the call whose return value you are explaining.
+    It is meant for a call made through `lib` directly, as a MuSig2
+    session is, and it reports what was last recorded: call it right
+    after the call whose return value you are explaining.
+
+    The bindings check their arguments before calling, so a violated
+    precondition is unreachable through all but one of them:
+    `keys.serialize` takes a libsecp256k1 object rather than bytes, and
+    there is nothing to check about one before handing it over. It calls
+    this itself, which is what keeps its own failure from being left on
+    the thread for the next caller to find.
 
     What was recorded is cleared, so a second call reports nothing and
     a later one cannot inherit this call's message.

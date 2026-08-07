@@ -19,7 +19,7 @@ from collections.abc import Sequence
 
 from . import CData, ffi, lib
 from ._scalar import scalar
-from .context import ctx
+from .context import check, ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
 # libsecp256k1 flag macros do not survive the preprocessing of the
@@ -347,8 +347,13 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
         uncompressed one.
 
     Raises:
-        RuntimeError: if libsecp256k1 fails, which a key it produced
-            cannot make it do.
+        ValueError: if the object is not a public key libsecp256k1 will
+            read -- a NULL pointer, or a `secp256k1_pubkey` nothing has
+            written to. This is the one argument of these bindings that
+            is a libsecp256k1 object rather than bytes, and so the one
+            that cannot be checked before the call.
+        RuntimeError: if libsecp256k1 fails for any other reason, which
+            a key it produced cannot make it do.
 
     Example:
         >>> from btclib_libsecp256k1 import keys, mult
@@ -368,5 +373,14 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     length = ffi.new("size_t *", ffi.sizeof(output))
     flags = COMPRESSED if compressed else UNCOMPRESSED
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, flags):
+        # every other argument of these bindings is bytes, checked before
+        # the call; this one is a libsecp256k1 object the caller holds, so
+        # a violated precondition is reachable here and nowhere else.
+        # check() is what turns it back into the message libsecp256k1
+        # wrote -- and, raising it, takes it off the thread. Left there it
+        # would be found by the next check(), which is the one a MuSig2
+        # caller makes through `lib`, and blamed on a call that did not
+        # produce it
+        check()
         raise RuntimeError("point serialization failed")
     return ffi.unpack(output, ffi.sizeof(output))
