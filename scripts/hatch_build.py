@@ -59,7 +59,13 @@ class CustomBuildHook(BuildHookInterface[Any]):
         build_vars = {"__name__": "__cffi__", "__file__": script}
         exec(code, build_vars, build_vars)
         if ext_name not in build_vars:
-            raise RuntimeError
+            # the message names both halves of the pyproject.toml entry,
+            # that entry being the only thing that can be wrong here: a
+            # bare `raise RuntimeError` said nothing at all, and this line
+            # is excluded from the coverage measure, so the message is the
+            # whole of what a maintainer would have to go on
+            msg = f"{script} defines no {ext_name}: stale cffi_modules entry"
+            raise RuntimeError(msg)
         return build_vars[ext_name]
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
@@ -123,7 +129,16 @@ class CustomBuildHook(BuildHookInterface[Any]):
             build_data["tag"] = f"py3-none-{self.dynamic_platform_tag()}"
 
     def dynamic_platform_tag(self) -> str:
-        """Platform tag of a dynamic (cffi ABI mode) wheel."""
+        """Platform tag of a dynamic (cffi ABI mode) wheel.
+
+        Raises RuntimeError on a Windows architecture this does not know,
+        rather than the KeyError a dict subscript would: the four targets
+        below are the four `scripts/cffi_build.py` aims CMake at, and the
+        two files disagreeing about which of them exist is the failure
+        this shape rules out -- `win-arm32` was in that file and not in
+        this one, so the one build that reached here would have ended in
+        a bare KeyError from a dict literal.
+        """
         if self.platform != platform.system():
             # cross-compilation: the target machine cannot be inspected;
             # x86_64 mingw Windows is the only supported cross target
@@ -134,9 +149,16 @@ class CustomBuildHook(BuildHookInterface[Any]):
         # former, as scripts/cffi_build.py explains
         machine = sysconfig.get_platform().rsplit("-", 1)[-1]
         if self.platform == "Windows":
-            return {"amd64": "win_amd64", "arm64": "win_arm64", "win32": "win32"}[
-                machine
-            ]
+            tags = {
+                "win32": "win32",
+                "amd64": "win_amd64",
+                "arm32": "win_arm32",
+                "arm64": "win_arm64",
+            }
+            if machine not in tags:
+                msg = f"no wheel tag known for the Windows architecture {machine}"
+                raise RuntimeError(msg)
+            return tags[machine]
         if self.platform == "Darwin":
             target = os.environ.get("MACOSX_DEPLOYMENT_TARGET") or platform.mac_ver()[0]
             major, _, minor = target.partition(".")
