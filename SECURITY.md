@@ -5,7 +5,7 @@
 Please do not open a GitHub issue. Provide responsible disclosure
 either privately through GitHub, from the Security tab of this
 repository ("Report a vulnerability"), or by emailing
-_security at btclib dot org_, as for every btclib project.
+*security at btclib dot org*, as for every btclib project.
 
 ## What belongs here, and what belongs upstream
 
@@ -14,7 +14,7 @@ This project is a thin binding layer: the cryptography is
 submodule and built from source. A flaw in the library itself is not
 ours to fix, and it has its own
 [security policy](https://github.com/bitcoin-core/secp256k1/blob/master/SECURITY.md)
-and its own address, _secp256k1-security at bitcoincore dot org_.
+and its own address, *secp256k1-security at bitcoincore dot org*.
 
 Report there anything affecting the C library. Report here anything
 affecting how these bindings drive it:
