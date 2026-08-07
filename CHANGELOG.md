@@ -1,5 +1,16 @@
 # Changelog
 
+<!-- markdownlint-configure-file
+  {
+    // MD024/no-duplicate-heading - a group heading repeats under every
+    // release with an entry in that group ("Packaging metadata", "The
+    // gate", "CI"), which is what keeps the page readable scrolling down
+    // it; only a duplicate under the same release heading would be the
+    // accident this rule looks for
+    "MD024": { "siblings_only": true }
+  }
+-->
+
 Every change of a release, in full: what changed, why, and what it cost.
 [HISTORY.md](./HISTORY.md) has the release notes, which say what a user has
 to act on; this file is the record behind them, and is where a claim in
@@ -29,6 +40,43 @@ release-notes length in the first place, and are still in
   and bitcoin-core-rpc carry the same two lines, which is what makes the
   three READMEs comparable; the badge sets differ only where the projects
   do, this one having no calendar version to declare.
+
+### Packaging metadata
+
+- **`keywords` names what this package wraps and what it reaches**, where
+  it said `bitcoin` and `libsecp256k1` and left the searchable name of the
+  curve out along with every wrapped module: `secp256k1`, `cryptography`,
+  `python-bindings`, `cffi`, `ecdsa`, `schnorr`, `bip340`, `ecdh`,
+  `ellswift`, `public-key-recovery` and `rfc-6979`, which is the nonce
+  `dsa.sign` uses. `RFC-6979` is spelled lowercase, as a GitHub topic has
+  to be: the list is the repository's topics in the same order, and one
+  spelling across the two is what lets them be compared. The order is by
+  relevance rather than alphabetical, PyPI showing keywords as the metadata
+  gives them and GitHub sorting its own.
+- **`musig2` and `bip324` are in that list, and neither is a wrapped
+  module.** The vendored library is built with
+  `SECP256K1_ENABLE_MODULE_MUSIG` and `secp256k1_musig.h` is among the
+  headers the cdef is made of, so all of `secp256k1_musig_nonce_gen`,
+  `_nonce_agg`, `_nonce_process`, `_partial_sign` and their neighbours are
+  reachable through the `lib` this package exposes -- what MuSig2 has no
+  module for is the session its two rounds need, which is the reason
+  README's Design section gives for leaving one out. `bip324` is the
+  `ellswift` module beside it: the encoding and the x-only ECDH that BIP's
+  handshake needs of its keys, and not its transport, which is a cipher and
+  a framing layer this package has no part of. The comment beside the list
+  states both limits, so a keyword found on PyPI leads to what is here
+  rather than to what a reader would assume from the name.
+  `elliptic-curves` is the one candidate left out: this is one curve, and
+  `secp256k1` names it.
+- **this file relaxes MD024 (no-duplicate-heading) for itself**, a group
+  heading repeating under every release that has an entry in that group:
+  the rule reads that repeat as the accident it usually is, and
+  `siblings_only` is what tells the two apart, a duplicate under one
+  release heading still failing. It is a `markdownlint-configure-file`
+  comment here rather than a line in `.markdownlint.jsonc`, which is
+  shared with btclib and bitcoin-core-rpc and says itself that a rule one
+  file needs belongs to that file; bitcoin-core-rpc's CHANGELOG.md carries
+  the same comment.
 
 ## v0.7.1.2
 

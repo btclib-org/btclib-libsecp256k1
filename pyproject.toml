@@ -17,7 +17,42 @@ requires-python = ">=3.10"
 # above ships that file beside LICENSE so the pointer travels with the
 # distribution
 authors = [{ name = "The btclib developers", email = "devs@btclib.org" }]
-keywords=["bitcoin", "libsecp256k1"]
+# the GitHub repository topics, in the same order, and the order is by
+# relevance rather than alphabetical: PyPI shows keywords as the metadata
+# gives them, and GitHub sorts its own, so there the order decides only
+# which topic goes when the twenty it allows are full -- which this list
+# is well short of. Lowercase throughout, a GitHub topic being lowercase
+# or not a topic, so that one spelling serves both lists.
+#
+# Two of them name what is reachable rather than what is wrapped, and the
+# difference is worth knowing before either is trusted. musig2 has no
+# module of its own -- the two-round protocol needs a session whose secret
+# nonce cannot be reused, which belongs where the signing state lives --
+# but the vendored library is built with SECP256K1_ENABLE_MODULE_MUSIG and
+# secp256k1_musig.h is among the headers the cdef is made of, so the whole
+# of that api is reachable through the `lib` this package exposes. bip324
+# is the ellswift module beside it: the encoding and the x-only ECDH that
+# BIP's handshake needs of its keys, and not its transport, which is a
+# cipher and a framing layer this package has no part of.
+#
+# elliptic-curves stays out: this is one curve, and secp256k1 names it.
+keywords=[
+        "libsecp256k1",
+        "secp256k1",
+        "bitcoin",
+        "cryptography",
+        "python-bindings",
+        "cffi",
+        "ecdsa",
+        "schnorr",
+        "bip340",
+        "musig2",
+        "ecdh",
+        "ellswift",
+        "bip324",
+        "public-key-recovery",
+        "rfc-6979",
+]
 classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.10",
