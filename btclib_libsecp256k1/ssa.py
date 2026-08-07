@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import secrets
 
-from . import CData, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import wipe
 from .context import ctx
@@ -24,7 +24,7 @@ EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
 
 
 def sign(
-    msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
+    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
 ) -> bytes:
     """Create a Schnorr signature of a 32-byte message hash.
 
@@ -55,7 +55,7 @@ def sign(
         >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
         True
     """
-    octets(msg_bytes, "message hash", 32)
+    msg_bytes = octets(msg_bytes, "message hash", 32)
     keypair = _keypair(prvkey)
 
     sig = ffi.new("char[64]")
@@ -74,7 +74,7 @@ def sign(
 
 
 def sign_custom(
-    msg_bytes: bytes, prvkey: bytes | int, aux_rand32: bytes | None = None
+    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
 ) -> bytes:
     """Create a Schnorr signature of a message of any length.
 
@@ -101,7 +101,7 @@ def sign_custom(
         RuntimeError: if libsecp256k1 fails to sign, which no input can
             make it do.
     """
-    octets(msg_bytes, "message")
+    msg_bytes = octets(msg_bytes, "message")
     keypair = _keypair(prvkey)
 
     sig = ffi.new("char[64]")
@@ -125,7 +125,9 @@ def sign_custom(
     raise RuntimeError("schnorr signing failed")
 
 
-def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> bool:
+def verify(
+    msg_bytes: BytesLike, pubkey_bytes: BytesLike, signature_bytes: BytesLike
+) -> bool:
     """Verify a Schnorr signature against a 32-byte x-only public key.
 
     The public key is the x-only one BIP340 verifies against, and only
@@ -148,10 +150,10 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
             well-formed signature that simply does not verify is False,
             not an exception.
     """
-    octets(msg_bytes, "message")
-    octets(signature_bytes, "signature", 64)
+    msg_bytes = octets(msg_bytes, "message")
+    signature_bytes = octets(signature_bytes, "signature", 64)
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    octets(pubkey_bytes, "x-only public key", 32)
+    pubkey_bytes = octets(pubkey_bytes, "x-only public key", 32)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
@@ -164,7 +166,7 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
     )
 
 
-def _keypair(prvkey: bytes | int) -> CData:
+def _keypair(prvkey: BytesLike | int) -> CData:
     """Create a keypair from a private key.
 
     Args:
@@ -183,7 +185,7 @@ def _keypair(prvkey: bytes | int) -> CData:
     return keypair
 
 
-def _aux_rand32(aux_rand32: bytes | None) -> bytes:
+def _aux_rand32(aux_rand32: BytesLike | None) -> bytes:
     """Check the auxiliary randomness of BIP340 signing.
 
     It is freshly generated when not provided, BIP340 recommending fresh

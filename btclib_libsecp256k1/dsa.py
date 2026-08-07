@@ -7,12 +7,14 @@
 
 from __future__ import annotations
 
-from . import CData, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from .context import ctx
 
 
-def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> bytes:
+def sign(
+    msg_bytes: BytesLike, prvkey: BytesLike | int, ndata: BytesLike | None = None
+) -> bytes:
     """Create an ECDSA signature.
 
     The nonce is the deterministic RFC6979 one, so the signature is a
@@ -45,7 +47,7 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
         True
     """
     prvkey_bytes = scalar(prvkey, "private key")
-    octets(msg_bytes, "message hash", 32)
+    msg_bytes = octets(msg_bytes, "message hash", 32)
 
     sig = ffi.new("secp256k1_ecdsa_signature *")
 
@@ -68,7 +70,9 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
     return _serialize_der(sig)
 
 
-def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> bool:
+def verify(
+    msg_bytes: BytesLike, pubkey_bytes: BytesLike, signature_bytes: BytesLike
+) -> bool:
     """Verify a ECDSA signature.
 
     A signature which is not in the normalized lower-s form is rejected;
@@ -95,11 +99,11 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
         >>> dsa.verify(msg, mult.mult_(1), dsa.sign(msg, 1))
         True
     """
-    octets(msg_bytes, "message hash", 32)
+    msg_bytes = octets(msg_bytes, "message hash", 32)
 
     signature = _parse_der(signature_bytes)
 
-    octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
@@ -107,7 +111,7 @@ def verify(msg_bytes: bytes, pubkey_bytes: bytes, signature_bytes: bytes) -> boo
     return bool(lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey))
 
 
-def normalize(signature_bytes: bytes) -> bytes:
+def normalize(signature_bytes: BytesLike) -> bytes:
     """Convert a DER signature to its normalized lower-s form.
 
     Args:
@@ -129,7 +133,7 @@ def normalize(signature_bytes: bytes) -> bytes:
     return _serialize_der(normalized)
 
 
-def is_low_s(signature_bytes: bytes) -> bool:
+def is_low_s(signature_bytes: BytesLike) -> bool:
     """Return True if the DER signature is in the normalized lower-s form.
 
     ECDSA signatures are malleable: negating s modulo the group order
@@ -152,7 +156,7 @@ def is_low_s(signature_bytes: bytes) -> bool:
     return not lib.secp256k1_ecdsa_signature_normalize(ctx, ffi.NULL, signature)
 
 
-def to_compact(signature_bytes: bytes) -> bytes:
+def to_compact(signature_bytes: BytesLike) -> bytes:
     """Convert a DER signature into its 64-byte compact form.
 
     Args:
@@ -173,7 +177,7 @@ def to_compact(signature_bytes: bytes) -> bytes:
     return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes))
 
 
-def to_der(signature_bytes: bytes) -> bytes:
+def to_der(signature_bytes: BytesLike) -> bytes:
     """Convert a 64-byte compact signature into its DER form.
 
     Args:
@@ -190,7 +194,7 @@ def to_der(signature_bytes: bytes) -> bytes:
         RuntimeError: if libsecp256k1 fails to serialize it, which no
             input can make it do.
     """
-    octets(signature_bytes, "compact signature", 64)
+    signature_bytes = octets(signature_bytes, "compact signature", 64)
 
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_compact(ctx, signature, signature_bytes):
@@ -198,7 +202,7 @@ def to_der(signature_bytes: bytes) -> bytes:
     return _serialize_der(signature)
 
 
-def _parse_der(signature_bytes: bytes) -> CData:
+def _parse_der(signature_bytes: BytesLike) -> CData:
     """Parse a DER signature into its internal representation.
 
     Args:
@@ -210,7 +214,7 @@ def _parse_der(signature_bytes: bytes) -> CData:
     Raises:
         ValueError: if the DER signature is malformed.
     """
-    octets(signature_bytes, "DER signature")
+    signature_bytes = octets(signature_bytes, "DER signature")
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if not lib.secp256k1_ecdsa_signature_parse_der(
         ctx, signature, signature_bytes, len(signature_bytes)

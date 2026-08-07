@@ -7,14 +7,14 @@
 
 from __future__ import annotations
 
-from . import CData, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from .context import ctx
 from .keys import serialize
 
 
 def sign(
-    msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None
+    msg_bytes: BytesLike, prvkey: BytesLike | int, ndata: BytesLike | None = None
 ) -> tuple[bytes, int]:
     """Create a recoverable ECDSA signature.
 
@@ -38,7 +38,7 @@ def sign(
             which no input can make it do.
     """
     prvkey_bytes = scalar(prvkey, "private key")
-    octets(msg_bytes, "message hash", 32)
+    msg_bytes = octets(msg_bytes, "message hash", 32)
 
     sig = ffi.new("secp256k1_ecdsa_recoverable_signature *")
 
@@ -61,7 +61,10 @@ def sign(
 
 
 def recover(
-    msg_bytes: bytes, signature_bytes: bytes, recid: int, compressed: bool = True
+    msg_bytes: BytesLike,
+    signature_bytes: BytesLike,
+    recid: int,
+    compressed: bool = True,
 ) -> bytes:
     """Recover the public key from a recoverable ECDSA signature.
 
@@ -84,8 +87,8 @@ def recover(
         RuntimeError: if libsecp256k1 fails to serialize the key, which
             no input can make it do.
     """
-    octets(msg_bytes, "message hash", 32)
-    octets(signature_bytes, "signature", 64)
+    msg_bytes = octets(msg_bytes, "message hash", 32)
+    signature_bytes = octets(signature_bytes, "signature", 64)
     if recid not in (0, 1, 2, 3):
         raise ValueError("the recovery id must be 0, 1, 2, or 3")
 
@@ -97,7 +100,7 @@ def recover(
     return serialize(pubkey, compressed)
 
 
-def to_der(signature_bytes: bytes, recid: int) -> bytes:
+def to_der(signature_bytes: BytesLike, recid: int) -> bytes:
     """Convert a recoverable signature into a plain DER signature.
 
     The recovery id is dropped, as it is not part of the DER encoding.
@@ -120,7 +123,7 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             signature, which no input can make it do.
     """
-    octets(signature_bytes, "signature", 64)
+    signature_bytes = octets(signature_bytes, "signature", 64)
     if recid not in (0, 1, 2, 3):
         raise ValueError("the recovery id must be 0, 1, 2, or 3")
 
@@ -139,7 +142,7 @@ def to_der(signature_bytes: bytes, recid: int) -> bytes:
     return ffi.unpack(sig_bytes, length[0])
 
 
-def _parse(signature_bytes: bytes, recid: int) -> CData:
+def _parse(signature_bytes: BytesLike, recid: int) -> CData:
     """Parse a compact signature and its recovery id.
 
     Args:

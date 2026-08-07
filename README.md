@@ -149,13 +149,17 @@ and decides nothing else.
   readily as for `bytes`, so a size check on its own let both through,
   and cffi refused them one call later in its own words and about a
   ctype — naming neither the argument nor what was wrong with it. What
-  crosses is `bytes`, and an `int` where a scalar is named; anything
-  else is refused here and called by the name the signature gives it.
-  A `bytearray` states the same value and the same width as `bytes`, so
-  converting one would guess at nothing — but it would widen what every
-  signature here promises, and `bytes(x)` is that conversion in the
-  caller's own code, where they can see it. This is the `TypeError`
-  these wrappers raise; every other refusal below is a `ValueError`
+  crosses is octets: `bytes`, `bytearray` or `memoryview`, plus an `int`
+  where a scalar is named. Anything else is refused here and called by
+  the name the signature gives it — the `TypeError` these wrappers
+  raise, every other refusal below being a `ValueError`.
+  The three are not a leniency of the kind refused above: each states a
+  value *and* a width, so nothing has to be disbelieved and nothing
+  supplied — the `int` is the wider door of the two, the 32-octet width
+  being the curve's. What they are not is passed through. The copy is
+  taken at the boundary, so a caller holding a secret in memory they can
+  overwrite — which is the reason to reach for a `bytearray` at all —
+  cannot change what libsecp256k1 is about to read
 - **validity is libsecp256k1's to decide, and it does.** Whether 32 bytes
   are a scalar in `[1, n-1]` is answered by
   `secp256k1_ec_seckey_verify`, and `keys.prvkey_verify` is that call, not

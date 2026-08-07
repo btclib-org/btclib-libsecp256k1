@@ -14,10 +14,11 @@ either serialization.
 
 from __future__ import annotations
 
+from . import BytesLike
 from .keys import pubkey_from_prvkey
 
 
-def mult_(num: bytes | int) -> bytes:
+def mult_(num: BytesLike | int) -> bytes:
     """Multiply the generator point, in serialized form.
 
     Args:
@@ -45,7 +46,7 @@ def mult_(num: bytes | int) -> bytes:
     return pubkey_from_prvkey(num, compressed=False)
 
 
-def mult(num: bytes | int) -> tuple[int, int]:
+def mult(num: BytesLike | int) -> tuple[int, int]:
     """Multiply the generator point, as a pair of coordinates.
 
     Args:

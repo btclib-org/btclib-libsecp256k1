@@ -20,6 +20,15 @@ __version__ = version("btclib_libsecp256k1")
 # alias still says what the value is
 CData = Any
 
+# what may be handed to an argument these bindings pass on as a bare
+# pointer. Three named types rather than the buffer protocol at large:
+# `bytes(x)` of anything else is a guess -- of an `int` it is that many
+# zero octets, which would turn `octets(32, "message hash", 32)` into a
+# valid argument -- while these three state a value and a width and are
+# copied, never passed through. `collections.abc.Buffer` is the same
+# idea and arrives with python 3.12, which is not yet the floor here
+BytesLike = bytes | bytearray | memoryview
+
 ffi = _btclib_libsecp256k1.ffi
 
 
