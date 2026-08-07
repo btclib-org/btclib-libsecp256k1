@@ -15,6 +15,7 @@ import secrets
 
 from . import CData, ffi, lib
 from ._scalar import octets, scalar
+from ._secret import wipe
 from .context import ctx
 
 # SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
@@ -58,9 +59,16 @@ def sign(
     keypair = _keypair(prvkey)
 
     sig = ffi.new("char[64]")
-    if lib.secp256k1_schnorrsig_sign32(
-        ctx, sig, msg_bytes, keypair, _aux_rand32(aux_rand32)
-    ):
+    try:
+        signed = lib.secp256k1_schnorrsig_sign32(
+            ctx, sig, msg_bytes, keypair, _aux_rand32(aux_rand32)
+        )
+    finally:
+        # a keypair carries the private key: overwrite it whether the
+        # signature was made, refused, or never attempted, _aux_rand32
+        # being able to raise between the two
+        wipe(keypair)
+    if signed:
         return ffi.unpack(sig, ffi.sizeof(sig))
     raise RuntimeError("schnorr signing failed")
 
@@ -96,18 +104,23 @@ def sign_custom(
     octets(msg_bytes, "message")
     keypair = _keypair(prvkey)
 
-    ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
-    extraparams = ffi.new("secp256k1_schnorrsig_extraparams *")
-    extraparams.magic = EXTRAPARAMS_MAGIC
-    extraparams.noncefp = ffi.NULL
-    # ndata has to stay referenced until the call is over: cffi keeps
-    # alive what a variable points to, not what a struct field does
-    extraparams.ndata = ndata
-
     sig = ffi.new("char[64]")
-    if lib.secp256k1_schnorrsig_sign_custom(
-        ctx, sig, msg_bytes, len(msg_bytes), keypair, extraparams
-    ):
+    try:
+        ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
+        extraparams = ffi.new("secp256k1_schnorrsig_extraparams *")
+        extraparams.magic = EXTRAPARAMS_MAGIC
+        extraparams.noncefp = ffi.NULL
+        # ndata has to stay referenced until the call is over: cffi keeps
+        # alive what a variable points to, not what a struct field does
+        extraparams.ndata = ndata
+
+        signed = lib.secp256k1_schnorrsig_sign_custom(
+            ctx, sig, msg_bytes, len(msg_bytes), keypair, extraparams
+        )
+    finally:
+        # the keypair carries the private key: see sign
+        wipe(keypair)
+    if signed:
         return ffi.unpack(sig, ffi.sizeof(sig))
     raise RuntimeError("schnorr signing failed")
 

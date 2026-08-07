@@ -51,7 +51,14 @@ These are known and inherent, not vulnerabilities:
     which are immutable and not zeroized: it stays in the process memory
     until garbage collection, and may be copied by the interpreter. The
     constant-time properties of libsecp256k1 apply to the C side of the
-    boundary, not to what the caller does before and after it
+    boundary, not to what the caller does before and after it.
+    The copy in the middle is not a Python object and is overwritten: a
+    private key or a shared secret libsecp256k1 writes into a cffi buffer
+    — the output of a tweak or a negation, an ECDH secret, the
+    `secp256k1_keypair` a BIP340 signature is made with — is read out and
+    the buffer zeroed before it is dropped. That is one copy taken back,
+    not safety: the `bytes` handed to the caller holds the same secret
+    and cannot be overwritten
 - a scalar passed as an `int` leaks its magnitude. A Python integer is a
     variable-length object, so serializing one — and any arithmetic that
     produced it — takes a time that depends on the value; the argument
