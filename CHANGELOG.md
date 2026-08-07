@@ -68,6 +68,13 @@ release-notes length in the first place, and are still in
   rather than to what a reader would assume from the name.
   `elliptic-curves` is the one candidate left out: this is one curve, and
   `secp256k1` names it.
+- **the repository now carries those entries as its topics**, where it
+  carried none: the pull request above could write the list and not apply
+  it, the repository settings living outside the tree. REPOSITORY.md has
+  them, as it has every other setting nothing in the tree can recover, and
+  with the command that diffs the two lists and exits nonzero when they
+  have drifted apart — sorted on both sides, GitHub returning an order of
+  its own.
 - **this file relaxes MD024 (no-duplicate-heading) for itself**, a group
   heading repeating under every release that has an entry in that group:
   the rule reads that repeat as the accident it usually is, and
