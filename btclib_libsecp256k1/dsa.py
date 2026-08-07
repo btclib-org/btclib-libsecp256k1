@@ -225,11 +225,21 @@ def _serialize_der(sig: CData) -> bytes:
         Its DER encoding, at most 72 bytes.
 
     Raises:
-        RuntimeError: if libsecp256k1 fails, which the 73-byte buffer
+        RuntimeError: if libsecp256k1 fails, which the 72-byte buffer
             makes unreachable.
     """
-    sig_bytes = ffi.new("char[73]")
-    length = ffi.new("size_t *", 73)
+    # 72 is the maximum a signature of this curve can encode to, and it
+    # is structural rather than generous: secp256k1_ecdsa_sig_serialize
+    # writes 6 + lenR + lenS, and each of those is at most 33 -- 32
+    # octets of scalar and the leading zero DER wants when the top bit
+    # is set. `to_der` reaches it, a high-s signature being one it
+    # serializes rather than refuses.
+    #
+    # The number is written once and the rest is derived from it: the
+    # length passed in is the buffer's own size, so the two cannot drift
+    # apart, and what comes out is what libsecp256k1 says it wrote
+    sig_bytes = ffi.new("char[72]")
+    length = ffi.new("size_t *", ffi.sizeof(sig_bytes))
     if not lib.secp256k1_ecdsa_signature_serialize_der(ctx, sig_bytes, length, sig):
         raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, length[0])

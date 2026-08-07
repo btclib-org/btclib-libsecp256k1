@@ -357,8 +357,8 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     """
     size = 33 if compressed else 65
     output = ffi.new(f"char[{size}]")
-    length = ffi.new("size_t *", size)
+    length = ffi.new("size_t *", ffi.sizeof(output))
     flags = COMPRESSED if compressed else UNCOMPRESSED
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, flags):
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, size)
+    return ffi.unpack(output, length[0])

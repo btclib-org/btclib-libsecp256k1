@@ -116,10 +116,10 @@ def decode(ell_bytes: bytes) -> bytes:
         raise RuntimeError("ElligatorSwift decoding failed")
 
     output = ffi.new("char[33]")
-    length = ffi.new("size_t *", 33)
+    length = ffi.new("size_t *", ffi.sizeof(output))
     if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, COMPRESSED):
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, 33)
+    return ffi.unpack(output, length[0])
 
 
 def xdh(

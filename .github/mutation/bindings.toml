@@ -20,13 +20,16 @@
 # one, both loop mutants dead, and the four the second session still found
 # -- three recid bounds and one message-hash check -- killed by hand
 # afterwards, each mutation applied to the source and the suite watched to
-# fail. What is left, 13 on the session that measured the filter below, is
-# two shapes that cannot be killed by a test and are not holes:
+# fail. What that left, 13 on the session that measured the filter below,
+# was two shapes, and one of the two is no longer there to read:
 #
-#   ffi.new("size_t *", 73) -> 74 or 72, an output buffer for a
-#   serialization libsecp256k1 sizes itself, writing what it needs and
-#   updating the length: a buffer declared larger is harmless by design, and
-#   one declared smaller still holds every value the function produces
+#   ffi.new("size_t *", 73) -> 74 or 72, the capacity of an output buffer,
+#   written as a second copy of the buffer's own size. Six of the 13, and
+#   answered by changing the code rather than by describing them here: the
+#   size is written once and `ffi.sizeof` derives the capacity from it, so
+#   those lines hold no literal for cosmic-ray to replace. What the last
+#   octet of the DER buffer is for now has a test of its own, which is what
+#   the survivors were really asking for
 #
 #   secrets.token_bytes(32) -> 31 or 33, randomness this package generates
 #   rather than accepts -- a BIP340 aux, an ellswift encoding, the context
@@ -37,9 +40,12 @@
 #   octets and takes 31 -- which is cffi's boundary rather than a test, and
 #   is why one line of this shape has one survivor and the others two
 #
-# So read a survivor list expecting those two shapes, and read anything else
-# as a test nobody has written. The list is that short because the filter
-# below skips the third shape before anything runs it. The settled rate is
+# So read a survivor list expecting the shape above, and read anything else
+# as a test nobody has written -- the buffer shape included, should it come
+# back with a buffer somebody sized twice. The list is that short because
+# the filter below skips the annotations before anything runs them. The
+# count here is the one that session measured, not the one the next will:
+# what this repository is answerable for is the shapes, and the rate is
 # whatever the next scheduled run reports; it is not restated here, a number
 # in a comment being a line every change to the suite would have to edit.
 #
