@@ -133,6 +133,18 @@ and decides nothing else.
   is the one part that cannot be left to the caller — a binding that
   reads adjacent heap into a signature when handed a short `bytes` would
   be safe only for the single caller who remembers to check first
+- **and the type is checked with the size, that check being one
+  question.** `len` answers for a `bytearray` and a `memoryview` as
+  readily as for `bytes`, so a size check on its own let both through,
+  and cffi refused them one call later in its own words and about a
+  ctype — naming neither the argument nor what was wrong with it. What
+  crosses is `bytes`, and an `int` where a scalar is named; anything
+  else is refused here and called by the name the signature gives it.
+  A `bytearray` states the same value and the same width as `bytes`, so
+  converting one would guess at nothing — but it would widen what every
+  signature here promises, and `bytes(x)` is that conversion in the
+  caller's own code, where they can see it. This is the `TypeError`
+  these wrappers raise; every other refusal below is a `ValueError`
 - **validity is libsecp256k1's to decide, and it does.** Whether 32 bytes
   are a scalar in `[1, n-1]` is answered by
   `secp256k1_ec_seckey_verify`, and `keys.prvkey_verify` is that call, not

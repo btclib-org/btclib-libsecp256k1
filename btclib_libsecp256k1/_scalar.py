@@ -3,9 +3,48 @@
 # Distributed under the MIT software license, see the accompanying
 # LICENSE file or https://opensource.org/license/mit for the full text.
 
-"""Normalization of the scalar arguments of the bindings."""
+"""What the arguments of the bindings are held to before they cross."""
 
 from __future__ import annotations
+
+
+def octets(value: bytes, name: str, size: int | None = None) -> bytes:
+    """Hold an argument to the type and the length a bare pointer needs.
+
+    Both halves of that, and they are one question.
+    The length, because libsecp256k1 reads a fixed number of octets from
+    a pointer whose length never reached C to be checked. The type,
+    because `len` answers for anything with a length: a `bytearray` of
+    32 passed that check and left cffi to refuse it one call later, in
+    its own words and about a ctype -- `initializer for ctype 'unsigned
+    char *' must be a cdata pointer` -- which names neither the argument
+    nor what was wrong with it. A `float` did not even get that far, and
+    came back as `object of type 'float' has no len()`.
+
+    `bytes` and nothing else. A `bytearray` or a `memoryview` states the
+    same value and the same width, and converting one would be no guess
+    at all -- but it would widen what every signature here promises, and
+    that is the caller's to ask for, spelled `bytes(x)` where they can
+    see it.
+
+    Args:
+        value: the argument, as the caller passed it.
+        name: what the argument is, as the exception should call it.
+        size: the number of octets libsecp256k1 will read, or None where
+            the encoding carries its own length.
+
+    Returns:
+        The same bytes, so that a call may wrap the argument it checks.
+
+    Raises:
+        TypeError: if the value is not bytes.
+        ValueError: if a size is given and the value is not that long.
+    """
+    if not isinstance(value, bytes):
+        raise TypeError(f"the {name} must be bytes, not {type(value).__name__}")
+    if size is not None and len(value) != size:
+        raise ValueError(f"the {name} must be {size} bytes")
+    return value
 
 
 def scalar(num: bytes | int, name: str) -> bytes:
@@ -36,6 +75,7 @@ def scalar(num: bytes | int, name: str) -> bytes:
         The scalar as 32 bytes, big endian.
 
     Raises:
+        TypeError: if the value is neither bytes nor an int.
         ValueError: if bytes are not exactly 32 long, or if an int does
             not fit in 32 bytes. Whether the value is a valid scalar,
             i.e. in [1, n-1], is for libsecp256k1 to say.
@@ -47,9 +87,9 @@ def scalar(num: bytes | int, name: str) -> bytes:
         # is a valid scalar, i.e. in [1, n-1], is for libsecp256k1 to say
         if not 0 <= num < 2**256:
             raise ValueError(f"the {name} must fit in 32 bytes")
-        num_bytes = num.to_bytes(32, "big")
-    else:
-        num_bytes = num
-    if len(num_bytes) != 32:
-        raise ValueError(f"the {name} must be 32 bytes")
-    return num_bytes
+        return num.to_bytes(32, "big")
+    # the domain here is wider than octets', so the type is said here:
+    # what is left for it is the length
+    if not isinstance(num, bytes):
+        raise TypeError(f"the {name} must be bytes or an int, not {type(num).__name__}")
+    return octets(num, name, 32)
