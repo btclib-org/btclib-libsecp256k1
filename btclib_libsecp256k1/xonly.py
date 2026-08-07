@@ -102,12 +102,17 @@ def tweak_add_check(
 
     Returns:
         True if tweaking the internal key by that tweak gives that key
-        and that parity.
+        and that parity. 32 bytes which are the x coordinate of no point
+        at all are one of the ways of being False: this compares the
+        serialization rather than parsing it, which is where the saving
+        over recomputing the tweak comes from.
 
     Raises:
-        ValueError: if either key is not 32 bytes or not a valid x
-            coordinate, if the parity is not 0 or 1, or if the tweak is
-            not 32 bytes or does not fit in them.
+        ValueError: if either key is not 32 bytes, if the internal key
+            is not a valid x coordinate, if the parity is not 0 or 1, or
+            if the tweak is not 32 bytes or does not fit in them. The
+            tweaked key is not parsed, and so is never invalid: see
+            Returns.
     """
     octets(tweaked_pubkey_bytes, "tweaked x-only public key", 32)
     if tweaked_parity not in (0, 1):

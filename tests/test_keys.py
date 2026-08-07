@@ -275,6 +275,14 @@ def test_xonly_tweak_add() -> None:
     )
     assert not xonly.tweak_add_check(tweaked_bytes, 1 - parity, xonly_bytes, tweak)
 
+    # and 32 bytes which are the x coordinate of no point at all are
+    # False rather than an error: this compares the serialization
+    # instead of parsing it, which is the whole of what it saves over
+    # recomputing the tweak. The internal key is parsed, and does raise
+    assert not xonly.tweak_add_check(b"\xff" * 32, parity, xonly_bytes, tweak)
+    with pytest.raises(ValueError, match="invalid x-only public key"):
+        xonly.tweak_add_check(tweaked_bytes, parity, b"\xff" * 32, tweak)
+
 
 def test_taproot_key_path() -> None:
     """Sign a taproot key path spending with a tweaked private key."""
