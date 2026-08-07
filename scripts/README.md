@@ -97,7 +97,9 @@ Running this file directly performs the same work with the current
 directory as the build directory, which is useful for an in-place build
 outside a wheel:
 
-    uv run python scripts/cffi_build.py
+```shell
+uv run python scripts/cffi_build.py
+```
 
 ### Environment variables
 
@@ -126,7 +128,9 @@ the pure python implementation of btclib. Each case asserts its own
 result before being timed, so a comparand that is merely fast and wrong
 cannot win.
 
-    uv run --group bench scripts/benchmark.py
+```shell
+uv run --group bench scripts/benchmark.py
+```
 
 The `bench` group is deliberately outside `dev`: btclib depends on this
 package, so it cannot be a dependency of developing it, and the two

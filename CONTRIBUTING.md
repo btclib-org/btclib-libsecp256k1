@@ -57,10 +57,12 @@ and `git submodule update` to fetch the submodule data
 and check out the appropriate commit.
 
 <!-- markdownlint-disable MD013 -->
-    $ git submodule init
-    Submodule 'secp256k1' (https://github.com/bitcoin-core/secp256k1.git) registered for path 'secp256k1'
-    $ git submodule update
-    Cloning into 'secp256k1'...
+```console
+$ git submodule init
+Submodule 'secp256k1' (https://github.com/bitcoin-core/secp256k1.git) registered for path 'secp256k1'
+$ git submodule update
+Cloning into 'secp256k1'...
+```
 <!-- markdownlint-enable MD013 -->
 
 The project uses [uv](https://docs.astral.sh/uv/) to manage the
@@ -69,23 +71,31 @@ development environment. The interpreter it is built on is pinned in
 hand-made virtualenv is needed. The development dependencies are the
 PEP 735 groups declared in `pyproject.toml`.
 
-    uv sync
+```shell
+uv sync
+```
 
 This also builds and installs the extension in editable mode, so the
 C toolchain the README describes must be available.
 
 To build:
 
-    uv build --sdist
-    uv build --wheel
+```shell
+uv build --sdist
+uv build --wheel
+```
 
 To test:
 
-    uv run pytest
+```shell
+uv run pytest
+```
 
 To measure the code coverage provided by tests:
 
-    uv run pytest --cov
+```shell
+uv run pytest --cov
+```
 
 Coverage is measured in branch mode and gated by the `fail_under`
 ratchet in `pyproject.toml`; the same check runs in CI.
@@ -93,12 +103,16 @@ ratchet in `pyproject.toml`; the same check runs in CI.
 To run everything CI checks before a PR, i.e. the formatter, the
 linters and the type checker:
 
-    uv run pre-commit run --all-files
+```shell
+uv run pre-commit run --all-files
+```
 
 To time these bindings against the other python wrappers of
 libsecp256k1, and against the pure python implementation of btclib:
 
-    uv run --group bench scripts/benchmark.py
+```shell
+uv run --group bench scripts/benchmark.py
+```
 
 That group is not part of `dev`, and installing it is a choice: btclib
 depends on this package, so it cannot be a dependency of developing it,
@@ -109,7 +123,9 @@ To test against another supported interpreter, bypass the build cache:
 uv keys it on the sources, which do not tell it that the compiled
 extension belongs to one ABI version only.
 
-    uv run --python 3.10 --no-cache pytest
+```shell
+uv run --python 3.10 --no-cache pytest
+```
 
 On a Windows arm64 machine, mind which interpreter that request gets:
 uv installs an x86-64 one unless the architecture is named
@@ -135,31 +151,43 @@ the runner, and that is worth knowing before trying.
 
 - `Lint and type-check`
 
-      uvx pre-commit run --all-files
+  ```shell
+  uvx pre-commit run --all-files
+  ```
 
 - `Coverage`
 
-      uv run --locked --no-default-groups --group test pytest --cov
+  ```shell
+  uv run --locked --no-default-groups --group test pytest --cov
+  ```
 
 - `Test <version> on <os>`, one row of the matrix
 
-      uv run --python 3.10 --no-cache pytest
+  ```shell
+  uv run --python 3.10 --no-cache pytest
+  ```
 
 - `Build wheels on <os>`, for this platform only
 
-      uv run --only-group build cibuildwheel
+  ```shell
+  uv run --only-group build cibuildwheel
+  ```
 
   the Linux wheels of that job are built in a manylinux container, so
   reproducing them needs a container runtime (`colima` on macOS)
 
 - `Build dynamic wheel on <os>`
 
-      BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
+  ```shell
+  BTCLIB_LIBSECP256K1_DYNAMIC=true uv build --wheel
+  ```
 
   on macOS the job exports a deployment target first, and reproducing it
   means exporting the same one:
 
-      export MACOSX_DEPLOYMENT_TARGET=11.0    # 10.13 on x86_64
+  ```shell
+  export MACOSX_DEPLOYMENT_TARGET=11.0    # 10.13 on x86_64
+  ```
 
   a dynamic wheel compiles no extension, so nothing derives its platform
   tag from a toolchain: without that variable `hatch_build.py` falls back
@@ -172,14 +200,18 @@ the runner, and that is worth knowing before trying.
 
 - `Build sdist`, and `Test sdist install on <os>` after it
 
-      uv build --sdist
-      python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
+  ```shell
+  uv build --sdist
+  python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
+  ```
 
 - `Validate distributions`
 
-      uv run --locked --only-group check twine check --strict dist/*
-      uv run --locked --only-group check check-wheel-contents dist/*.whl
-      uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+  ```shell
+  uv run --locked --only-group check twine check --strict dist/*
+  uv run --locked --only-group check check-wheel-contents dist/*.whl
+  uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+  ```
 
 - `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
   faithful: the cross-compilation CI does is from ubuntu, not from macOS
@@ -189,9 +221,11 @@ the runner, and that is worth knowing before trying.
   unlike btclib's own equivalent job: every `automodule` directive
   imports this package, which means compiling libsecp256k1 first
 
-      git submodule update --init
-      uv run --locked --no-default-groups --group docs \
-          sphinx-build -W --keep-going -b html docs/source docs/build/html
+  ```shell
+  git submodule update --init
+  uv run --locked --no-default-groups --group docs \
+      sphinx-build -W --keep-going -b html docs/source docs/build/html
+  ```
 
 The `published` workflow has no local equivalent by design: what it
 installs is what PyPI serves.
@@ -204,8 +238,10 @@ them run locally.
   the suite. The upgrade rewrites `uv.lock`, so restore it afterwards with
   `git checkout uv.lock`:
 
-      uv lock --upgrade
-      uv run --locked --no-default-groups --group test pytest
+  ```shell
+  uv lock --upgrade
+  uv run --locked --no-default-groups --group test pytest
+  ```
 
 - `links` needs a tool uv does not provide, lychee being a rust binary, so
   the workflow uses the action. `.lycheeignore` holds the URLs a checker
@@ -215,18 +251,20 @@ them run locally.
 - `mutation`, scoped by `.github/mutation/bindings.toml`, which is what the
   workflow reads too:
 
-      uv run --locked --no-default-groups --group test --group mutation \
-          cosmic-ray baseline .github/mutation/bindings.toml
-      uv run --locked --no-default-groups --group test --group mutation \
-          cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
-      uv run --locked --no-default-groups --group test --group mutation \
-          cr-filter-operators bindings.sqlite .github/mutation/bindings.toml
-      uv run --locked --no-default-groups --group test --group mutation \
-          cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
-      uv run --locked --no-default-groups --group test --group mutation \
-          cr-report --surviving-only --show-diff bindings.sqlite
-      uv run --locked --no-default-groups \
-          python .github/scripts/mutation_counts.py bindings.sqlite
+  ```shell
+  uv run --locked --no-default-groups --group test --group mutation \
+      cosmic-ray baseline .github/mutation/bindings.toml
+  uv run --locked --no-default-groups --group test --group mutation \
+      cosmic-ray init .github/mutation/bindings.toml bindings.sqlite
+  uv run --locked --no-default-groups --group test --group mutation \
+      cr-filter-operators bindings.sqlite .github/mutation/bindings.toml
+  uv run --locked --no-default-groups --group test --group mutation \
+      cosmic-ray exec .github/mutation/bindings.toml bindings.sqlite
+  uv run --locked --no-default-groups --group test --group mutation \
+      cr-report --surviving-only --show-diff bindings.sqlite
+  uv run --locked --no-default-groups \
+      python .github/scripts/mutation_counts.py bindings.sqlite
+  ```
 
   `baseline` first, always: it runs the configured test command against the
   unmutated tree, and without it a stale command fails every mutant
@@ -283,19 +321,21 @@ release.
   `*.csv` or `*.json`, fails the corresponding hook until its baseline is
   regenerated:
 
-      # the tree, entropy detectors on; the vendored vector data is
-      # excluded by a filter the baseline itself records
-      uvx --from detect-secrets detect-secrets scan \
-          --baseline .secrets.baseline
+  ```shell
+  # the tree, entropy detectors on; the vendored vector data is
+  # excluded by a filter the baseline itself records
+  uvx --from detect-secrets detect-secrets scan \
+      --baseline .secrets.baseline
 
-      # the vendored vector data, entropy detectors off: these files are
-      # 64-character hex and nothing else, so a new vector would read as a
-      # new secret. The paths are the hook's `files` pattern spelled out
-      uvx --from detect-secrets detect-secrets scan \
-          --disable-plugin HexHighEntropyString \
-          --disable-plugin Base64HighEntropyString \
-          tests/*.csv tests/*.json \
-          > .secrets.vectors.baseline
+  # the vendored vector data, entropy detectors off: these files are
+  # 64-character hex and nothing else, so a new vector would read as a
+  # new secret. The paths are the hook's `files` pattern spelled out
+  uvx --from detect-secrets detect-secrets scan \
+      --disable-plugin HexHighEntropyString \
+      --disable-plugin Base64HighEntropyString \
+      tests/*.csv tests/*.json \
+      > .secrets.vectors.baseline
+  ```
 
   read the diff before committing it, which is the whole point of a
   baseline: what appears there is what nobody has looked at yet
