@@ -15,8 +15,13 @@ The point is not a ranking: the three binding packages call the same
 libsecp256k1, so what separates them is the boundary crossing, and what
 separates them from btclib is the C. Read the output as an order of
 magnitude and never as a number to quote -- the loop count differs per
-function, the timings are wall clock, and nothing here repeats a
-measurement or discards an outlier.
+function, and nothing here repeats a measurement or discards an outlier.
+
+btclib's own rows need its dispatch turned off, which
+`python_arithmetic_only` below does and says why: `dsa.verify_` and
+`ssa.verify_` delegate to these very bindings for secp256k1 with sha256,
+so without it the two rows measured C with a python wrapper in front and
+called it python.
 
 Not part of the test suite and not run by CI: it needs three third-party
 packages this project does not depend on.
@@ -28,6 +33,7 @@ import time
 from collections.abc import Callable
 
 import coincurve
+from btclib.curves import curve
 from btclib.ecc import dsa, ssa
 from btclib.hashes import reduce_to_hlen
 from btclib.to_pub_key import pub_keyinfo_from_prv_key
@@ -42,6 +48,31 @@ xonly_pubkey = pubkey[1:]
 msg = reduce_to_hlen(b"Satoshi Nakamoto")
 dsa_sig = btclib_libsecp256k1.dsa.sign(msg, prvkey)
 ssa_sig = btclib_libsecp256k1.ssa.sign(msg, prvkey)
+
+
+def python_arithmetic_only() -> None:
+    """Turn btclib's libsecp256k1 dispatch off, in every namespace.
+
+    Without this the two btclib rows below measured *these bindings* with
+    a btclib wrapper in front, and reported it as python: `dsa.verify_`
+    and `ssa.verify_` delegate for secp256k1 with sha256, which is
+    exactly what is set up above. The two rows came out a little slower
+    than this package's own and nothing said why.
+
+    Every namespace, because `_libsecp256k1_applicable` is imported *by
+    name* into `ecc.dsa`, `ecc.ssa` and `curves.curve`: patching one
+    leaves the other two delegating, so a partial patch still measures C
+    and still looks like python. The multiplication under the
+    verification equation lives in the third of them.
+
+    Called once, after the fixtures above are built -- they go through
+    btclib too, and there is no reason to slow those down.
+    """
+    for module in (dsa, ssa, curve):
+        module._libsecp256k1_applicable = lambda *_: False
+
+
+python_arithmetic_only()
 
 
 def dsa_btclib() -> None:
@@ -103,19 +134,25 @@ def benchmark(func: Callable[[], None], mult: int = 1) -> None:
     all of them would either take minutes on btclib or measure the C
     calls against the resolution of the clock.
     """
-    start = time.time()
+    # perf_counter and not time(): the wall clock can step backwards
+    # under an NTP correction, and a benchmark is the one place that
+    # shows up as a negative duration
+    start = time.perf_counter()
     for _ in range(1000 * mult):
         func()
-    end = time.time()
+    end = time.perf_counter()
     print(f"{func.__name__:<17}: {((end - start) / mult):.6f}")
 
 
-benchmark(dsa_btclib, 10)
+# one thousand calls of the python path is already a second of wall
+# clock, where the C rows need a hundred thousand to leave the clock's
+# own resolution behind
+benchmark(dsa_btclib, 1)
 benchmark(dsa_coincurve, 100)
 benchmark(dsa_secp256k1, 100)
 benchmark(dsa_libsecp256k1, 100)
 
-benchmark(ssa_btclib, 10)
+benchmark(ssa_btclib, 1)
 benchmark(ssa_coincurve, 100)
 benchmark(ssa_secp256k1, 100)
 benchmark(ssa_libsecp256k1, 100)

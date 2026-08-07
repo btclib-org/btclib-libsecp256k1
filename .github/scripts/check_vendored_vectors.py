@@ -21,6 +21,10 @@ documented as behind would be a decision already made, and
 re-reporting the same gap every month would be noise rather than news;
 btclib's own README has that shape today, this one does not yet.
 
+A path upstream has renamed or deleted is reported rather than raising:
+it has no commit to name as a tip, and a pin standing on a file that is
+not there any more is the one drift nobody would otherwise notice.
+
 Two more shapes this script does not attempt, for the same reason
 btclib's does not, present or not in this project's own README today: a
 path carrying a `<name>` placeholder, where one pin serves several
@@ -79,6 +83,16 @@ class Drift:
     latest_commit: str
     latest_date: str
 
+    @property
+    def path_is_gone(self) -> bool:
+        """True where upstream has no commit touching the pinned path.
+
+        The empty `latest_commit` is what says so: there is no tip to
+        name, `_latest_commit` having answered None. Reading it through
+        a name keeps that encoding in one place.
+        """
+        return not self.latest_commit
+
 
 def _entries_at_tip(readme: str) -> tuple[list[Entry], list[str]]:
     """Return the checkable entries, and the headings this skips.
@@ -115,8 +129,17 @@ def _entries_at_tip(readme: str) -> tuple[list[Entry], list[str]]:
     return entries, skipped
 
 
-def _latest_commit(repo: str, path: str) -> tuple[str, str]:
-    """Return the sha and date of the most recent commit touching path."""
+def _latest_commit(repo: str, path: str) -> tuple[str, str] | None:
+    """Return the sha and date of the most recent commit touching path.
+
+    None where upstream has no commit touching it at all, which means the
+    path has been renamed or deleted: the sharpest drift there is, a pin
+    naming a file that is not there any more. This used to unpack one
+    commit out of an empty list and raise `ValueError` instead, so the
+    monthly run went red and `report` was never reached -- no issue
+    opened, on the one kind of drift nobody would otherwise notice, which
+    is what this workflow exists for.
+    """
     result = subprocess.run(  # noqa: S603
         [
             _GH,
@@ -133,7 +156,10 @@ def _latest_commit(repo: str, path: str) -> tuple[str, str]:
         check=True,
         text=True,
     )
-    (commit,) = json.loads(result.stdout)
+    commits = json.loads(result.stdout)
+    if not commits:
+        return None
+    commit = commits[0]
     date: str = commit["commit"]["committer"]["date"][:10]
     sha: str = commit["sha"]
     return sha, date
@@ -144,9 +170,12 @@ def find_drift(readme_path: Path) -> tuple[list[Drift], list[str]]:
     entries, skipped = _entries_at_tip(readme_path.read_text(encoding="utf-8"))
     drifted = []
     for entry in entries:
-        latest_sha, latest_date = _latest_commit(entry.repo, entry.path)
-        if latest_sha != entry.commit:
-            drifted.append(Drift(entry, latest_sha, latest_date))
+        latest = _latest_commit(entry.repo, entry.path)
+        if latest is None:
+            # a path upstream no longer has: drift with no tip to name
+            drifted.append(Drift(entry, "", ""))
+        elif latest[0] != entry.commit:
+            drifted.append(Drift(entry, *latest))
     return drifted, skipped
 
 
@@ -157,6 +186,14 @@ def _issue_body(readme_path: Path, drifted: list[Drift], skipped: list[str]) -> 
         "",
     ]
     for drift in drifted:
+        if drift.path_is_gone:
+            lines.append(
+                f"- **{drift.entry.heading}**: pinned to"
+                f" `{drift.entry.commit[:12]}`, and `{drift.entry.repo}` has no"
+                f" commit touching `{drift.entry.path}` any more -- renamed,"
+                " moved or deleted upstream"
+            )
+            continue
         lines.append(
             f"- **{drift.entry.heading}**: pinned to `{drift.entry.commit[:12]}`,"
             f" upstream's tip of `{drift.entry.path}` is now"
@@ -230,9 +267,25 @@ def main() -> int:
     """
     args = [a for a in sys.argv[1:] if a != "--dry-run"]
     dry_run = len(args) != len(sys.argv) - 1
+    if len(args) != 1:
+        # a human running this by hand is the only way here, the workflow
+        # passing the path every time: an IndexError naming a list is
+        # what they used to get
+        print(
+            f"usage: {Path(sys.argv[0]).name} <README path> [--dry-run]",
+            file=sys.stderr,
+        )
+        return 2
     readme_path = Path(args[0])
     drifted, skipped = find_drift(readme_path)
     for drift in drifted:
+        if drift.path_is_gone:
+            print(
+                f"GONE: {drift.entry.heading} pinned to"
+                f" {drift.entry.commit[:12]}, and {drift.entry.repo} has no"
+                f" commit touching {drift.entry.path} any more"
+            )
+            continue
         print(
             f"BEHIND: {drift.entry.heading} pinned to {drift.entry.commit[:12]},"
             f" tip is {drift.latest_commit[:12]} ({drift.latest_date})"
