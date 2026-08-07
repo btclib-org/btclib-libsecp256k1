@@ -206,44 +206,34 @@ def test_invalid_inputs() -> None:
 def test_type_checks_refuse_what_merely_has_a_length() -> None:
     """A size check alone is not a check: `len` answers for more than bytes.
 
-    A `bytearray` of 32 passed every one of them and reached cffi, which
-    refused it a call later in its own words and about a ctype --
-    `initializer for ctype 'unsigned char *' must be a cdata pointer` --
-    naming neither the argument nor what was wrong with it. A `float`
-    did not get that far, and came back as `object of type 'float' has
-    no len()`. Both are the binding's to refuse, and it names them.
-
-    That a `bytearray` is refused rather than converted is the decision
-    and not the oversight: it states the same value and the same width
-    as bytes, and `bytes(x)` is the conversion -- in the caller's code,
-    where they can see it, rather than in a signature that promises
-    bytes and quietly means more.
+    What the boundary takes is bytes, a bytearray and a memoryview --
+    `tests/test_bytes_like.py` drives every entry point with each of the
+    three. What it refuses is everything else, and it refuses it by
+    name: a `str` has a length and is not octets, a `float` has none and
+    came back as `object of type 'float' has no len()` before there was
+    a type check to meet.
 
     Every call below is annotated for what it is: an argument of a type
     the signature refuses, which is why each carries the `type: ignore`
     that says mypy already knew.
     """
-    msg = b"\x01" * 32
     prvkey = 7
     pubkey_bytes = mult.mult_(prvkey)
-    der_bytes = dsa.sign(msg, prvkey)
 
-    with pytest.raises(TypeError, match="message hash must be bytes, not bytearray"):
-        dsa.sign(bytearray(msg), prvkey)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="public key must be bytes, not memoryview"):
-        dsa.verify(msg, memoryview(pubkey_bytes), der_bytes)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="tag must be bytes, not str"):
         hashes.tagged_sha256("TapLeaf", b"")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="message hash must be bytes, not str"):
+        dsa.sign("x" * 32, prvkey)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="ElligatorSwift public key must be bytes"):
-        ellswift.decode(bytearray(64))  # type: ignore[arg-type]
+        ellswift.decode(None)  # type: ignore[arg-type]
 
     # the scalars take an int too, so their message says so
-    with pytest.raises(TypeError, match="private key must be bytes or an int"):
-        dsa.sign(msg, bytearray(32))  # type: ignore[arg-type]
     with pytest.raises(
         TypeError, match="private key must be bytes or an int, not float"
     ):
         mult.mult(1.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="tweak must be bytes or an int, not str"):
+        keys.prvkey_tweak_add(prvkey, "x" * 32)  # type: ignore[arg-type]
 
     # a sequence of public keys handed one public key: bytes is itself a
     # sequence, so what reaches parse is an int, and saying so is the

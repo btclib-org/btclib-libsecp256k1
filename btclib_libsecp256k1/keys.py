@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from . import CData, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take
 from .context import check, ctx
@@ -29,7 +29,7 @@ COMPRESSED = 258
 UNCOMPRESSED = 2
 
 
-def prvkey_verify(prvkey: bytes | int) -> bool:
+def prvkey_verify(prvkey: BytesLike | int) -> bool:
     """Return True if the private key is a valid scalar, i.e. in [1, n-1].
 
     Args:
@@ -47,7 +47,7 @@ def prvkey_verify(prvkey: bytes | int) -> bool:
     return bool(lib.secp256k1_ec_seckey_verify(ctx, prvkey_bytes))
 
 
-def prvkey_negate(prvkey: bytes | int) -> bytes:
+def prvkey_negate(prvkey: BytesLike | int) -> bytes:
     """Negate a private key.
 
     Args:
@@ -66,7 +66,7 @@ def prvkey_negate(prvkey: bytes | int) -> bytes:
     return take(prvkey_buffer)
 
 
-def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
+def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
     """Add a tweak to a private key.
 
     This is the private-key side of BIP32 derivation, and of any other
@@ -91,7 +91,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     return take(prvkey_buffer)
 
 
-def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
+def prvkey_tweak_mul(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
     """Multiply a private key by a tweak.
 
     Args:
@@ -113,7 +113,7 @@ def prvkey_tweak_mul(prvkey: bytes | int, tweak: bytes | int) -> bytes:
     return take(prvkey_buffer)
 
 
-def pubkey_from_prvkey(prvkey: bytes | int, compressed: bool = True) -> bytes:
+def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> bytes:
     """Return the public key of a private key, i.e. the point kG.
 
     This is the generator multiplication of `mult.mult_`, with the
@@ -147,7 +147,7 @@ def pubkey_from_prvkey(prvkey: bytes | int, compressed: bool = True) -> bytes:
     return serialize(pubkey, compressed)
 
 
-def pubkey_negate(pubkey_bytes: bytes, compressed: bool = True) -> bytes:
+def pubkey_negate(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
     """Negate a public key.
 
     Args:
@@ -169,7 +169,7 @@ def pubkey_negate(pubkey_bytes: bytes, compressed: bool = True) -> bytes:
 
 
 def pubkey_tweak_add(
-    pubkey_bytes: bytes, tweak: bytes | int, compressed: bool = True
+    pubkey_bytes: BytesLike, tweak: BytesLike | int, compressed: bool = True
 ) -> bytes:
     """Add the generator multiplied by the tweak to a public key.
 
@@ -199,7 +199,7 @@ def pubkey_tweak_add(
 
 
 def pubkey_tweak_mul(
-    pubkey_bytes: bytes, tweak: bytes | int, compressed: bool = True
+    pubkey_bytes: BytesLike, tweak: BytesLike | int, compressed: bool = True
 ) -> bytes:
     """Multiply a public key by a tweak.
 
@@ -231,7 +231,9 @@ def pubkey_tweak_mul(
     return serialize(pubkey, compressed)
 
 
-def pubkey_combine(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> bytes:
+def pubkey_combine(
+    pubkeys_bytes: Sequence[BytesLike], compressed: bool = True
+) -> bytes:
     """Add public keys together.
 
     Args:
@@ -261,7 +263,7 @@ def pubkey_combine(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> b
     return serialize(combined, compressed)
 
 
-def pubkey_cmp(pubkey1_bytes: bytes, pubkey2_bytes: bytes) -> int:
+def pubkey_cmp(pubkey1_bytes: BytesLike, pubkey2_bytes: BytesLike) -> int:
     """Compare two public keys, in lexicographic order of compressed form.
 
     The order is the one of the compressed serialization, whichever form
@@ -284,7 +286,9 @@ def pubkey_cmp(pubkey1_bytes: bytes, pubkey2_bytes: bytes) -> int:
     )
 
 
-def pubkey_sort(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> list[bytes]:
+def pubkey_sort(
+    pubkeys_bytes: Sequence[BytesLike], compressed: bool = True
+) -> list[bytes]:
     """Sort public keys, in lexicographic order of compressed form.
 
     This is the ordering of a BIP67 multisig script, and the one MuSig2
@@ -313,7 +317,7 @@ def pubkey_sort(pubkeys_bytes: Sequence[bytes], compressed: bool = True) -> list
     return [serialize(pubkey, compressed) for pubkey in array]
 
 
-def parse(pubkey_bytes: bytes) -> CData:
+def parse(pubkey_bytes: BytesLike) -> CData:
     """Parse a public key into its internal libsecp256k1 representation.
 
     The internal form is what the raw `lib` calls take, and what
@@ -330,7 +334,7 @@ def parse(pubkey_bytes: bytes) -> CData:
         ValueError: if the bytes are not a valid point in either
             serialization.
     """
-    octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")

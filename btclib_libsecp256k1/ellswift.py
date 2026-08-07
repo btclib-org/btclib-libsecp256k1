@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import secrets
 
-from . import ffi, lib
+from . import BytesLike, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take
 from .context import ctx
 from .keys import serialize
 
 
-def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
+def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> bytes:
     """Create the 64-byte ElligatorSwift encoding of a private key's public key.
 
     This is safer than encode(mult_(prvkey)), as the private key itself
@@ -42,10 +42,11 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
 
     # entropy is not a serialization: a shorter value is a caller mistake
     # rather than a small number, and is not padded into a valid argument
-    if aux_rand32 is None:
-        aux_rand32 = secrets.token_bytes(32)
-    else:
-        octets(aux_rand32, "aux_rand32", 32)
+    aux_rand32 = (
+        secrets.token_bytes(32)
+        if aux_rand32 is None
+        else octets(aux_rand32, "aux_rand32", 32)
+    )
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_create(ctx, ell_bytes, prvkey_bytes, aux_rand32):
@@ -53,7 +54,7 @@ def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
-def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
+def encode(pubkey_bytes: BytesLike, rnd32: BytesLike | None = None) -> bytes:
     """Encode a public key as 64 ElligatorSwift bytes.
 
     The randomness must not be a deterministic function of the public
@@ -74,16 +75,13 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
-    octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
 
     # 32 bytes of entropy, or nothing: see the comment in create
-    if rnd32 is None:
-        rnd32 = secrets.token_bytes(32)
-    else:
-        octets(rnd32, "rnd32", 32)
+    rnd32 = secrets.token_bytes(32) if rnd32 is None else octets(rnd32, "rnd32", 32)
 
     ell_bytes = ffi.new("char[64]")
     if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
@@ -91,7 +89,7 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
-def decode(ell_bytes: bytes, compressed: bool = True) -> bytes:
+def decode(ell_bytes: BytesLike, compressed: bool = True) -> bytes:
     """Decode a 64-byte ElligatorSwift public key into a public key.
 
     Args:
@@ -108,7 +106,7 @@ def decode(ell_bytes: bytes, compressed: bool = True) -> bytes:
         RuntimeError: if libsecp256k1 fails to decode or serialize,
             which no 64 bytes can make it do.
     """
-    octets(ell_bytes, "ElligatorSwift public key", 64)
+    ell_bytes = octets(ell_bytes, "ElligatorSwift public key", 64)
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
@@ -117,7 +115,7 @@ def decode(ell_bytes: bytes, compressed: bool = True) -> bytes:
 
 
 def xdh(
-    ell_a_bytes: bytes, ell_b_bytes: bytes, prvkey: bytes | int, party: int
+    ell_a_bytes: BytesLike, ell_b_bytes: BytesLike, prvkey: BytesLike | int, party: int
 ) -> bytes:
     """Compute the x-only ECDH shared secret of two ElligatorSwift keys.
 
@@ -142,8 +140,8 @@ def xdh(
             0 or 1, or if the private key is not 32 bytes, does not fit
             in them, or is not a valid scalar.
     """
-    octets(ell_a_bytes, "ElligatorSwift public key of A", 64)
-    octets(ell_b_bytes, "ElligatorSwift public key of B", 64)
+    ell_a_bytes = octets(ell_a_bytes, "ElligatorSwift public key of A", 64)
+    ell_b_bytes = octets(ell_b_bytes, "ElligatorSwift public key of B", 64)
     if party not in (0, 1):
         raise ValueError("the party must be 0 (A) or 1 (B)")
 

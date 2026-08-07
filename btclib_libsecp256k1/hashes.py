@@ -10,12 +10,12 @@ https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 
 from __future__ import annotations
 
-from . import ffi, lib
+from . import BytesLike, ffi, lib
 from ._scalar import octets
 from .context import ctx
 
 
-def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
+def tagged_sha256(tag: BytesLike, msg: BytesLike) -> bytes:
     """Return the BIP340 tagged hash of a message.
 
     That is SHA256(SHA256(tag) || SHA256(tag) || msg): the tag separates
@@ -39,8 +39,8 @@ def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
         >>> hashes.tagged_sha256(b"TapLeaf", b"").hex()
         '5212c288a377d1f8164962a5a13429f9ba6a7b84e59776a52c6637df2106facb'
     """
-    octets(tag, "tag")
-    octets(msg, "message")
+    tag = octets(tag, "tag")
+    msg = octets(msg, "message")
     output = ffi.new("char[32]")
     if not lib.secp256k1_tagged_sha256(ctx, output, tag, len(tag), msg, len(msg)):
         raise RuntimeError("tagged hashing failed")

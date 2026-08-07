@@ -7,13 +7,13 @@
 
 from __future__ import annotations
 
-from . import ffi, lib
+from . import BytesLike, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take
 from .context import ctx
 
 
-def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
+def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
     """Compute the ECDH shared secret.
 
     The result is the SHA256 of the compressed shared point, i.e. the
@@ -41,7 +41,7 @@ def shared_secret(pubkey_bytes: bytes, prvkey: bytes | int) -> bytes:
             it is not a valid scalar.
     """
     prvkey_bytes = scalar(prvkey, "private key")
-    octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, "public key")
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
