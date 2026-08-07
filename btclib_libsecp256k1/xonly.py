@@ -20,13 +20,13 @@ not inside an argument check.
 
 from __future__ import annotations
 
-from . import CData, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take, wipe
 from .context import ctx
 
 
-def from_pubkey(pubkey_bytes: bytes) -> tuple[bytes, int]:
+def from_pubkey(pubkey_bytes: BytesLike) -> tuple[bytes, int]:
     """Convert a public key into its x-only form and y parity.
 
     Args:
@@ -43,14 +43,14 @@ def from_pubkey(pubkey_bytes: bytes) -> tuple[bytes, int]:
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
-    octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, "public key")
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError("invalid public key")
     return _to_xonly(pubkey)
 
 
-def tweak_add(pubkey_bytes: bytes, tweak: bytes | int) -> tuple[bytes, int]:
+def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, int]:
     """Add the generator multiplied by the tweak to an x-only public key.
 
     This is the BIP341 taproot output key, given the internal key and
@@ -84,10 +84,10 @@ def tweak_add(pubkey_bytes: bytes, tweak: bytes | int) -> tuple[bytes, int]:
 
 
 def tweak_add_check(
-    tweaked_pubkey_bytes: bytes,
+    tweaked_pubkey_bytes: BytesLike,
     tweaked_parity: int,
-    pubkey_bytes: bytes,
-    tweak: bytes | int,
+    pubkey_bytes: BytesLike,
+    tweak: BytesLike | int,
 ) -> bool:
     """Check that a tweaked x-only public key is the tweak of another one.
 
@@ -115,7 +115,7 @@ def tweak_add_check(
             tweaked key is not parsed, and so is never invalid: see
             Returns.
     """
-    octets(tweaked_pubkey_bytes, "tweaked x-only public key", 32)
+    tweaked_pubkey_bytes = octets(tweaked_pubkey_bytes, "tweaked x-only public key", 32)
     if tweaked_parity not in (0, 1):
         raise ValueError("the parity must be 0 or 1")
 
@@ -129,7 +129,7 @@ def tweak_add_check(
     )
 
 
-def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
+def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
     """Add a tweak to the private key of an x-only public key.
 
     The private key is first negated, if needed, to be the one of the
@@ -169,7 +169,7 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
         wipe(keypair)
 
 
-def _parse(pubkey_bytes: bytes) -> CData:
+def _parse(pubkey_bytes: BytesLike) -> CData:
     """Parse a 32-byte x-only public key.
 
     Args:
@@ -182,7 +182,7 @@ def _parse(pubkey_bytes: bytes) -> CData:
         ValueError: if it is not 32 bytes, or not a valid x coordinate.
     """
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    octets(pubkey_bytes, "x-only public key", 32)
+    pubkey_bytes = octets(pubkey_bytes, "x-only public key", 32)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
@@ -214,7 +214,7 @@ def _to_xonly(pubkey: CData) -> tuple[bytes, int]:
     return ffi.unpack(output, ffi.sizeof(output)), parity[0]
 
 
-def _keypair(prvkey: bytes | int) -> CData:
+def _keypair(prvkey: BytesLike | int) -> CData:
     """Create a keypair from a private key.
 
     Args:

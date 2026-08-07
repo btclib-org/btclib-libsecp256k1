@@ -18,11 +18,14 @@ is the same 0.7.1 (1a53f49). What the public API gained is one function
 and two `compressed` flags; what it lost is `recovery.COMPRESSED` and
 `ellswift.COMPRESSED`, two copies of a flag macro that `keys.COMPRESSED`
 still declares — the one removal here, and the one entry a caller
-importing either has to act on. Three things changed behaviour: the text
-of one error message, the class `keys.serialize` raises for an argument
-no valid caller passes, and the exception a wrong *type* meets, which is
-now the boundary's and names the argument instead of cffi's a call
-later. Each has its entry below. Neither file counts its entries:
+importing either has to act on. What it also gained is a wider door:
+every argument that takes octets takes a `bytearray` and a `memoryview`
+as well as `bytes`, which is a widening and breaks nothing. Three things
+changed behaviour: the text of one error message, the class
+`keys.serialize` raises for an argument no valid caller passes, and the
+exception a wrong *type* meets, which is now the boundary's and names
+the argument instead of cffi's a call later. Each has its entry below.
+Neither file counts its entries:
 `grep -c '^- '` does that, whereas a stated number is a line every open
 branch has to edit.
 
@@ -96,22 +99,38 @@ branch has to edit.
   and `test_illegal_argument`'s *"which the bindings' own wrappers cannot
   do"* — and describe it instead.
 - **An argument is checked for its type where it is checked for its
-  length** (#73), those being one question about a bare pointer. `len`
-  answers for a `bytearray` and a `memoryview` as readily as for bytes,
-  so both passed every size check and reached cffi, which refused them a
-  call later in its own words and about a ctype — `initializer for ctype
-  'unsigned char *' must be a cdata pointer` — naming neither the
-  argument nor what was wrong with it; a `float` came back as `object of
-  type 'float' has no len()`; and `_scalar.scalar`, annotated `-> bytes`,
-  returned the bytearray it was handed. `_scalar.octets` is that one
-  check, and the eighteen size checks across eight modules are now that
-  call. Nothing that worked stops working — cffi already refused all of
-  it, further on. `bytes` and nothing else: a `bytearray` states the same
-  value and the same width, so converting one would guess at nothing, but
-  it would widen what every signature promises, and `bytes(x)` is the
-  conversion in the caller's own code. `keys.pubkey_sort(pubkey)` — one
-  key where a sequence of them goes, which bytes being a sequence made
-  silently wrong — now says `the public key must be bytes, not int`.
+  length** (#73, #74), those being one question about a bare pointer.
+  `len` answers for a `bytearray` and a `memoryview` as readily as for
+  bytes, so both passed every size check and reached cffi, which refused
+  them a call later in its own words and about a ctype — `initializer
+  for ctype 'unsigned char *' must be a cdata pointer` — naming neither
+  the argument nor what was wrong with it; a `float` came back as
+  `object of type 'float' has no len()`; and `_scalar.scalar`, annotated
+  `-> bytes`, returned the bytearray it was handed. `_scalar.octets` is
+  that one check, and every size check across the eight wrapper modules
+  is now that call. `keys.pubkey_sort(pubkey)` — one key where a
+  sequence of them goes, which bytes being a sequence made silently
+  wrong — now says `the public key must be bytes, not int`.
+- **And what crosses is octets, not `bytes` alone** (#74): a `bytearray`
+  and a `memoryview` are converted rather than refused, and `BytesLike`
+  is what the signatures say. #73 had refused them, on the argument that
+  converting would widen what every signature promises; the answer is
+  that the signatures widened. They are not the leniency a short value
+  is — each states a value *and* a width, so nothing has to be
+  disbelieved and nothing supplied, which makes them a narrower door
+  than the `int` this package has always taken, whose 32-octet width is
+  the curve's rather than the caller's. And a caller who holds a secret
+  in memory they can overwrite, which is the reason to want a mutable
+  buffer and is what SECURITY.md now describes this package doing with
+  its own, had been meeting a `TypeError` for it. The conversion is a
+  copy taken at the boundary, never a pass-through, so overwriting that
+  buffer cannot change what libsecp256k1 is about to read.
+  `tests/test_bytes_like.py` drives every entry point taking such an
+  argument with each of the three types and asserts one answer, which is
+  what makes a call site that checks without assigning fail there rather
+  than in a caller's code; a `test_the_sweep_is_whole` holds the list to
+  what the modules export, so a function added and not swept is an
+  absence that fails.
 - **A `bool` is refused where a scalar goes** (#73). `isinstance(True,
   int)` is true, so `True` was the scalar 1 and `False` the scalar 0:
   `keys.prvkey_verify(False)` answered False, the correct verdict on
@@ -381,6 +400,17 @@ branch has to edit.
 
 ### The gate
 
+- **The README quickstart is executed again** (#74). Fencing the
+  indented blocks put the closing ``` flush against the last line of
+  each example, and doctest reads the line after an example as the
+  output it expects: three of the ten stopped passing, two of them
+  expecting `True` followed by a fence. A blank line before each closing
+  fence is what says an example's output ends there. The suite caught
+  it, which is what it is for — `test_the_readme_examples_run` was added
+  in this same release because *"an example nobody runs is documentation
+  that stops being true silently"* — and this is the first thing it
+  caught. `markdownlint-cli2` stays clean over the result: a blank line
+  inside a fenced block is not a blank line around one.
 - **The entropy detectors of `detect-secrets` run over the tree.**
   `.secrets.baseline` was generated with `HexHighEntropyString` and
   `Base64HighEntropyString` off, and it is the baseline that decides
