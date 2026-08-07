@@ -27,7 +27,9 @@ As used by the
 
 To install (and/or upgrade):
 
-    python -m pip install --upgrade btclib_libsecp256k1
+```shell
+python -m pip install --upgrade btclib_libsecp256k1
+```
 
 ## Quickstart
 
@@ -35,26 +37,32 @@ Sign and verify, ECDSA and BIP340. Every line below is executed by the
 test suite, on every interpreter and every kind of wheel, so an example
 that stops working fails a build rather than sitting here:
 
-    >>> import hashlib
-    >>> from btclib_libsecp256k1 import dsa, keys, ssa, xonly
+```python
+>>> import hashlib
+>>> from btclib_libsecp256k1 import dsa, keys, ssa, xonly
 
-    >>> # BIP340 test vector 1; yours comes from os.urandom or a wallet
-    >>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
-    >>> pubkey = keys.pubkey_from_prvkey(prvkey)
-    >>> msg = hashlib.sha256(b"hello").digest()
+>>> # BIP340 test vector 1; yours comes from os.urandom or a wallet
+>>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
+>>> pubkey = keys.pubkey_from_prvkey(prvkey)
+>>> msg = hashlib.sha256(b"hello").digest()
+```
 
 ECDSA, over the 32-byte hash, with the deterministic RFC6979 nonce:
 
-    >>> signature = dsa.sign(msg, prvkey)
-    >>> dsa.verify(msg, pubkey, signature)
-    True
+```python
+>>> signature = dsa.sign(msg, prvkey)
+>>> dsa.verify(msg, pubkey, signature)
+True
+```
 
 BIP340 Schnorr, over the same hash, against the x-only key:
 
-    >>> xonly_pubkey, parity = xonly.from_pubkey(pubkey)
-    >>> signature = ssa.sign(msg, prvkey)
-    >>> ssa.verify(msg, xonly_pubkey, signature)
-    True
+```python
+>>> xonly_pubkey, parity = xonly.from_pubkey(pubkey)
+>>> signature = ssa.sign(msg, prvkey)
+>>> ssa.verify(msg, xonly_pubkey, signature)
+True
+```
 
 Both take the private key as `bytes` or as an `int`, and both return
 `bytes`. What each argument may be, and what is refused rather than
@@ -255,8 +263,10 @@ nothing in the return value to say what happened. `context.check()`
 raises what was reported, the failed precondition verbatim, and is meant
 to follow such a call:
 
-    if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
-        context.check()  # ValueError, naming the failed precondition
+```python
+if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
+    context.check()  # ValueError, naming the failed precondition
+```
 
 That example is the one that matters: partial signing zeroes the secret
 nonce, so signing twice with it is refused, and this is how a session

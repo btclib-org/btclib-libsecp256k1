@@ -63,7 +63,9 @@ module that only exists after a build.
 The `lint` workflow runs that very file, so what CI enforces is what a
 commit enforces:
 
-    uvx pre-commit run --all-files
+```shell
+uvx pre-commit run --all-files
+```
 
 Never add a check that exists only in a workflow, and never leave a hook
 weaker locally than on a runner: a hook that needs a tool the developer
@@ -84,13 +86,15 @@ lose. Reading it is fine — `git log`, `git show`, `git diff`, `gh`, and a
 
 **Every session works in a worktree**, its own, from the first edit:
 
-    WT=<scratchpad>/wt<issue>
-    git worktree add -b <branch> "$WT" origin/dev
-    cd "$WT" && uv sync --locked      # a second venv, and a second build of
-                                      # the extension: minutes, not seconds
-    # edit, gate and commit here, then
-    git push origin HEAD:refs/heads/<branch>
-    git worktree remove --force "$WT" # removing it is part of finishing
+```shell
+WT=<scratchpad>/wt<issue>
+git worktree add -b <branch> "$WT" origin/dev
+cd "$WT" && uv sync --locked      # a second venv, and a second build of
+                                  # the extension: minutes, not seconds
+# edit, gate and commit here, then
+git push origin HEAD:refs/heads/<branch>
+git worktree remove --force "$WT" # removing it is part of finishing
+```
 
 The venv and the C build are the whole of the cost, and they buy the thing
 that matters: a commit cannot contain work that was never in it, and the
@@ -112,26 +116,28 @@ copy is for — `cp file file.bak`, then put it back.
 
 ## Commands whose flags are load-bearing
 
-    # the suite, as the coverage job runs it: uv run syncs by itself, and
-    # without these flags it installs the whole dev set
-    uv run --locked --no-default-groups --group test pytest --cov
+```shell
+# the suite, as the coverage job runs it: uv run syncs by itself, and
+# without these flags it installs the whole dev set
+uv run --locked --no-default-groups --group test pytest --cov
 
-    # another interpreter; --no-cache because the cached extension
-    # belongs to one ABI
-    uv run --python 3.10 --no-cache pytest
+# another interpreter; --no-cache because the cached extension
+# belongs to one ABI
+uv run --python 3.10 --no-cache pytest
 
-    # the packaging gates, pinned by uv.lock rather than fetched by uvx
-    uv build --sdist
-    uv run --locked --only-group check twine check --strict dist/*
-    uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
+# the packaging gates, pinned by uv.lock rather than fetched by uvx
+uv build --sdist
+uv run --locked --only-group check twine check --strict dist/*
+uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
 
-    # after touching pyproject.toml; the uv-lock hook does it too
-    uv lock
+# after touching pyproject.toml; the uv-lock hook does it too
+uv lock
 
-    # after adding a hex constant to a test module; the vendored vector
-    # data has a baseline of its own, whose command is in CONTRIBUTING.md.
-    # Neither file is excluded from the scan, only recorded as reviewed
-    uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
+# after adding a hex constant to a test module; the vendored vector
+# data has a baseline of its own, whose command is in CONTRIBUTING.md.
+# Neither file is excluded from the scan, only recorded as reviewed
+uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
+```
 
 ## The workflows that gate, and the four that do not
 

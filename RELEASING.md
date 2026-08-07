@@ -90,7 +90,7 @@ Then:
    left a fourth number open, by step 10 below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
    submodule has moved since
-2. close the release notes. `CHANGELOG.md` and `HISTORY.md` are written
+1. close the release notes. `CHANGELOG.md` and `HISTORY.md` are written
    as each change lands, not here, so what is left is to read the open
    section of both against `git log`, drop the
    `(work in progress, not released yet)` from each heading, and
@@ -100,7 +100,7 @@ Then:
    read `CHANGELOG.md`, which is the one of the two nothing enforces.
    If the vendored libsecp256k1 moved, update the version named at the
    top of `README.md` too
-3. give the pull request its title and its body before merging it, not
+1. give the pull request its title and its body before merging it, not
    after. The title is the version; the body says what the release is —
    what moved, what did not, and which of the two a user would notice.
    A rebase leaves no merge commit, so none of that reaches `master`'s
@@ -130,39 +130,45 @@ Then:
    ends up at — a rebase leaves no merge commit of its own — which is
    worth asking for by commit rather than reading off a branch:
 
-       gh run list --commit "$(git rev-parse origin/master)"
+   ```shell
+   gh run list --commit "$(git rev-parse origin/master)"
+   ```
 
    the red `Dependabot Updates` runs sitting beside them are Dependabot's
    own updater failing to compute an update, not a workflow of this
    repository, and say nothing about the tree
-4. tag the tip `master` now points at, and push that tag alone:
+1. tag the tip `master` now points at, and push that tag alone:
 
-       git tag v0.7.1
-       git push origin v0.7.1
+   ```shell
+   git tag v0.7.1
+   git push origin v0.7.1
+   ```
 
    `git push --tags` would push whatever other local tags happen to
    exist. The workflow then builds and tests every artifact the release
    ships and stops at the `pypi` environment
-5. approve the `pypi` deployment when the run pauses for review. Up to
+1. approve the `pypi` deployment when the run pauses for review. Up to
    here nothing is public and the tag can still be deleted; the upload
    that follows is the point of no return — the upload, and not the
    approval, the token exchange happening after it. A registration that
    does not match the claims fails there having uploaded nothing, as the
    0.7.1 rehearsal did on TestPyPI, and a version survives a failed
    exchange: delete the tag, fix the registration, tag again
-6. check that what was published installs, in an environment of its own
+1. check that what was published installs, in an environment of its own
    rather than one that may already hold it, and run something with it —
    installing being weaker than working where a compiled extension is
    what was installed:
 
-       uv run --isolated --no-project --with btclib_libsecp256k1==0.7.1 \
-         python -c "
-       from btclib_libsecp256k1 import ssa
-       msg = bytes(32)
-       pub = bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9')
-       sig = bytes.fromhex('E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0')
-       assert ssa.verify(msg, pub, sig)
-       "
+   ```shell
+   uv run --isolated --no-project --with btclib_libsecp256k1==0.7.1 \
+     python -c "
+   from btclib_libsecp256k1 import ssa
+   msg = bytes(32)
+   pub = bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9')
+   sig = bytes.fromhex('E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0')
+   assert ssa.verify(msg, pub, sig)
+   "
+   ```
 
    BIP340 vector 0, the same check `published` makes below. Then check
    the attestations, the two checks the rehearsal makes and for the same
@@ -170,7 +176,7 @@ Then:
    attestations are under `/integrity/<project>/<version>/<filename>/provenance`
    rather than in the JSON API, which answers `null` for `provenance`
    even where they are
-7. run the `published` workflow from the Actions tab, and expect it green:
+1. run the `published` workflow from the Actions tab, and expect it green:
    it installs from PyPI what was just uploaded, on every platform and at
    both ends of the supported interpreter range, and verifies BIP340
    vector 0 with it. From then on it runs weekly on its own, and a failure
@@ -179,12 +185,12 @@ Then:
    racing the index if it ran straight after the upload. On 0.7.1 it went
    from nineteen cells red to nineteen green, having had nothing
    installable to find the day before
-8. check the GitHub release the workflow created once PyPI had accepted
+1. check the GitHub release the workflow created once PyPI had accepted
    the upload: its notes are the tag's section of `HISTORY.md`, and the
    sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
    generated the notes from the merged pull requests instead, and they
    are worth replacing by hand
-9. realign `dev` onto `master`, before anything else is committed to it.
+1. realign `dev` onto `master`, before anything else is committed to it.
    Rebase and merge replays `dev`'s commits with new SHAs, so the moment
    a release is merged the two branches hold the same tree through
    different histories, and the merge base between them stops advancing.
@@ -199,11 +205,13 @@ Then:
    `git rebase` would. Archive what is about to become unreachable, then
    move the branch:
 
-       git fetch origin
-       git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
-       git push origin history/dev-0.7.1
-       git switch dev && git reset --hard origin/master
-       git push --force-with-lease origin dev
+   ```shell
+   git fetch origin
+   git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
+   git push origin history/dev-0.7.1
+   git switch dev && git reset --hard origin/master
+   git push --force-with-lease origin dev
+   ```
 
    the tag is what keeps `dev`'s own commits readable, and it must not
    start with `v`, `release.yml` triggering on `tags: ["v*"]`. Nothing in
@@ -225,16 +233,18 @@ Then:
    flipping the one setting that governs it, immediately before the push
    and immediately after:
 
-       gh api repos/<owner>/<repo>/branches/dev/protection --jq \
-         '{required_status_checks, enforce_admins: .enforce_admins.enabled,
-           required_pull_request_reviews, restrictions,
-           required_linear_history: .required_linear_history.enabled,
-           allow_force_pushes: true, allow_deletions: .allow_deletions.enabled,
-           block_creations: .block_creations.enabled,
-           required_conversation_resolution: .required_conversation_resolution.enabled,
-           lock_branch: .lock_branch.enabled,
-           allow_fork_syncing: .allow_fork_syncing.enabled}' \
-         | gh api -X PUT repos/<owner>/<repo>/branches/dev/protection --input -
+   ```shell
+   gh api repos/<owner>/<repo>/branches/dev/protection --jq \
+     '{required_status_checks, enforce_admins: .enforce_admins.enabled,
+       required_pull_request_reviews, restrictions,
+       required_linear_history: .required_linear_history.enabled,
+       allow_force_pushes: true, allow_deletions: .allow_deletions.enabled,
+       block_creations: .block_creations.enabled,
+       required_conversation_resolution: .required_conversation_resolution.enabled,
+       lock_branch: .lock_branch.enabled,
+       allow_fork_syncing: .allow_fork_syncing.enabled}' \
+     | gh api -X PUT repos/<owner>/<repo>/branches/dev/protection --input -
+   ```
 
    read the four nullable fields back first (`required_status_checks`,
    `required_pull_request_reviews`, `restrictions`, and `required_signatures`,
@@ -253,11 +263,13 @@ Then:
    moved out from under it, and reports the whole release as its own diff
    until it is rebased:
 
-       git rebase --onto origin/master <the old dev tip> <branch>
+   ```shell
+   git rebase --onto origin/master <the old dev tip> <branch>
+   ```
 
    this comes before step 10 rather than after it: the bump step 10 makes
    is on `dev`, and the force update above would discard it
-10. open the next version on `dev`: bump `pyproject.toml` to a fourth
+1. open the next version on `dev`: bump `pyproject.toml` to a fourth
     number over what was just published — `0.7.1.1` after `0.7.1` — and
     run `uv lock`. It is a placeholder, and step 1 renumbers it if the
     submodule moves before the next release; what it buys is a tree that
@@ -276,7 +288,7 @@ Then:
     `## v<version> (work in progress, not released yet)` and empty: what
     lands next then has somewhere to be written down as it lands, which
     is the whole of step 2
-11. open a draft pull request from `dev` to `master` for the version step
+1. open a draft pull request from `dev` to `master` for the version step
     10 just opened, title included, and leave its body for what step 3
     already asked for: written before the release is cut, not
     reconstructed from the diff at the last minute. A draft one is
@@ -335,29 +347,31 @@ without rebuilding anything.
    there, and `0.7.1rc1` is a version PyPI would then hand to `--pre`
    installs. The `version-check` job refuses a tag whose version is not
    digits and dots, so the mistake stops before anything is built
-2. approve it, then check that what was published installs, in an
+1. approve it, then check that what was published installs, in an
    environment of its own rather than one that may already hold it. A
    re-run has to be approved again, the protection applying to each
    deployment attempt rather than once per run:
 
-       uv run --isolated --no-project \
-         --index-url https://test.pypi.org/simple/ \
-         --extra-index-url https://pypi.org/simple/ \
-         --index-strategy unsafe-best-match --prerelease allow \
-         --with btclib_libsecp256k1==0.7.1.dev1 \
-         python -c "import btclib_libsecp256k1 as m; print(m.__version__)"
+   ```shell
+   uv run --isolated --no-project \
+     --index-url https://test.pypi.org/simple/ \
+     --extra-index-url https://pypi.org/simple/ \
+     --index-strategy unsafe-best-match --prerelease allow \
+     --with btclib_libsecp256k1==0.7.1.dev1 \
+     python -c "import btclib_libsecp256k1 as m; print(m.__version__)"
+   ```
 
    the extra index being needed for `cffi`, which TestPyPI does not have,
    and `--prerelease allow` for the `.dev<run><attempt>` suffix the
    version installed carries
-3. run something with it, installing being weaker than working where a
+1. run something with it, installing being weaker than working where a
    compiled extension is what was installed. The check the `published`
    workflow makes — BIP340 vector 0, and the round trip of a signature
    the build makes itself — is the one to reach for, and it is worth
    reaching for here rather than only after PyPI: this is the first
    moment a wheel this repository built is fetched from an index by a
    resolver, and the last before the version cannot be replaced
-4. check the attestations. The JSON API will not show them, its
+1. check the attestations. The JSON API will not show them, its
    `provenance` field being null on every file of a release that has
    them; the project page shows them, and machine-readably they are
    under `/integrity/<project>/<version>/<filename>/provenance`, whose
@@ -425,7 +439,9 @@ next fork.
   policy that admitted branches alone would refuse the deployment after
   the whole matrix had been built:
 
-      gh api repos/{owner}/{repo}/environments/pypi/deployment-branch-policies
+  ```shell
+  gh api repos/{owner}/{repo}/environments/pypi/deployment-branch-policies
+  ```
 
   What that rule constrains is the *name* of the ref, and nothing else: a
   `v*` tag pushed on a branch head, on an old `dev` state or on a

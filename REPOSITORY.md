@@ -25,8 +25,10 @@ nothing.
 `checks` with an `app_id` rather than the bare `contexts` list, so nothing
 else can satisfy one:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/branches/master/protection \
-      --jq '.required_status_checks'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/branches/master/protection \
+  --jq '.required_status_checks'
+```
 
 | Check | Produced by |
 | --- | --- |
@@ -34,14 +36,18 @@ else can satisfy one:
 | `Lint and type-check` | `lint.yml`, its only job |
 | `CodeQL` | code scanning's default setup |
 
-    gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
-      --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
+  --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
+```
 
 **CodeQL is code scanning's default setup, not a workflow of this
 repository** — `state: configured`, python and actions, the default query
 suite, weekly — so there is no file here to read its triggers off:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
+```
 
 That absence of a file is also why the check was first left out of the
 rule, on a measurement that was the wrong one: every ordinary pull
@@ -53,8 +59,10 @@ matters there is the other kind, `dev` into `master`; #21, the 0.7.1
 release merge, has CodeQL analyses under `refs/pull/21/head`. That is
 the pull request this rule actually gates, and CodeQL runs on it:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
-      --jq '.[] | {ref, category, created_at}'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
+  --jq '.[] | {ref, category, created_at}'
+```
 
 `Dependency Graph` is not a candidate either: its runs are `dynamic`,
 GitHub submitting the graph after a push rather than checking a pull
@@ -65,11 +73,13 @@ partial PUT drops the reviews, the signatures and the rest. And `-F`,
 not `-f`, for `strict` — `gh api`'s `-f` sends every value as a string,
 and GitHub refuses `"true"` where a boolean is declared:
 
-    sub=branches/master/protection/required_status_checks
-    gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
-      -F 'checks[][context]=tests-passed' -F 'checks[][app_id]=15368' \
-      -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
-      -F 'checks[][context]=CodeQL' -F 'checks[][app_id]=57789'
+```shell
+sub=branches/master/protection/required_status_checks
+gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
+  -F 'checks[][context]=tests-passed' -F 'checks[][app_id]=15368' \
+  -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
+  -F 'checks[][context]=CodeQL' -F 'checks[][app_id]=57789'
+```
 
 ## Branch protection
 
@@ -83,8 +93,10 @@ satisfy "one approving review" from the author, GitHub refusing
 self-approval, so the review is a stop rather than a speed bump, and the
 admin bypass is the only way past it without a second maintainer to add.
 
-    gh api -X DELETE \
-      repos/btclib-org/btclib-libsecp256k1/branches/master/protection/enforce_admins
+```shell
+gh api -X DELETE \
+  repos/btclib-org/btclib-libsecp256k1/branches/master/protection/enforce_admins
+```
 
 Turned off after being on through the 0.7.1 release, whose squash merge
 (see RELEASING.md) is what the previous setting actually cost: with
@@ -98,9 +110,11 @@ next incident has the same escape hatch btclib already keeps.
 
 `dev` is protected too, minimally and identically to btclib's own:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/branches/dev/protection \
-      --jq '{required_linear_history, allow_force_pushes, allow_deletions,
-        enforce_admins, required_conversation_resolution}'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/branches/dev/protection \
+  --jq '{required_linear_history, allow_force_pushes, allow_deletions,
+    enforce_admins, required_conversation_resolution}'
+```
 
 No force pushes, no deletions, linear history, resolved conversations —
 and nothing beyond that: no required check, no review, no signature, so a
@@ -124,7 +138,9 @@ instead of closing.
 
 `delete_branch_on_merge` is on, since 7 August 2026:
 
-    gh api repos/btclib-org/btclib-libsecp256k1 --jq '.delete_branch_on_merge'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1 --jq '.delete_branch_on_merge'
+```
 
 GitHub deletes the head branch of a pull request when it is merged, which
 is what keeps the branch list a list of live work rather than a history of
@@ -144,8 +160,10 @@ still worth looking at now and then.
 **The default `GITHUB_TOKEN` is read-only repository-wide**, so a job
 needing more declares it:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/actions/permissions/workflow \
-      --jq '.default_workflow_permissions'   # "read"
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/actions/permissions/workflow \
+  --jq '.default_workflow_permissions'   # "read"
+```
 
 Only `release.yml` asks for more: `contents: write` on `github-release`,
 and `id-token: write` on the two publish jobs, which is what Trusted
@@ -157,8 +175,10 @@ readable where the job is.
 
 Both environments require a review, so an upload waits for a person:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/environments \
-      --jq '.environments[] | {name, protection_rules}'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/environments \
+  --jq '.environments[] | {name, protection_rules}'
+```
 
 `pypi` and `testpypi` each have `fametrano` as the required reviewer.
 `pypi` carries a deployment branch policy besides — one custom rule
@@ -166,8 +186,10 @@ admitting the tag pattern `v*`, that environment being reachable only from
 a tag — while `testpypi` has none, being reached from a branch by
 dispatch:
 
-    gh api repos/{owner}/{repo}/environments/pypi/deployment-branch-policies
-    # {"name": "v*", "type": "tag"}
+```shell
+gh api repos/{owner}/{repo}/environments/pypi/deployment-branch-policies
+# {"name": "v*", "type": "tag"}
+```
 
 The asymmetry is worth reading rather than assuming: a policy admitting
 branches alone would refuse the deployment *after* the whole matrix had
@@ -194,8 +216,10 @@ fails again with `invalid-publisher`, that is the first thing to check.
 Three ecosystems, and all three target `dev`, `master` only receiving
 merges from it:
 
-    gh api repos/{owner}/{repo}/contents/.github/dependabot.yml \
-      --jq '.content' | base64 -d | grep -E 'package-ecosystem|target'
+```shell
+gh api repos/{owner}/{repo}/contents/.github/dependabot.yml \
+  --jq '.content' | base64 -d | grep -E 'package-ecosystem|target'
+```
 
 `github-actions` moves the SHA pins, `uv` the locked dependencies, and
 `gitsubmodule` signals that the vendored secp256k1 has moved upstream —
@@ -208,7 +232,9 @@ saying nothing. Dependabot security updates are on.
 
 Some settings cannot be enabled and fail silently:
 
-    gh api repos/btclib-org/btclib-libsecp256k1 --jq '.security_and_analysis'
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1 --jq '.security_and_analysis'
+```
 
 Secret scanning and push protection are enabled;
 `secret_scanning_non_provider_patterns` and
@@ -223,7 +249,9 @@ carries what maintaining its baseline costs.
 Unlike btclib, this repository serves no GitHub Pages site, so no file in
 its root is a URL anywhere:
 
-    gh api repos/btclib-org/btclib-libsecp256k1/pages   # 404
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/pages   # 404
+```
 
 btclib.org is built from the btclib repository's `master` root, which is
 why that project's README is also a web page and this one's is not.
