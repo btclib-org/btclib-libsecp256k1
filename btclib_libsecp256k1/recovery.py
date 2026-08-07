@@ -10,10 +10,7 @@ from __future__ import annotations
 from . import CData, ffi, lib
 from ._scalar import octets, scalar
 from .context import ctx
-
-# SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
-# the preprocessing of the headers into cffi definitions
-COMPRESSED = 258
+from .keys import serialize
 
 
 def sign(
@@ -65,8 +62,10 @@ def sign(
     return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes)), recid[0]
 
 
-def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
-    """Recover the compressed public key from a recoverable ECDSA signature.
+def recover(
+    msg_bytes: bytes, signature_bytes: bytes, recid: int, compressed: bool = True
+) -> bytes:
+    """Recover the public key from a recoverable ECDSA signature.
 
     Args:
         msg_bytes: the 32-byte hash the signature was made over.
@@ -74,9 +73,10 @@ def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
         recid: the recovery id, 0 to 3. A wrong one recovers a different
             key rather than failing, so it is part of the signature and
             not a guess.
+        compressed: whether to return 33 bytes rather than 65.
 
     Returns:
-        The 33-byte compressed public key.
+        The serialized recovered public key.
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if the
@@ -96,14 +96,7 @@ def recover(msg_bytes: bytes, signature_bytes: bytes, recid: int) -> bytes:
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes):
         raise ValueError("public key recovery failed")
-
-    # one length per flag, so the buffer is what is unpacked: see the
-    # comment in keys.serialize
-    output = ffi.new("char[33]")
-    length = ffi.new("size_t *", ffi.sizeof(output))
-    if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, COMPRESSED):
-        raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return serialize(pubkey, compressed)
 
 
 def to_der(signature_bytes: bytes, recid: int) -> bytes:

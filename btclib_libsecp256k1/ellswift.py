@@ -16,10 +16,7 @@ from . import ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take
 from .context import ctx
-
-# SECP256K1_EC_COMPRESSED: the libsecp256k1 flag macros do not survive
-# the preprocessing of the headers into cffi definitions
-COMPRESSED = 258
+from .keys import serialize
 
 
 def create(prvkey: bytes | int, aux_rand32: bytes | None = None) -> bytes:
@@ -94,16 +91,17 @@ def encode(pubkey_bytes: bytes, rnd32: bytes | None = None) -> bytes:
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
-def decode(ell_bytes: bytes) -> bytes:
-    """Decode a 64-byte ElligatorSwift public key into its compressed form.
+def decode(ell_bytes: bytes, compressed: bool = True) -> bytes:
+    """Decode a 64-byte ElligatorSwift public key into a public key.
 
     Args:
         ell_bytes: the 64-byte encoding.
+        compressed: whether to return 33 bytes rather than 65.
 
     Returns:
-        The 33-byte compressed public key. Every 64 bytes decode to a
-        point, which is what makes the encoding indistinguishable from
-        random: there is nothing to reject.
+        The serialized public key. Every 64 bytes decode to a point,
+        which is what makes the encoding indistinguishable from random:
+        there is nothing to reject.
 
     Raises:
         ValueError: if the input is not 64 bytes.
@@ -115,14 +113,7 @@ def decode(ell_bytes: bytes) -> bytes:
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
         raise RuntimeError("ElligatorSwift decoding failed")
-
-    # one length per flag, so the buffer is what is unpacked: see the
-    # comment in keys.serialize
-    output = ffi.new("char[33]")
-    length = ffi.new("size_t *", ffi.sizeof(output))
-    if not lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, COMPRESSED):
-        raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return serialize(pubkey, compressed)
 
 
 def xdh(
