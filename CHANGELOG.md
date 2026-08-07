@@ -27,19 +27,30 @@ release-notes length in the first place, and are still in
 - **The README badges are the ones that can turn red**, in the order the
   reader asks for them: version, downloads, development status, license
   and supported interpreters on the first line; test, lint, pre-commit.ci
-  and the documentation build on the second. The five that reported no
-  state — `uv`, `pre-commit enabled`, ruff, mypy and markdownlint-cli2 —
-  name a choice rather than measure anything, so they are in
-  CONTRIBUTING.md's "Building and testing", beside the prose that says how
-  each choice is enforced; the Slack badge is down with the repository
-  link, "where do I ask" being a question the reader has after reading.
-  The alternative text says what each badge means — "PyPI version",
-  "supported Python versions", "test workflow status" — rather than naming
-  the site that serves the image: it is the accessible name of the link,
-  and a flat list of badges has nothing else to carry the meaning. btclib
-  and bitcoin-core-rpc carry the same two lines, which is what makes the
-  three READMEs comparable; the badge sets differ only where the projects
-  do, this one having no calendar version to declare.
+  and the documentation build on the second; the repository and the Slack
+  channel on the third, "where is the code" and "where do I ask" being the
+  two questions a reader has once the first two lines have answered
+  theirs. That third line is where the repository link was already, a
+  sentence between two horizontal rules of its own; as a badge beside the
+  others it needs neither rule, and the plain-text link that read "Browse
+  GitHub Code Repository" now names the repository it opens. The badges
+  that report no state — `uv`, ruff, mypy, markdownlint-cli2 and
+  `pre-commit enabled` — name a choice rather than measure anything, so
+  they open CONTRIBUTING.md, which is the file that says how each choice
+  is enforced and what the command for it is, rather than sitting inside
+  its "Building and testing" section. ruff is three of them, its
+  formatter, its linter and its docstring rules being three gates with
+  three documentation pages and three ways to fail, where one badge
+  announced them as one; `pre-commit` closes that run because it is what
+  runs the others, and the repository and Slack badges close the line, a
+  contributor wanting both. The alternative text says what each badge
+  means — "PyPI version", "supported Python versions", "test workflow
+  status" — rather than naming the site that serves the image: it is the
+  accessible name of the link, and a flat list of badges has nothing else
+  to carry the meaning. btclib and bitcoin-core-rpc carry the same three
+  lines and the same CONTRIBUTING.md run, which is what makes the three
+  comparable; the badge sets differ only where the projects do, this one
+  having no calendar version to declare.
 
 ### Packaging metadata
 
