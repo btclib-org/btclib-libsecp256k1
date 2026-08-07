@@ -49,16 +49,21 @@ def sign(msg_bytes: bytes, prvkey: bytes | int, ndata: bytes | None = None) -> b
 
     sig = ffi.new("secp256k1_ecdsa_signature *")
 
-    noncefc = ffi.NULL
-    # the nonce contribution is 32 bytes of entropy, not a serialization:
-    # a shorter value is a caller mistake rather than a small number, and
-    # padding it here would turn one into a valid argument. Omitted, the
-    # nonce is the RFC6979 one alone
-    if ndata is None:
-        ndata = ffi.NULL
-    else:
-        octets(ndata, "ndata", 32)
-    if not lib.secp256k1_ecdsa_sign(ctx, sig, msg_bytes, prvkey_bytes, noncefc, ndata):
+    # secp256k1_ecdsa_sign takes the nonce function and its data: NULL
+    # for the first selects the RFC6979 default, and it is the only one
+    # these bindings pass -- a python nonce function would be called from
+    # inside the signature, with the secret passing through a python
+    # object on every call.
+    #
+    # The contribution beside it is 32 bytes of entropy, not a
+    # serialization: a shorter value is a caller mistake rather than a
+    # small number, and padding it here would turn one into a valid
+    # argument. Omitted, the nonce is the RFC6979 one alone
+    noncefp = ffi.NULL
+    ndata_ptr = ffi.NULL if ndata is None else octets(ndata, "ndata", 32)
+    if not lib.secp256k1_ecdsa_sign(
+        ctx, sig, msg_bytes, prvkey_bytes, noncefp, ndata_ptr
+    ):
         raise ValueError("invalid private key")
     return _serialize_der(sig)
 
