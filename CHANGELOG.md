@@ -250,6 +250,18 @@ branch has to edit.
 
 ### What the wheels are built with
 
+- **Two failures of the build hook say what went wrong** (#75).
+  `get_ext_object` raised a bare `RuntimeError` -- no message at all --
+  for a `cffi_modules` entry naming an object its script does not define;
+  it now names both halves of the entry, which is the only thing that can
+  be wrong there, and matters the more because the line is excluded from
+  the coverage measure. And `dynamic_platform_tag` subscripted a dict
+  literal of three Windows architectures, so a fourth answered `KeyError`
+  -- `win-arm32`, which `scripts/cffi_build.py` does aim CMake at, being
+  the one the two files disagreed about. It is in the map now, and
+  anything else raises a `RuntimeError` naming the architecture, which is
+  the policy `shared_library_extension` beside it already had.
+
 - **The static Unix extension is compiled with the interpreter's own
   `CFLAGS`.** `CC`, `CFLAGS`, `CCSHARED` in that order is what
   `customize_compiler` composes for the extensions the interpreter
@@ -319,6 +331,25 @@ branch has to edit.
   so the ratchet is unmoved.
 
 ### External vectors
+
+- **The vendored-vector re-checker reports a path upstream has deleted,
+  rather than raising on it** (#75). `repos/{repo}/commits?path=` answers
+  `[]` with a 200 when no commit touches that path any more -- renamed,
+  moved or deleted -- and `(commit,) = json.loads(...)` unpacked one
+  commit out of that. The `ValueError` took `find_drift` down with it and
+  `report` was never reached: the monthly run turned red and no issue was
+  opened, which is the one outcome the workflow exists to prevent, on the
+  one drift a vendored file nobody re-reads would otherwise hide.
+  `_latest_commit` answers None there now, `Drift` carries a
+  `path_is_gone` reading that encoding in one place, and the issue body
+  and stdout say GONE with the reason instead of naming a tip that does
+  not exist. Called with no README, or two, it prints its usage on stderr
+  and exits 2, where `Path(args[0])` had answered `IndexError: list index
+  out of range` about a list the caller never saw. btclib's copy of this
+  script is the same code and has the same fix, with the tests: this
+  repository has no test module for it, `.github/scripts` being outside
+  the coverage source here, so what holds it is btclib's suite and the
+  hand check in the session log.
 
 - **ellswift is held to BIP324's published vectors.** The tests encoded,
   decoded and agreed with themselves, which says nothing about the map
@@ -411,6 +442,25 @@ branch has to edit.
   that stops being true silently"* — and this is the first thing it
   caught. `markdownlint-cli2` stays clean over the result: a blank line
   inside a fenced block is not a blank line around one.
+- **The benchmark measures btclib's python arithmetic, which it had
+  stopped doing** (#75). Two of its eight rows are labelled *"through
+  btclib's pure python arithmetic"*, and `dsa.verify_` and `ssa.verify_`
+  delegate to these very bindings for secp256k1 with sha256 -- which is
+  exactly the fixture the script sets up. Traced, the two rows called
+  `btclib_libsecp256k1.dsa.verify` and `.ssa.verify`: the same C as the
+  package's own rows with a python wrapper in front, 22.5 and 24.9 us
+  against 13.9 and 13.8, where the python path is 1214 and 1270.
+  `python_arithmetic_only` turns the dispatch off before the rows run,
+  and it does so in three namespaces because `_libsecp256k1_applicable`
+  is imported *by name* into `ecc.dsa`, `ecc.ssa` and `curves.curve`:
+  patching one leaves the other two delegating, which is a partial patch
+  that still measures C and still looks like python -- the first
+  measurement taken for this entry was wrong that way. The two rows drop
+  to `mult=1`, a thousand calls of a millisecond being a second of clock
+  where they had been sized for twenty microseconds, and the loop reads
+  `perf_counter` rather than `time`, a wall clock being the one thing a
+  benchmark should not use.
+
 - **The entropy detectors of `detect-secrets` run over the tree.**
   `.secrets.baseline` was generated with `HexHighEntropyString` and
   `Base64HighEntropyString` off, and it is the baseline that decides
