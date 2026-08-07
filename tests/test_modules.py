@@ -111,6 +111,12 @@ def test_recovery() -> None:
     assert custom[0] != signature_bytes
     assert recovery.recover(msg, *custom) == pubkey_bytes
 
+    # the recovered key comes back in either form, this being
+    # keys.serialize and the same point either way
+    uncompressed = recovery.recover(msg, signature_bytes, recid, compressed=False)
+    assert uncompressed == mult.mult_(prvkey)
+    assert compress(uncompressed) == pubkey_bytes
+
 
 def test_recovery_invalid_inputs() -> None:
     """Every argument the recovery module bounds is refused out of range.
@@ -170,6 +176,9 @@ def test_ellswift() -> None:
     assert ellswift.decode(fixed) == pubkey_a
     # the encoding is randomized: a fresh one differs
     assert ellswift.create(prvkey_a) != ell_a
+    # and the decoding comes back in either form, this being
+    # keys.serialize and the same point either way
+    assert ellswift.decode(ell_a, compressed=False) == mult.mult_(prvkey_a)
 
     # x-only ECDH: both parties agree on the BIP324 shared secret
     ell_b = ellswift.create(prvkey_b)
