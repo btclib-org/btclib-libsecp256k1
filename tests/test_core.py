@@ -244,6 +244,39 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
         keys.pubkey_sort(pubkey_bytes)  # type: ignore[arg-type]
 
 
+def test_a_bool_is_not_a_scalar() -> None:
+    """A bool is refused where a scalar goes, python making it an int.
+
+    This is the one type whose acceptance could not be seen in the
+    answer. `keys.prvkey_verify(False)` returned False, which is the
+    correct verdict on the scalar zero and indistinguishable from the
+    correct verdict on whatever the caller meant; `mult.mult_(True)`
+    returned the generator. A `float` or a `str` in the same place is a
+    typo that raises, and always did.
+
+    Nor could the type checker say so: `bool` is a subtype of `int`, so
+    these two calls are the only ones in this module that need no
+    `type: ignore` -- mypy holds them to be correct. That is the whole
+    argument for the check being made at run time.
+
+    Refused for the scalars alone. `recid`, `party` and the y parity
+    take a bool as the 0 or 1 it is, those being flags rather than
+    values, and reading one as `True` guesses at nothing.
+    """
+    for value in (True, False):
+        with pytest.raises(TypeError, match="private key must be bytes or an int"):
+            keys.prvkey_verify(value)
+        with pytest.raises(TypeError, match="tweak must be bytes or an int, not bool"):
+            keys.prvkey_tweak_add(7, value)
+
+    # the flags are unaffected: a bool there is the 0 or 1 it is, and
+    # the recovery id of any signature is one of the two
+    msg = b"\x01" * 32
+    sig_bytes, recid = recovery.sign(msg, 7)
+    assert recid in (0, 1)
+    assert recovery.recover(msg, sig_bytes, bool(recid)) == keys.pubkey_from_prvkey(7)
+
+
 def test_size_checks_refuse_both_sides() -> None:
     """Every size check refuses a value too long as well as one too short.
 
