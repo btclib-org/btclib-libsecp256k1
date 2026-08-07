@@ -327,6 +327,16 @@ extend-ignore-re = ['"[0-9a-fA-F]+"']
 extend-exclude = ["secp256k1"]
 
 [tool.ruff.lint]
+# these two go together, and neither means what it says alone. Naming a
+# rule instead of coding it -- see the comment above `ignore` -- is itself
+# a preview feature, so the first line is the price of the second, and on
+# its own it would also turn on every rule ruff is still designing. The
+# second takes those back off: with it a preview rule runs only where it
+# is named exactly, and every entry of `select` below is a family, which
+# no preview rule can be reached through. So the gate stays the stable
+# rule set it was, and what preview buys here is a config that reads
+preview = true
+explicit-preview-rules = true
 select = [
     "F",     # pyflakes
     "E",     # pycodestyle errors
@@ -378,14 +388,21 @@ select = [
     # exempted below rather than fixed: see per-file-ignores
     "PYI",   # flake8-pyi
 ]
+# here and in per-file-ignores below, a rule is named rather than coded.
+# `select` above has no choice, a family having no name form, but an entry
+# that suppresses one rule can say which one: the reason then sits in the
+# comment and the rule in the entry, rather than the reason in the comment
+# and a lookup in the entry. RUF201 asks for exactly this and is preview,
+# so nothing here enforces it -- what does is that the next reader of this
+# file should not have to look each code up to find out what was allowed
 ignore = [
     # comparing against a key, signature or hash length (32, 33, 64, 65)
     # is not a magic value: it is the domain
-    "PLR2004",
+    "magic-value-comparison",
     # the message of an exception belongs where it is raised, not in a
     # class defined to carry it: these wrappers raise ValueError and
     # RuntimeError, which is what a caller catches
-    "TRY003",
+    "raise-vanilla-args",
 ]
 
 [tool.ruff.lint.flake8-pytest-style]
@@ -441,38 +458,49 @@ max-doc-length = 80
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-# asserts are the point of a test suite. D103 is deliberately *not* here:
-# a test function states what it verifies -- the property, the published
-# vector, the failure mode -- which its name cannot, and which is what a
-# reader deciding whether a red test matters needs. The name says which
-# call is under test; the docstring says what about it is being claimed
-"tests/*" = ["S101"]
+# asserts are the point of a test suite. undocumented-public-function is
+# deliberately *not* here: a test function states what it verifies -- the
+# property, the published vector, the failure mode -- which its name
+# cannot, and which is what a reader deciding whether a red test matters
+# needs. The name says which call is under test; the docstring says what
+# about it is being claimed
+"tests/*" = ["assert"]
 # the benchmark script asserts its own results before timing them, and
 # prints them: T20 is selected for the library, which writes to no stream
 # of its own, and a script whose caller is a terminal is the case it is
 # not about
-"scripts/benchmark.py" = ["S101", "T201"]
+"scripts/benchmark.py" = ["assert", "print"]
 # the build scripts drive CMake and load the cffi build description by
 # exec(): both are inherent to compiling a C dependency from a build
-# backend, and neither ever sees untrusted input
-"scripts/cffi_build.py" = ["S404", "S603", "S607"]
-# same T201 exemption as the benchmark script above: the warning printed
-# here is what a wheel builder reads in its own log, not the library
-# talking to a stream it does not own
-"scripts/hatch_build.py" = ["S102", "T201"]
-# PYI021 wants no docstring in a stub, on the assumption that one
-# lives in the .py file the stub mirrors -- true everywhere else, and
+# backend, and neither ever sees untrusted input.
+# suspicious-subprocess-import stood in this list and suppressed nothing:
+# it is a preview rule, and a preview rule is not reached through the "S"
+# family that selects the rest of them -- it has to be named, and no line
+# names it. An exemption for a check nobody runs claims a decision that
+# was never taken, so it goes. Naming the rule in `select` is what would
+# bring it back, and this line with it -- wider than it was, the import
+# being in the mutation counter and the vendored-vector check too
+"scripts/cffi_build.py" = [
+    "subprocess-without-shell-equals-true",
+    "start-process-with-partial-path",
+]
+# same `print` exemption as the benchmark script above: the warning
+# printed here is what a wheel builder reads in its own log, not the
+# library talking to a stream it does not own
+"scripts/hatch_build.py" = ["exec-builtin", "print"]
+# docstring-in-stub asks that a stub carry none, on the assumption that
+# one lives in the .py file the stub mirrors -- true everywhere else, and
 # not here: the extension this stub describes is compiled, not
 # written, so this module docstring is the only place its own
 # reasoning (why ffi and lib need one, why lib stays Any) can live
-"stubs/_btclib_libsecp256k1.pyi" = ["PYI021"]
+"stubs/_btclib_libsecp256k1.pyi" = ["docstring-in-stub"]
 # BEHIND, SKIPPED and the all-clear line are what a monthly run's log
 # says happened, the issue it opens or closes being the same report a
 # second way; matching btclib's own T201 exemption for the same script
-".github/scripts/check_vendored_vectors.py" = ["T201"]
+".github/scripts/check_vendored_vectors.py" = ["print"]
 # and the mutation counter, whose one line of output is what the workflow
 # step exists to put in the log: same exemption, same reason
-".github/scripts/mutation_counts.py" = ["T201"]
+".github/scripts/mutation_counts.py" = ["print"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
