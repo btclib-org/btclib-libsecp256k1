@@ -429,6 +429,48 @@ branch has to edit.
   `tests/README.md`, as the ones before them are, so the monthly
   `vendored-vectors` workflow re-checks them.
 
+### Mutation testing
+
+- **The inert third of a session is skipped before it runs, not counted
+  after it does** (#70). Every module here opens with
+  `from __future__ import annotations`, so a mutant of the `|` inside a
+  `bytes | int` signature — `bytes >> int` and ten more — is unreachable
+  by any test, nothing ever evaluating the annotation as an expression.
+  Unfiltered, a session paid the whole suite for that shape on 352 of 777
+  mutants before reaching the 13 that were real: 365 survivors in five
+  minutes, against 352 skipped and the same 13 in two once
+  `[cosmic-ray.filters.operators-filter]` excluded the `BitOr` family by
+  operator — in `bindings.toml` itself, which already says what is
+  mutated and what judges it, rather than a `# pragma: no mutate` on each
+  of the 26 lines it would otherwise mark and on every one a later
+  signature adds. `cr-rate` cannot report a filtered session: its
+  `is_killed` counts a skip as a kill, so it divided by every enumerated
+  mutant and read 1.67%, where the 13 that survived the 425 that ran are
+  3.06% of them. `.github/scripts/mutation_counts.py` prints killed,
+  survived and skipped instead, with the rate over what actually ran, and
+  fails on a worker outcome that is no verdict at all rather than
+  reporting it as either.
+- **Two of the three real shapes a session survivor list held are
+  answered in the code instead of read past** (#71). Six of the 13 #70
+  measured were an output buffer whose size was written more than once —
+  a serialization, the capacity handed to libsecp256k1 and the length
+  unpacked back, as up to three separate literals where `keys.serialize`
+  already wrote it once; the other seven were `secrets.token_bytes(32)`,
+  a length not observable in an aux value or a shared secret hashed
+  before use. `ffi.sizeof` now derives every buffer size across the
+  eighteen call sites in eight modules that used to write it by hand, and
+  where the randomness is copied into a fixed-size array instead of hashed
+  — `ssa.sign_`'s `char[32]` — the longer half of that pair already died
+  on cffi's own bound, `ffi.new` there refusing 33 octets and taking 31.
+- **A third, unrelated shape survived a private module's own size
+  check.** `_scalar.octets`'s `len(value_bytes) != size` mutated to
+  `is not` passed the whole suite, no wrapper here ever asking for a size
+  past CPython's cached range for small ints, where an equal pair is the
+  same object and the two operators cannot be told apart.
+  `test_octets_size_check_compares_by_value` drives the check directly at
+  300 octets — past the cache, and past every size a wrapper reaches —
+  where `!=` and `is not` stop agreeing.
+
 ### The gate
 
 - **The README quickstart is executed again** (#74). Fencing the

@@ -16,6 +16,7 @@ import secrets
 import pytest
 
 from btclib_libsecp256k1 import (
+    _scalar,
     context,
     dsa,
     ellswift,
@@ -314,6 +315,22 @@ def test_size_checks_refuse_both_sides() -> None:
     # the check and its mutant refuse that value
     with pytest.raises(ValueError, match="fit in 32 bytes"):
         dsa.sign(msg, 2**256 + 1)
+
+
+def test_octets_size_check_compares_by_value() -> None:
+    """`_scalar.octets`'s size check is `!=`, not `is not`.
+
+    No wrapper here ever asks for a size past 256, which is exactly why a
+    mutant turning that `!=` into `is not` survived a mutation session:
+    every size this package checks -- 32, 33, 65 -- sits inside CPython's
+    cached range for small ints, where two equal ones are the same object
+    and the two operators cannot be told apart. 300 does not, and `size`
+    stays referenced for the whole call, so the object `len(value_bytes)`
+    computes cannot be allocated at its address once it is freed --
+    `!=` accepts it, `is not` would refuse it as a false mismatch.
+    """
+    value = bytes(300)
+    assert _scalar.octets(value, "value", len(value)) == value
 
 
 def test_der_reaches_all_72_octets() -> None:
