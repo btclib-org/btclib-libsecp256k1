@@ -107,7 +107,8 @@ Then:
    stops the release before the matrix builds anything — it does not
    read `CHANGELOG.md`, which is the one of the two nothing enforces.
    If the vendored libsecp256k1 moved, update the version named at the
-   top of `README.md` too
+   top of `README.md` too (`grep -n 'wraps libsecp256k1' README.md`
+   finds the line without a search through the prose)
 1. give the pull request its title and its body before merging it, not
    after. The title is the version; the body says what the release is —
    what moved, what did not, and which of the two a user would notice.
@@ -126,6 +127,14 @@ Then:
    `latest`'s result belongs here too, a line rather than a screenshot: it
    gates nothing, and a pull request that never mentions it having run
    reads exactly like one that skipped it.
+
+   A deliberate skip and an item nobody has gotten to yet are different
+   facts and do not fit under one checkbox: 0.7.1.2's own checklist
+   folded "dispatch `latest`" and "`mutation` is owed" into a single
+   line, which could not say "skipped this once, on purpose" and "done,
+   by hand and out of band" at the same time without being rewritten
+   first. Separate lines for independent questions cost nothing and stay
+   accurate without an edit.
 
    Then merge `dev` into `master` with a green CI, using **Rebase and
    merge** and never *Squash and merge*.
@@ -151,9 +160,13 @@ Then:
    gh run list --commit "$(git rev-parse origin/master)"
    ```
 
-   the red `Dependabot Updates` runs sitting beside them are Dependabot's
-   own updater failing to compute an update, not a workflow of this
-   repository, and say nothing about the tree
+   and worth waiting for rather than assuming: the push a rebase-and-merge
+   makes to `master` fires `lint` and `test` again from their `push`
+   trigger, a run of its own rather than the `pull_request` run already
+   green on the pull request a moment earlier. The red `Dependabot
+   Updates` runs sitting beside them are Dependabot's own updater failing
+   to compute an update, not a workflow of this repository, and say
+   nothing about the tree
 1. tag the tip `master` now points at, and push that tag alone:
 
    ```shell
@@ -170,7 +183,19 @@ Then:
    approval, the token exchange happening after it. A registration that
    does not match the claims fails there having uploaded nothing, as the
    0.7.1 rehearsal did on TestPyPI, and a version survives a failed
-   exchange: delete the tag, fix the registration, tag again
+   exchange: delete the tag, fix the registration, tag again.
+
+   Retagging rebuilds a matrix that was never at fault, though: 0.7.1.2
+   hit this same `invalid-publisher` for real, on `pypi` rather than a
+   rehearsal's `testpypi`, the registration having gone stale behind an
+   eyeballed check of the project settings — a repository rename is
+   enough to do that silently, and the settings page does not flag a
+   `workflow_ref` or `environment` that no longer matches. The matrix had
+   already built and only the publish step had failed, so fixing the
+   registration and running `gh run rerun <run id> --failed` republished
+   from the artifacts already there, in minutes rather than the better
+   part of an hour, the tag never touched. Retagging is the right answer
+   only when the failure happened before the artifacts existed
 1. check that what was published installs, in an environment of its own
    rather than one that may already hold it, and run something with it —
    installing being weaker than working where a compiled extension is
@@ -236,6 +261,22 @@ Then:
    `git diff origin/master origin/dev` is how to say so rather than
    assume it.
 
+   `git switch dev` assumes a checkout free to hold it, which the
+   convention this repository asks every session to follow — its own
+   worktree, never the primary checkout — does not give a worktree
+   already busy with a branch of its own, and should not be made to have
+   by switching branches inside it. Without a local checkout of `dev` at
+   all:
+
+   ```shell
+   git push --force-with-lease=refs/heads/dev:<old dev sha> origin \
+     origin/master:refs/heads/dev
+   ```
+
+   pushes the read-only remote-tracking ref `origin/master` straight to
+   `refs/heads/dev`, the lease keyed to the `dev` tip a `git fetch`
+   already holds rather than to a branch checked out locally.
+
    That last push can fail on its own, distinctly from everything above
    it: `dev`'s branch protection blocking force pushes is not one of the
    rules `enforce_admins` being off exempts an administrator from. That
@@ -283,6 +324,12 @@ Then:
    ```shell
    git rebase --onto origin/master <the old dev tip> <branch>
    ```
+
+   GitHub's own `mergeable`/`mergeStateStatus` on that branch's pull
+   request can still read `CONFLICTING`/`DIRTY` for a few seconds after
+   the force-push that follows, before it finishes recomputing against
+   the new tip — worth a second look rather than read as the rebase
+   above having failed.
 
    this comes before step 10 rather than after it: the bump step 10 makes
    is on `dev`, and the force update above would discard it
@@ -440,7 +487,11 @@ next fork.
   `workflow_ref` naming the file and the ref it ran from — and the
   registration has to be read against them rather than the other way
   round, the log itself warning that the claims are for debugging and
-  not for configuring from
+  not for configuring from. A registration that matched once is not
+  guaranteed to keep matching: 0.7.1.2 hit `invalid-publisher` on `pypi`
+  itself, the registration having gone stale — most likely behind the
+  repository's rename — since 0.7.1 last needed it, with nothing on this
+  side having touched it in between
 - on GitHub, repository Settings, Environments: create the `pypi` and
   `testpypi` environments, each with the required reviewers who approve
   -- `fametrano` on both. Self-review stays allowed on purpose: the
