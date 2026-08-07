@@ -1,16 +1,15 @@
 # btclib_libsecp256k1
 
-[![python](https://img.shields.io/pypi/pyversions/btclib_libsecp256k1.svg?logo=python)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
-[![pypi](https://img.shields.io/pypi/v/btclib_libsecp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
-[![downloads](https://static.pepy.tech/badge/btclib_libsecp256k1)](https://pepy.tech/project/btclib_libsecp256k1)
 [![status](https://img.shields.io/pypi/status/btclib_libsecp256k1.svg)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
 [![license](https://img.shields.io/github/license/btclib-org/btclib-libsecp256k1.svg)](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/LICENSE)
+[![pypi](https://img.shields.io/pypi/v/btclib_libsecp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
+[![downloads](https://static.pepy.tech/badge/btclib_libsecp256k1)](https://pepy.tech/project/btclib_libsecp256k1)
+[![python](https://img.shields.io/pypi/pyversions/btclib_libsecp256k1.svg?logo=python)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
 [![lint and format: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![type-check: mypy](https://img.shields.io/badge/type--check-mypy-yellowgreen.svg?logo=mypy)](http://mypy-lang.org/)
+[![docs](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
 [![lint](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml)
 [![test](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml)
-[![docs](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
-
 [![Follow on Twitter](https://img.shields.io/twitter/follow/btclib?style=social&logo=twitter)](https://twitter.com/intent/follow?screen_name=btclib)
 
 ---
