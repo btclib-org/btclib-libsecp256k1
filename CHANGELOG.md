@@ -9,6 +9,8 @@ Only v0.7.1.2 is here. The releases before it were documented at
 release-notes length in the first place, and are still in
 [HISTORY.md](./HISTORY.md) rather than duplicated here.
 
+## v0.7.1.3 (work in progress, not released yet)
+
 ## v0.7.1.2
 
 Grouped, and the order runs from what a caller sees to what only
