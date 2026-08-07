@@ -12,13 +12,19 @@ release-notes length in the first place, and are still in
 ## v0.7.1.2 (work in progress, not released yet)
 
 Grouped, and the order runs from what a caller sees to what only
-maintainers do. Nothing here breaks a caller: the wrapped
+maintainers do. The wrapped
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
-is the same 0.7.1 (1a53f49), nothing in the public API moved, and what it
-gained is one function. One wrapper changed behaviour, in the text of an
-error message, and the entry below says which and why. Neither file
-counts its entries: `grep -c '^- '` does that, whereas a stated number is
-a line every open branch has to edit.
+is the same 0.7.1 (1a53f49). What the public API gained is one function
+and two `compressed` flags; what it lost is `recovery.COMPRESSED` and
+`ellswift.COMPRESSED`, two copies of a flag macro that `keys.COMPRESSED`
+still declares — the one removal here, and the one entry a caller
+importing either has to act on. Three things changed behaviour: the text
+of one error message, the class `keys.serialize` raises for an argument
+no valid caller passes, and the exception a wrong *type* meets, which is
+now the boundary's and names the argument instead of cffi's a call
+later. Each has its entry below. Neither file counts its entries:
+`grep -c '^- '` does that, whereas a stated number is a line every open
+branch has to edit.
 
 ### What the boundary answers
 
@@ -70,9 +76,107 @@ a line every open branch has to edit.
   answers exactly the 65 bytes it did, opening with `0x04`, and
   `tests/test_core.py` asserts the new text so that the next change to it
   is deliberate.
+- **`keys.serialize` raises what libsecp256k1 reported, and takes it off
+  the thread** (#73). It is the one wrapper whose argument is a
+  libsecp256k1 object rather than bytes, so it is the one place where
+  nothing can be checked before the call and a precondition is
+  libsecp256k1's to violate: a NULL pointer, or a `secp256k1_pubkey`
+  nothing has written to, reached the illegal-argument callback. What
+  came back was `RuntimeError("point serialization failed")` — the class
+  reserved here for what no input can provoke — while the message
+  libsecp256k1 had just written stayed recorded on the thread. The next
+  `context.check()` found it and raised it, and that caller is the MuSig2
+  one going through `lib`: they were told `pubkey != NULL` about a call
+  they never made. That is what `test_check_clears_what_it_reported`
+  exists to prevent, and it was reachable from the public API.
+  `serialize` calls `check()` on the failing branch now, which raises the
+  message as the `ValueError` a caller's mistake is and, raising it,
+  clears it; the `RuntimeError` remains for a failure that reported
+  nothing. Two docstrings had claimed the case away — `check()`'s own,
+  and `test_illegal_argument`'s *"which the bindings' own wrappers cannot
+  do"* — and describe it instead.
+- **An argument is checked for its type where it is checked for its
+  length** (#73), those being one question about a bare pointer. `len`
+  answers for a `bytearray` and a `memoryview` as readily as for bytes,
+  so both passed every size check and reached cffi, which refused them a
+  call later in its own words and about a ctype — `initializer for ctype
+  'unsigned char *' must be a cdata pointer` — naming neither the
+  argument nor what was wrong with it; a `float` came back as `object of
+  type 'float' has no len()`; and `_scalar.scalar`, annotated `-> bytes`,
+  returned the bytearray it was handed. `_scalar.octets` is that one
+  check, and the eighteen size checks across eight modules are now that
+  call. Nothing that worked stops working — cffi already refused all of
+  it, further on. `bytes` and nothing else: a `bytearray` states the same
+  value and the same width, so converting one would guess at nothing, but
+  it would widen what every signature promises, and `bytes(x)` is the
+  conversion in the caller's own code. `keys.pubkey_sort(pubkey)` — one
+  key where a sequence of them goes, which bytes being a sequence made
+  silently wrong — now says `the public key must be bytes, not int`.
+- **A `bool` is refused where a scalar goes** (#73). `isinstance(True,
+  int)` is true, so `True` was the scalar 1 and `False` the scalar 0:
+  `keys.prvkey_verify(False)` answered False, the correct verdict on
+  zero and not distinguishable from the correct verdict on whatever was
+  meant, and `keys.pubkey_from_prvkey(True)` answered the generator.
+  That is what separates it from a `float` in the same place, which
+  raised then and raises now — the acceptance was invisible in the
+  answer, and invisible to mypy too, `bool` being a subtype of `int`.
+  For the scalars alone: `recid`, `party` and the y parity are flags
+  whose domain is `{0, 1}`, and a bool there is the 0 or 1 it is.
+- **The libsecp256k1 buffers a secret passes through are overwritten**
+  (#73). SECURITY.md records the python side as inherent, and it is: a
+  `bytes` is immutable, so what a caller hands in and what is handed back
+  stay until the collector gets to them. The copy in the middle is not
+  that — it is memory cffi allocated and this package owns, it is
+  writable, and nothing outside these wrappers sees it, so leaving a
+  private key in it was an omission rather than a limit. Read out and
+  zeroed now: the keys of `keys.prvkey_negate`, `prvkey_tweak_add` and
+  `prvkey_tweak_mul`, the taproot signing key of
+  `xonly.prvkey_tweak_add`, the shared secrets of `ecdh.shared_secret`
+  and `ellswift.xdh`, and the `secp256k1_keypair` of the two BIP340
+  signing calls and of the taproot tweak, wiped in a `finally` because
+  `_aux_rand32` can raise between its creation and the signature. The
+  length is asked of `ffi.buffer` rather than of `ffi.sizeof`: on a
+  `secp256k1_keypair *` the latter answers 8, the size of the pointer,
+  and wiping 8 octets would clear the first quarter of a private key and
+  report success — written that way the new test fails. One copy taken
+  back, not safety, and SECURITY.md says which.
+- **`recovery.recover` and `ellswift.decode` answer in either
+  serialization** (#73), through `keys.serialize` rather than through a
+  copy of it. Both wrote the same block — a `char[33]`, a length derived
+  from it, the `SECP256K1_EC_COMPRESSED` flag redeclared at the top of
+  the module, and a comment pointing at `keys.serialize` for the
+  reasoning, which was the argument for calling it. Each takes the
+  `compressed` flag every producer in `keys` has, defaulting to the 33
+  octets they always returned; reaching the uncompressed form meant
+  `keys.serialize(keys.parse(...))` in the caller before. The two
+  duplicated `COMPRESSED` constants go with the block, `keys.COMPRESSED`
+  being the one that carries the comment explaining why a flag macro is
+  written out at all.
+- **Three smaller things the same audit turned up** (#73). `noncefc` was
+  a typo of `noncefp`, which is what the header calls the nonce function
+  pointer, in both signing modules. `ndata`, annotated `bytes | None`,
+  was reassigned to `ffi.NULL` before being passed — mypy allowed it only
+  because `ffi` is `Any` — and has a name of its own now, with the
+  comment saying why a python nonce function is not offered: it would put
+  the secret through a python object on every call from inside the
+  signature. And `test_safe_abort` created a context on every run and
+  never destroyed it, with the flag `769`, which is `SIGN|VERIFY`,
+  deprecated since libsecp256k1 0.2 as `context.py`'s own comment says.
 
 ### The documented boundary
 
+- **`xonly.tweak_add_check` says what it does with a tweaked key that is
+  no point** (#73). Its contract promised `ValueError: if either key is
+  not 32 bytes or not a valid x coordinate`. Only the internal key is
+  parsed; the tweaked one is compared against the serialization of the
+  recomputed point, so 32 bytes which are the x coordinate of nothing
+  return False. That is the right behaviour — bytes that are no point are
+  the tweak of nothing, and comparing rather than parsing is the whole of
+  what this saves over recomputing the tweak — and Returns now says it,
+  with Raises naming the key that really is parsed. Nothing in the gate
+  could have caught it: `pydoclint` checks that a `Raises` section is
+  there, not that it is true, which is the concession recorded below, and
+  the suite had asserted the two keys only where both were points.
 - **Every function of the package documents its arguments, its return
   value and what it raises.** What lengths are accepted, what is refused
   rather than padded, which failure is a `ValueError` and which a
