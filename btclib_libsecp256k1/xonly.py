@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from . import CData, ffi, lib
 from ._scalar import octets, scalar
+from ._secret import take, wipe
 from .context import ctx
 
 
@@ -152,14 +153,20 @@ def prvkey_tweak_add(prvkey: bytes | int, tweak: bytes | int) -> bytes:
             valid input can make it do.
     """
     keypair = _keypair(prvkey)
-    tweak_bytes = scalar(tweak, "tweak")
-    if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair, tweak_bytes):
-        raise ValueError("invalid tweak or resulting private key")
-
     prvkey_buffer = ffi.new("char[32]")
-    if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair):
-        raise RuntimeError("private key extraction failed")
-    return ffi.unpack(prvkey_buffer, ffi.sizeof(prvkey_buffer))
+    try:
+        tweak_bytes = scalar(tweak, "tweak")
+        if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair, tweak_bytes):
+            raise ValueError("invalid tweak or resulting private key")
+
+        if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair):
+            raise RuntimeError("private key extraction failed")
+        return take(prvkey_buffer)
+    finally:
+        # a keypair carries the private key -- the tweaked one here,
+        # which is the one that signs -- so it is overwritten on the way
+        # out whether that was reached or refused
+        wipe(keypair)
 
 
 def _parse(pubkey_bytes: bytes) -> CData:
