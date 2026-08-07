@@ -244,6 +244,31 @@ leaves them off — **do not read that 200 as success.** The
 `detect-secrets` hook is the compensating control, and CONTRIBUTING.md
 carries what maintaining its baseline costs.
 
+## Topics
+
+The topics are `pyproject.toml`'s `keywords`, entry for entry: one list
+spelled in two places, and the same spelling in both is what lets a drift
+between them be seen at all. Lowercase throughout, a GitHub topic being
+lowercase or not a topic. They were set on 7 August 2026, from the list #81
+wrote: that pull request could change the packaging metadata and not the
+repository, these settings living outside the tree, which is why it landed
+with the topics still empty.
+
+Nothing in the tree holds the two lists together, so this is the command
+that does: it prints the difference and exits nonzero on one.
+
+```shell
+diff <(gh api repos/{owner}/{repo} --jq '.topics[]' | sort) \
+     <(sed -n '/^keywords=\[/,/^]/s/^ *"\(.*\)",$/\1/p' pyproject.toml \
+       | sort)
+```
+
+Both sides are sorted because GitHub returns the topics in an order of
+its own rather than the one it was given: a reordering there is not
+drift, and only `pyproject.toml`'s order is the deliberate one. The
+comment above the `keywords` list says what decided it, and why `musig2`
+and `bip324` are in a list of what this package wraps.
+
 ## No website
 
 Unlike btclib, this repository serves no GitHub Pages site, so no file in
