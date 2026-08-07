@@ -43,7 +43,7 @@ release-notes length in the first place, and are still in
 
 ### Packaging metadata
 
-- **`keywords` names what this package wraps and what it exposes**, where
+- **`keywords` names what this package wraps and what it reaches**, where
   it said `bitcoin` and `libsecp256k1` and left the searchable name of the
   curve out along with every wrapped module: `secp256k1`, `cryptography`,
   `python-bindings`, `cffi`, `ecdsa`, `schnorr`, `bip340`, `ecdh`,
@@ -52,10 +52,22 @@ release-notes length in the first place, and are still in
   to be: the list is the repository's topics in the same order, and one
   spelling across the two is what lets them be compared. The order is by
   relevance rather than alphabetical, PyPI showing keywords as the metadata
-  gives them and GitHub sorting its own. Three candidates are left out on
-  purpose, and the comment beside the list says why: `musig2`, which is
-  not wrapped; `bip324`, whose transport is not implemented here; and
-  `elliptic-curves`, this being one curve, which `secp256k1` names.
+  gives them and GitHub sorting its own.
+- **`musig2` and `bip324` are in that list, and neither is a wrapped
+  module.** The vendored library is built with
+  `SECP256K1_ENABLE_MODULE_MUSIG` and `secp256k1_musig.h` is among the
+  headers the cdef is made of, so all of `secp256k1_musig_nonce_gen`,
+  `_nonce_agg`, `_nonce_process`, `_partial_sign` and their neighbours are
+  reachable through the `lib` this package exposes -- what MuSig2 has no
+  module for is the session its two rounds need, which is the reason
+  README's Design section gives for leaving one out. `bip324` is the
+  `ellswift` module beside it: the encoding and the x-only ECDH that BIP's
+  handshake needs of its keys, and not its transport, which is a cipher and
+  a framing layer this package has no part of. The comment beside the list
+  states both limits, so a keyword found on PyPI leads to what is here
+  rather than to what a reader would assume from the name.
+  `elliptic-curves` is the one candidate left out: this is one curve, and
+  `secp256k1` names it.
 - **this file relaxes MD024 (no-duplicate-heading) for itself**, a group
   heading repeating under every release that has an entry in that group:
   the rule reads that repeat as the accident it usually is, and
