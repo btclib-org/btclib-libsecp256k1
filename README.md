@@ -258,7 +258,11 @@ arguments validated, so the place to enforce it is where the signing
 state already lives, in [btclib](https://github.com/btclib-org/btclib):
 its PSBT is the multi-party signing machinery MuSig2 plugs into, and the
 specifications say the same (BIP327 the protocol, BIP373 its PSBT
-fields, BIP328 its descriptors).
+fields, BIP328 its descriptors). That place already holds the session:
+`btclib.ecc.musig2.sign` zeroes the secret nonce it consumes, so a
+second call with it fails before a second signature exists, and
+`btclib.psbt.musig2.partial_sign` carries the same guarantee into a PSBT
+round.
 
 What MuSig2 needs from here is what has no state, and it is all present:
 `keys.pubkey_sort` for the key ordering and `keys.pubkey_combine` for
