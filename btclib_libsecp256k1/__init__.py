@@ -50,7 +50,9 @@ def _load_lib(module: Any) -> Any:
 
     Raises:
         ImportError: if the extension carries no linked-in library and
-            no shared object beside it can be loaded.
+            no shared object beside it can be loaded. Chains the last
+            loader error, if any candidate was rejected rather than
+            merely absent.
     """
     # a static extension has the library linked in
     if hasattr(module, "lib"):
@@ -59,15 +61,21 @@ def _load_lib(module: Any) -> Any:
     # a dynamic one (cffi ABI mode) has to find, at run time, the shared
     # object shipped beside it
     path = pathlib.Path(module.__file__).parent
+    rejected: list[tuple[str, OSError]] = []
     for suffix in (".dll", ".so", ".dylib"):
         for file in path.glob(f"libsecp256k1*{suffix}*"):
             try:
                 return ffi.dlopen(str(file))
-            except OSError:
+            except OSError as exc:
                 # a file the loader rejects does not end the search: a
                 # wheel repaired by auditwheel or delocate can ship more
-                # than one match, only one of which is the library
-                pass
+                # than one match, only one of which is the library --
+                # but its error is worth keeping, in case none is
+                rejected.append((file.name, exc))
+    if rejected:
+        tried = ", ".join(f"{name} ({exc})" for name, exc in rejected)
+        msg = f"no loadable shared libsecp256k1 found in {path}, tried: {tried}"
+        raise ImportError(msg) from rejected[-1][1]
     msg = f"no loadable shared libsecp256k1 found in {path}"
     raise ImportError(msg)
 
