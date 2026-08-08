@@ -149,27 +149,11 @@ repos:
       - id: markdownlint-cli2
         name: markdownlint-cli2 (in place fixes)
         args: [--fix]
-  - repo: https://github.com/leoll2/copyright_notice_precommit
-    rev: 0.1.1
-    hooks:
-      - id: copyright-notice
-        # --enforce-all, because without it the hook intersects the files
-        # pre-commit hands it with `git diff --staged --diff-filter=A` and
-        # checks the notice on newly *added* staged files alone. On a clean
-        # checkout that set is empty, so the run in the lint workflow --
-        # `pre-commit run --all-files`, the one that gates a pull request --
-        # was checking no file at all, whatever the pattern below matched
-        args: [--notice=COPYRIGHT, --enforce-all]
-        # "python" as a filename pattern never matched anything either. The
-        # optional i is the same miss one extension over:
-        # stubs/_btclib_libsecp256k1.pyi is a source file of this project,
-        # named in mypy_path and force-included in the sdist, and its header
-        # was the pre-MIT one for as long as nothing read it
-        files: \.pyi?$
   # ruff replaces black, isort, flake8, autoflake, pyupgrade, bandit,
-  # pydocstringformatter and yesqa: one tool, one config section in
-  # pyproject.toml, and a fraction of the runtime. The rule selection
-  # (and what each family stands in for) is documented there
+  # copyright_notice_precommit, pydocstringformatter and yesqa: one tool,
+  # one config section in pyproject.toml, and a fraction of the runtime.
+  # The rule selection (and what each family stands in for) is documented
+  # there
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.1
     hooks:

@@ -434,6 +434,13 @@ select = [
     # the one finding PYI has, on stubs/_btclib_libsecp256k1.pyi, is
     # exempted below rather than fixed: see per-file-ignores
     "PYI",   # flake8-pyi
+    # flake8-copyright, replacing the copyright-notice pre-commit hook:
+    # a rule living inside ruff's own file-selection logic checks
+    # whatever files it is given the same way regardless of who is
+    # asking, unlike the retired hook, which checked only staged files
+    # unless given --enforce-all -- the gap btclib's own ed6e8014 found
+    # and closed by hand there
+    "CPY",   # flake8-copyright
 ]
 # here and in per-file-ignores below, a rule is named rather than coded.
 # `select` above has no choice, a family having no name form, but an entry
@@ -548,6 +555,26 @@ max-complexity = 10
 # and the mutation counter, whose one line of output is what the workflow
 # step exists to put in the log: same exemption, same reason
 ".github/scripts/mutation_counts.py" = ["print"]
+
+[tool.ruff.lint.flake8-copyright]
+# notice-rgx is COPYRIGHT's text as one regex, anchored with ^ so a
+# match has to open the file rather than merely occur somewhere in its
+# first 4096 bytes -- unanchored, an import or a docstring placed above
+# the notice would still pass, which is not the question the retired
+# hook's substring search over the whole file asked either. No source
+# file here opens with a shebang, so nothing legitimate sits between
+# byte zero and the notice for the anchor to exclude.
+# CPY001 checks against a file's own first 4096 bytes regardless of
+# which files pre-commit was told to look at -- unlike the retired
+# hook, which needed --enforce-all or it intersected only newly *added*
+# staged files, checking nothing at all under "pre-commit run
+# --all-files", the very invocation the lint workflow runs.
+# It also needs no files: pattern of its own the way that hook did:
+# stubs/_btclib_libsecp256k1.pyi kept a pre-MIT header for as long as
+# the hook's pattern matched only \.py$ and not \.pyi$, and ruff lints
+# .pyi files by default, so there is no second extension to remember
+# this time
+notice-rgx = "^# Copyright \\(c\\) The btclib developers\\n#\\n# Distributed under the MIT software license, see the accompanying\\n# LICENSE file or https://opensource\\.org/license/mit for the full text\\."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
