@@ -80,6 +80,23 @@ release-notes length in the first place, and are still in
   directory with no matching candidate at all still gets the shorter
   message, that case never having had one to blame. Closes #88.
 
+### Mutation testing
+
+- **A session run ahead of this release, `_load_lib` having changed
+  since 0.7.1.2, found one survivor shape on `rejected[-1]`** — six
+  mutants of the same index, all reporting `TestOutcome.SURVIVED`,
+  because `test_load_lib_unloadable_candidate` checked only
+  `isinstance(exc_info.value.__cause__, OSError)`, true of any candidate
+  chained, and because with two rejected candidates `rejected[-1]` and
+  `rejected[1]` name the same element regardless, one mutant unkillable
+  by any assertion at that length. A third candidate, and an assertion
+  that the last name in the `ImportError`'s own message is the one
+  `__cause__` reports, killed all six: `path.glob`'s order being
+  undocumented, the test pins it with `sorted`, the same way this
+  project fixes what a test cannot otherwise hold constant about an
+  external call. The session that measured that: 667 jobs, 385 skipped
+  by the operator filter, 0 survivors of the 282 that ran.
+
 ### The gate
 
 - **The copyright-notice hook is retired for ruff's own `CPY001`** (#85).
