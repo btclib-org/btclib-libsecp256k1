@@ -85,30 +85,54 @@ def test_load_lib_returns_a_loadable_candidate(tmp_path: pathlib.Path) -> None:
     assert _load_lib(module) is not None
 
 
-def test_load_lib_unloadable_candidate(tmp_path: pathlib.Path) -> None:
+def test_load_lib_unloadable_candidate(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A file that matches the glob but does not load is not a library.
 
     It is skipped and the search continues, so what the caller is told is
     that the directory holds no loadable libsecp256k1 -- rather than the
     dlopen failure of one candidate, which would report the first
     accident as the whole answer. But that accident is not thrown away:
-    it is the one diagnostic that says *why*, and it has to survive to
-    the final ImportError, both named in its message and chained as
-    __cause__, for a dynamic wheel's import failure to be debuggable
-    rather than just "no loadable shared libsecp256k1 found".
+    it is the one diagnostic that says *why*, and the *last* rejected
+    candidate's -- not any other one's -- has to survive to the final
+    ImportError, both named in its message and chained as __cause__, for
+    a dynamic wheel's import failure to be debuggable rather than just
+    "no loadable shared libsecp256k1 found".
     """
-    # two files matching the glob, both rejected by the loader: a wheel
+    # three files matching the glob, all rejected by the loader: a wheel
     # repaired by auditwheel or delocate can ship more than one match, and
     # the diagnostic of each rejected candidate has to reach the final
-    # failure, not just the last one tried
-    (tmp_path / "libsecp256k1.so").write_bytes(b"not a shared object")
-    (tmp_path / "libsecp256k1.so.1").write_bytes(b"not a shared object either")
+    # failure, not just the last one tried. Two would not do here: with a
+    # two-element list, index -1 and index 1 name the same element, which
+    # is exactly the survivor a mutation session
+    # (.github/mutation/bindings.toml) found on `rejected[-1]` -- six
+    # variants of the same off-by-index mutant, none of them killed by a
+    # test that only checked `isinstance(cause, OSError)`. glob's own
+    # order is undocumented, so it is pinned to sorted order here rather
+    # than trusted, the same way this project fixes what a test cannot
+    # otherwise hold constant about an external call
+    names = ["libsecp256k1.so", "libsecp256k1.so.1", "libsecp256k1.so.2"]
+    for name in names:
+        (tmp_path / name).write_bytes(b"not a shared object")
+    real_glob = pathlib.Path.glob
+
+    def sorted_glob(
+        self: pathlib.Path, *args: object, **kwargs: object
+    ) -> list[pathlib.Path]:
+        return sorted(real_glob(self, *args, **kwargs))  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pathlib.Path, "glob", sorted_glob)
     module = types.SimpleNamespace(__file__=str(tmp_path / "_extension.py"))
     with pytest.raises(
         ImportError, match="no loadable shared libsecp256k1"
     ) as exc_info:
         _load_lib(module)
     message = str(exc_info.value)
-    assert "libsecp256k1.so" in message
-    assert "libsecp256k1.so.1" in message
-    assert isinstance(exc_info.value.__cause__, OSError)
+    for name in names:
+        assert name in message
+    # sorted order puts libsecp256k1.so.2 last, being the longest of three
+    # names sharing a prefix, so its OSError -- naming its own path, as
+    # dlopen's does -- is what has to be __cause__, and no other
+    # candidate's path is a substring of it
+    assert "libsecp256k1.so.2" in str(exc_info.value.__cause__)
