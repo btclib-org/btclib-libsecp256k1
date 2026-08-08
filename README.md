@@ -90,7 +90,15 @@ same libsecp256k1 version, a fourth number is appended:
 
 These bindings are a boundary, not a library: every function is one
 libsecp256k1 call, with its arguments validated first and its return
-code checked. The cryptography — the algorithms, the constant-time
+code checked. A function returning a key or a signature calls it twice:
+libsecp256k1 hands back an opaque object — a `secp256k1_pubkey`, a
+`secp256k1_ecdsa_signature` — that only a second call serializes into
+bytes, no libsecp256k1 call producing them directly.
+`keys.pubkey_from_prvkey` is `secp256k1_ec_pubkey_create` followed by
+`secp256k1_ec_pubkey_serialize`; every other function returning a key or
+a signature has the same shape, the second call being the serialization
+the first cannot do rather than a second decision. The cryptography —
+the algorithms, the constant-time
 implementation, the side-channel hardening — is upstream's, and none of
 it is reimplemented, extended or second-guessed here. Wrappers of the
 same C library cannot honestly differ in what it computes, nor in how
