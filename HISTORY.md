@@ -5,7 +5,11 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
-## v0.7.1.3 (work in progress, not released yet)
+## v0.7.1.3
+
+The same
+[libsecp256k1 0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)
+(1a53f49) as v0.7.1.2: **no breaking changes**.
 
 - **A dynamic wheel's import failure says why.** `ImportError` now names
   every shared-object candidate `_load_lib` rejected and chains the last
