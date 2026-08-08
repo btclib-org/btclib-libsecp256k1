@@ -51,6 +51,74 @@ release-notes length in the first place, and are still in
   lines and the same CONTRIBUTING.md run, which is what makes the three
   comparable; the badge sets differ only where the projects do, this one
   having no calendar version to declare.
+- **`pubkey_from_prvkey`'s two libsecp256k1 calls are two calls for a
+  stated reason** (#89). The Design section claimed every function is one
+  libsecp256k1 call, without saying that a function returning a key or a
+  signature is two: libsecp256k1 hands one back as an opaque object, and
+  only a second call serializes it into bytes. `pubkey_from_prvkey` names
+  its two — `secp256k1_ec_pubkey_create`, `secp256k1_ec_pubkey_serialize`
+  — as the shape every other producer of a key or a signature shares.
+- **The MuSig2 section names what already guards a reused nonce** (#91).
+  It said the signing state "already lives" in btclib without naming what
+  lives there, which read as an open gap rather than a settled fact.
+  `btclib.ecc.musig2.sign` and `btclib.psbt.musig2.partial_sign` are named,
+  both zeroing the secret nonce on use, which refuses reuse deterministically
+  before a second signature exists.
+
+### Import diagnostics
+
+- **A dynamic wheel's `ImportError` says what it tried, and why each
+  attempt failed** (#90). `_load_lib` searches the shared object shipped
+  beside a dynamic (cffi ABI) build, and silently dropped every rejected
+  candidate's `OSError` while doing it — a wheel repaired by `auditwheel`
+  or `delocate` can ship more than one match, only one of which is the
+  library, so a directory holding a wrong-platform library alongside the
+  right one surfaced only "no loadable shared libsecp256k1 found", with
+  nothing said about what was there or why it did not load. Each rejected
+  candidate's name and error are now kept, joined into the message when
+  none loads, and the last one chained as the exception's cause; a
+  directory with no matching candidate at all still gets the shorter
+  message, that case never having had one to blame. Closes #88.
+
+### The gate
+
+- **The copyright-notice hook is retired for ruff's own `CPY001`** (#85).
+  `leoll2/copyright_notice_precommit` existed for exactly one check — a
+  missing or altered notice at the top of a source file — that
+  `flake8-copyright` already does, selectable under this project's
+  existing `explicit-preview-rules` gate rather than needing anything new
+  turned on: one less repo to pin, one less hook environment for
+  pre-commit(.ci) to install. It also needs no `files:` pattern of its
+  own the way the retired hook did, widened from `\.py$` to `\.pyi?$` only
+  after `stubs/_btclib_libsecp256k1.pyi` kept a pre-MIT header for as long
+  as the narrower pattern missed it — ruff lints `.pyi` files by default.
+  And it checks whatever files it is given the same way regardless of who
+  is asking, unlike the retired hook, which intersected the files
+  pre-commit handed it with newly *added* staged files unless given
+  `--enforce-all`, silently checking nothing under `pre-commit run
+  --all-files` — the exact invocation the lint workflow runs, and the
+  incident this file already records above. `notice-rgx` is COPYRIGHT's
+  text as one anchored regex rather than a substring search over the whole
+  file, the design rationale moving to `pyproject.toml` beside it.
+
+### Dependencies
+
+- **`cryptography` moves to 50.0.0, closing CVE-2026-69247** (#92).
+  Dependabot alert #9 (GHSA-g6cj-pr64-35w5, high) flagged 49.0.0, pulled in
+  transitively on Linux via `twine`'s `keyring` → `secretstorage`
+  dependency, as inside the range vulnerable to a PKCS#7 `EnvelopedData`
+  decryption oracle. Neither this package nor `twine` decrypts PKCS#7, so
+  the oracle was unreachable here, but there was no reason to stay in the
+  vulnerable range. `secretstorage` only requires `cryptography>=2.0`, so
+  no other package needed to move with it.
+- **Every other locked dependency moves to its latest compatible
+  version** (#93): `uv lock --upgrade`, ahead of the `latest` sentinel's
+  own schedule rather than waiting for it. Notable moves: `btclib`
+  2023.7.12 → 2026.8.7, pulling in a new transitive `bitcoin-core-rpc`
+  dependency (both `bench`-group only, no part of `test`, `lint`, `check`
+  or the default group), `ruff` 0.16.0 → 0.16.2, `cibuildwheel` → 4.2.0,
+  plus patch bumps to `coverage`, `filelock`, `packaging`, `platformdirs`,
+  `setuptools` and `virtualenv` among others. No `pyproject.toml` change.
 
 ### Packaging metadata
 

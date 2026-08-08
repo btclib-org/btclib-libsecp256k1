@@ -7,6 +7,16 @@ a tag is generated from.
 
 ## v0.7.1.3 (work in progress, not released yet)
 
+- **A dynamic wheel's import failure says why.** `ImportError` now names
+  every shared-object candidate `_load_lib` rejected and chains the last
+  loader error, instead of only "no loadable shared libsecp256k1 found".
+- **`cryptography` moved to 50.0.0**, closing CVE-2026-69247 — a PKCS#7
+  decryption oracle pulled in transitively through the packaging tools,
+  and unreachable from this package's own code either way.
+- **Two README clarifications**: why `pubkey_from_prvkey` is two
+  libsecp256k1 calls rather than one, and which btclib functions guard a
+  MuSig2 nonce against reuse.
+
 ## v0.7.1.2
 
 The same

@@ -345,6 +345,10 @@ extend-exclude = ["secp256k1/"]
 # the macOS wheel-repair tool, named in __init__.py and in test.yml beside
 # auditwheel: a real name, and one no spelling of it can avoid
 delocate = "delocate"
+# ruff's flake8-copyright rule code, named above in `select` and in the
+# comment below it, and again in CHANGELOG.md's prose: a real rule code,
+# not a typo of "copy" or "cpu"
+cpy = "cpy"
 
 [tool.typos.default]
 # a quoted run of hexadecimal digits is a vector, not a word. The rule has
