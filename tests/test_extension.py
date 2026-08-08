@@ -91,11 +91,24 @@ def test_load_lib_unloadable_candidate(tmp_path: pathlib.Path) -> None:
     It is skipped and the search continues, so what the caller is told is
     that the directory holds no loadable libsecp256k1 -- rather than the
     dlopen failure of one candidate, which would report the first
-    accident as the whole answer.
+    accident as the whole answer. But that accident is not thrown away:
+    it is the one diagnostic that says *why*, and it has to survive to
+    the final ImportError, both named in its message and chained as
+    __cause__, for a dynamic wheel's import failure to be debuggable
+    rather than just "no loadable shared libsecp256k1 found".
     """
-    # a file matching the glob that the loader rejects is skipped, and
-    # the directory as a whole is reported as holding no library
+    # two files matching the glob, both rejected by the loader: a wheel
+    # repaired by auditwheel or delocate can ship more than one match, and
+    # the diagnostic of each rejected candidate has to reach the final
+    # failure, not just the last one tried
     (tmp_path / "libsecp256k1.so").write_bytes(b"not a shared object")
+    (tmp_path / "libsecp256k1.so.1").write_bytes(b"not a shared object either")
     module = types.SimpleNamespace(__file__=str(tmp_path / "_extension.py"))
-    with pytest.raises(ImportError, match="no loadable shared libsecp256k1"):
+    with pytest.raises(
+        ImportError, match="no loadable shared libsecp256k1"
+    ) as exc_info:
         _load_lib(module)
+    message = str(exc_info.value)
+    assert "libsecp256k1.so" in message
+    assert "libsecp256k1.so.1" in message
+    assert isinstance(exc_info.value.__cause__, OSError)
