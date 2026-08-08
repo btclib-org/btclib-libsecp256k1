@@ -16,11 +16,19 @@ Every change of a release, in full: what changed, why, and what it cost.
 to act on; this file is the record behind them, and is where a claim in
 those notes can be checked.
 
-Only v0.7.1.2 is here. The releases before it were documented at
+This file starts at v0.7.1.2. The releases before it were documented at
 release-notes length in the first place, and are still in
 [HISTORY.md](./HISTORY.md) rather than duplicated here.
 
 ## v0.7.1.4 (work in progress, not released yet)
+
+### Documentation
+
+- **This file's own preamble says where it starts, not what it holds.**
+  "Only v0.7.1.2 is here" was true for exactly one release, and v0.7.1.3
+  landing under it made it false without anything failing; every release
+  after would have done the same. Where the file starts is the fact it
+  was reaching for, and that one does not move.
 
 ## v0.7.1.3
 
