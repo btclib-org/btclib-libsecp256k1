@@ -64,8 +64,14 @@ jobs:
     # the whole matrix on a tree its author is not asking anyone to
     # review yet. The gate below carries the same condition, so a draft
     # skips uniformly and the gate does not read that skip as a job that
-    # should have run
-    if: ${{ !github.event.pull_request.draft }}
+    # should have run.
+    # The exception is by base branch, and it is the release pull
+    # request: dev -> master stays a draft from one release to the
+    # next, and nothing here triggers on a push to dev, so without it
+    # a commit merged into dev would be tested by nothing at all
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ubuntu-latest
     # every job below caps its own runtime, this one included: the default
     # is six hours, and with tens of jobs compiling C a single hang is
@@ -103,7 +109,9 @@ jobs:
 
   build-cibuildwheel:
     name: Build wheels on ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     # the interpreter uv runs the build tools with is the one setup-python
@@ -193,7 +201,9 @@ jobs:
 
   build-dynamic:
     name: Build dynamic wheel on ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     # see build-cibuildwheel; here the platform tag of the wheel is the
@@ -269,7 +279,9 @@ jobs:
 
   build-sdist:
     name: Build sdist
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # see build-cibuildwheel
@@ -328,7 +340,9 @@ jobs:
     name: >-
       Test sdist install on ${{ matrix.os }}${{
       matrix.architecture && format(' ({0})', matrix.architecture) }}
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -391,7 +405,9 @@ jobs:
 
   build-windows:
     name: "Build on Linux for Windows"
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # see build-cibuildwheel
@@ -440,7 +456,9 @@ jobs:
   # only be yanked and burnt
   check-dist:
     name: Validate distributions
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [build-cibuildwheel, build-dynamic, build-sdist, build-windows]
@@ -519,7 +537,9 @@ jobs:
 
   test-dynamic:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -591,7 +611,9 @@ jobs:
 
   test-static:
     name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      || github.base_ref == 'master' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -675,7 +697,9 @@ jobs:
     name: tests-passed
     # and the draft condition every job above carries, so a draft
     # skips uniformly rather than tripping the skip check below
-    if: ${{ always() && !github.event.pull_request.draft }}
+    if: >-
+      ${{ always() && (!github.event.pull_request.draft
+      || github.base_ref == 'master') }}
     needs:
       - coverage
       - build-cibuildwheel
