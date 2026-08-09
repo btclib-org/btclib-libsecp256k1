@@ -21,6 +21,11 @@ on:
     # ever test it. Tag pushes are covered by the release workflow
     branches: [master]
   pull_request:
+    # ready_for_review, so a pull request marked ready gets the run the
+    # draft condition below withheld while it was a draft: the default
+    # types do not include it, and without it a readied pull request
+    # would wait for its next push to be checked at all
+    types: [opened, reopened, synchronize, ready_for_review]
   # allows the release workflow to reuse this gate
   workflow_call:
     inputs:
@@ -68,6 +73,12 @@ concurrency:
 jobs:
   lint:
     name: Lint and type-check
+    # a draft pull request is work in progress: every push to one runs
+    # these checks on a tree its author is not asking anyone to review
+    # yet. A run on the merge result still happens the moment the pull
+    # request is marked ready, which is why ready_for_review is a
+    # trigger type above
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -113,6 +124,7 @@ jobs:
   # It also installs a different dependency group and runs in parallel
   docs:
     name: Build the documentation
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
