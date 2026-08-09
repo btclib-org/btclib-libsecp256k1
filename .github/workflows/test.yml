@@ -326,9 +326,9 @@ jobs:
   # carry for it is not what a POSIX build reads
   test-sdist:
     name: >-
-    if: ${{ !github.event.pull_request.draft }}
       Test sdist install on ${{ matrix.os }}${{
       matrix.architecture && format(' ({0})', matrix.architecture) }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
