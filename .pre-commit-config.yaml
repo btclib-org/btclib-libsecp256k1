@@ -103,7 +103,7 @@ repos:
   # hook list: a build definition nothing but check-yaml reads, on a
   # service whose failure mode is a docs build that stops happening
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.4
+    rev: 0.38.0
     hooks:
       - id: check-dependabot
       - id: check-readthedocs
@@ -155,7 +155,7 @@ repos:
   # The rule selection (and what each family stands in for) is documented
   # there
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
+    rev: v0.16.2
     hooks:
       - id: ruff-check
         name: ruff (lint, in place fixes)
@@ -313,7 +313,7 @@ repos:
   # a dependency added to pyproject.toml from reaching a branch without
   # the lock entry that pins it
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.1
+    rev: 0.12.3
     hooks:
       - id: uv-lock
 
