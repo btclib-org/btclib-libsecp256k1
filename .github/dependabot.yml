@@ -25,7 +25,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "thursday"
-    target-branch: "dev"
+    target-branch: "main"
     groups:
       # one PR for all action bumps instead of one PR each
       github-actions:
@@ -45,7 +45,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "thursday"
-    target-branch: "dev"
+    target-branch: "main"
     groups:
       dev-tooling:
         patterns: ["*"]
@@ -60,6 +60,6 @@ updates:
     schedule:
       interval: "weekly"
       day: "thursday"
-    target-branch: "dev"
+    target-branch: "main"
     cooldown:
       default-days: 7
