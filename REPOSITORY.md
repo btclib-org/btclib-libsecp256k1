@@ -10,31 +10,61 @@ repository, so this file is the whole of them: nothing here can be
 recovered by reading the tree. Every value below was read from the API,
 and the command that reads it is beside it.
 
-## Required checks on master
+## Required checks on main
 
 **Never name matrix contexts in a branch rule.** The rule lives outside
 the repository, so a context that stops being produced blocks every merge
 with nothing in the tree to explain why — and the matrix here is
-`Test ${{ matrix.python-version }} on ${{ matrix.os }}`, whose contexts
-change with every interpreter added or dropped. `tests-passed` is the
-aggregate job at the end of `test.yml` that `needs` every other job in
-it; a job added to that workflow belongs in its `needs` list, or it gates
-nothing.
+`Run the suite on the static wheel, ${{ matrix.python-version }},
+${{ matrix.os }}`, whose contexts change with every interpreter added or
+dropped. `test: every job passed` is the aggregate job at the end of
+`test.yml` that `needs` every other job in it; a job added to that
+workflow belongs in its `needs` list, or it gates nothing. The name
+carries the workflow because a context is keyed by name alone: two
+workflows with a job named the same thing produce one ambiguous check.
 
-`master` requires three checks, bound to the app that produces each —
-`checks` with an `app_id` rather than the bare `contexts` list, so nothing
-else can satisfy one:
+What the rule holds is read from the endpoint, never assumed:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/branches/master/protection \
+gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
   --jq '.required_status_checks'
 ```
 
 | Check | Produced by |
 | --- | --- |
-| `tests-passed` | `test.yml`, aggregate over the matrix |
+| `test: every job passed` | `test.yml`, aggregate over the matrix |
 | `Lint and type-check` | `lint.yml`, its only job |
+| `Build the documentation` | `docs.yml`, its only job |
 | `CodeQL` | code scanning's default setup |
+
+`Build the documentation` is named on its own on purpose: a rule naming
+`Lint and type-check` alone would leave a red documentation build outside
+the required checks entirely. It moved from `lint.yml` to `docs.yml`
+without the rule changing, which is worth knowing before renaming
+anything — a context is matched by name, not by the workflow that reported
+it, so moving a job is free and renaming one is not.
+
+Neither `macos.yml`, `latest.yml`, `links.yml`, `mutation.yml`,
+`published.yml` nor `vendored-vectors.yml` appears in the rule, and none of
+them must: each is expected to go red for a reason no pull request
+introduced. `macos.yml` is the one worth naming twice, because it does run
+the suite: what a merge no longer waits for is the platform whose runners
+queue for tens of minutes, measured in `test.yml`'s header, and
+`release.yml` calls it so that a publication still does.
+
+Each check is bound to the app that produces it — `checks` with an `app_id`
+rather than the bare `contexts` list — so nothing else can satisfy one.
+15368 is Actions and 57789 is `github-advanced-security`, which is the app
+that reports `CodeQL`: the two Actions jobs of code scanning's default setup
+are called `Analyze (actions)` and `Analyze (python)`, and the `CodeQL`
+context is a separate check run that appears seconds after both finish.
+Reading it too early is how one concludes that the rule names a context
+nothing produces:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
+  --jq '.check_runs[] | {name, app: .app.slug, app_id: .app.id}'
+```
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
@@ -50,14 +80,14 @@ gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
 ```
 
 That absence of a file is also why the check was first left out of the
-rule, on a measurement that was the wrong one: every ordinary pull
-request targets `dev`, and default setup analyzes push events on the
-default branch and pull requests *against* it, nothing else, so a pull
-request like #43 produces no CodeQL check run at all — measured, zero
-analyses. But the rule protects `master`, and the pull request that
-matters there is the other kind, `dev` into `master`; #21, the 0.7.1
-release merge, has CodeQL analyses under `refs/pull/21/head`. That is
-the pull request this rule actually gates, and CodeQL runs on it:
+rule, on a measurement that was the wrong one: it was taken on a pull
+request against the branch that used to sit between a contributor and the
+trunk, and default setup analyzes push events on the default branch and
+pull requests *against* it, nothing else — so a pull request like #43
+produced no CodeQL check run at all, measured, zero analyses. With `main`
+the only long-lived branch every pull request is the kind default setup
+analyzes, which is the kind #21, the 0.7.1 release merge, already was:
+its analyses are under `refs/pull/21/head`.
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
@@ -74,12 +104,23 @@ not `-f`, for `strict` — `gh api`'s `-f` sends every value as a string,
 and GitHub refuses `"true"` where a boolean is declared:
 
 ```shell
-sub=branches/master/protection/required_status_checks
+sub=branches/main/protection/required_status_checks
 gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
-  -F 'checks[][context]=tests-passed' -F 'checks[][app_id]=15368' \
+  -F 'checks[][context]=test: every job passed' -F 'checks[][app_id]=15368' \
   -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
+  -F 'checks[][context]=Build the documentation' -F 'checks[][app_id]=15368' \
   -F 'checks[][context]=CodeQL' -F 'checks[][app_id]=57789'
 ```
+
+Renaming a required check is the one change that cannot be made in a pull
+request. The rule names a context by the job's display name, so the pull
+request that renames the job stops producing the old name and never
+produces the one the rule is still waiting for. The rule moves first,
+against the branch, and then the pull request that renames the job reports
+the name the rule now wants; `enforce_admins` being off is what makes the
+window survivable rather than a lock. Every open pull request that predates
+the rename is blocked until it is rebased, which is the reason to do it
+with none open but the one doing the renaming.
 
 ## Branch protection
 
@@ -197,10 +238,10 @@ been built, and no rehearsal would reveal it, reaching the other
 environment.
 
 What that rule constrains is the *name* of the ref and nothing else. A
-`v*` tag pushed on a branch head, on an old `dev` state or on a
-fork-synced commit satisfies it exactly as the release tag does, so it is
-not the check that a release is a release: the `version-check` job of
-`release.yml` fails a tag that is not an ancestor of `master`, before the
+`v*` tag pushed on a branch head, on a stale state or on a fork-synced
+commit satisfies it exactly as the release tag does, so it is not the
+check that a release is a release: the `version-check` job of
+`release.yml` fails a tag that is not an ancestor of `main`, before the
 matrix builds anything. [RELEASING.md](RELEASING.md) has the rest,
 including what a mismatched trusted publisher looks like and why
 self-review stays allowed.

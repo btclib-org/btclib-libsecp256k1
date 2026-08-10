@@ -172,11 +172,33 @@ Anything machine-local — an interpreter path, a telemetry answer, a theme —
 belongs in the editor's own user settings instead, those two files being
 read by every checkout of this repository.
 
+### What runs when
+
+| workflow | when | what it varies |
+| --- | --- | --- |
+| `test` | pull request, push | every platform but macOS, every interpreter |
+| `lint`, `docs` | pull request, push | — |
+| `vendored-vectors` | monthly, a change to itself | — |
+| `macos` | Wednesday, a release | both macOS images, both linkages |
+| `latest` | Wednesday | the dependencies, at their newest |
+| `links`, `mutation` | weekly | — |
+| `published` | monthly, a release | what PyPI serves |
+| `release` | a tag | calls the gates, `macos` and `published` |
+
+The first two rows are what a merge waits for. macOS is not among them on
+purpose, and the numbers are in `test.yml`'s header: it is the one platform
+whose runners queue for tens of minutes rather than for two, so it answers
+weekly, and before a release, rather than before a review. The wheels it
+ships are still built on every pull request, `cibuildwheel` running the
+suite against each one as it builds it — what waits a week is pip's
+selection among them and the dynamic build. Everything but the first two
+rows also takes `workflow_dispatch`.
+
 ### Running what CI runs
 
-Each job of the `lint` and `test` workflows, and the local command that
-reproduces it. Two of them cannot be reproduced on a machine that is not
-the runner, and that is worth knowing before trying.
+Each job of the `lint`, `docs` and `test` workflows, and the local command
+that reproduces it. Two of them cannot be reproduced on a machine that is
+not the runner, and that is worth knowing before trying.
 
 - `Lint and type-check`
 
@@ -184,17 +206,24 @@ the runner, and that is worth knowing before trying.
   uvx pre-commit run --all-files
   ```
 
-- `Coverage`
+- `Measure coverage, gated at 100%`
 
   ```shell
   uv run --locked --no-default-groups --group test pytest --cov
   ```
 
-- `Test <version> on <os>`, one row of the matrix
+- `Run the suite on the static wheel, <version>, <os>`, and its dynamic
+  counterpart, one row of either matrix
 
   ```shell
   uv run --python 3.10 --no-cache pytest
+  BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --python 3.10 --no-cache \
+      --reinstall-package btclib_libsecp256k1 pytest
   ```
+
+  the two steps of `macos.yml`'s own cells are these two, in this order and
+  for the same reason: neither the environment nor the build cache is keyed
+  on the variable that chooses the linkage
 
 - `Build wheels on <os>`, for this platform only
 
@@ -227,14 +256,15 @@ the runner, and that is worth knowing before trying.
   values and the reasoning behind them are in `test.yml`, next to the
   step that exports them
 
-- `Build sdist`, and `Test sdist install on <os>` after it
+- `Build sdist`, and `Install from the sdist and run the suite on <os>`
+  after it
 
   ```shell
   uv build --sdist
   python -m pip install --verbose dist/*.tar.gz   # in a fresh venv
   ```
 
-- `Validate distributions`
+- `Inspect the distribution files and install one`
 
   ```shell
   uv run --locked --only-group check twine check --strict dist/*
@@ -259,9 +289,13 @@ the runner, and that is worth knowing before trying.
 The `published` workflow has no local equivalent by design: what it
 installs is what PyPI serves.
 
-The three sentinels beside it gate nothing, so a red one is read in the
-Actions tab rather than fixed on a branch. Each is dispatchable, and two of
-them run locally.
+The sentinels beside it gate nothing, so a red one is read in the Actions
+tab rather than fixed on a branch. Each is dispatchable, and all but `links`
+run locally.
+
+- `macos`, which is the suite on the two macOS images and reproducible only
+  on a Mac. Both linkages, the commands being the pair given above under
+  the suite job
 
 - `latest`, which resolves every dependency at its newest before running
   the suite. The upgrade rewrites `uv.lock`, so restore it afterwards with

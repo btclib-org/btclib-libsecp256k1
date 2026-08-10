@@ -1,0 +1,137 @@
+---
+name: macos
+
+# the platform the merge gate does not wait for. test.yml runs the suite on
+# four operating systems on every pull request and this one runs the two
+# macOS images, weekly and before a release, because macOS is where the wait
+# came from: the numbers, and the command that re-derives them, are in
+# test.yml's own header, next to the matrices these cells left.
+#
+# What runs here is not what left, and the difference is the point. The
+# cells that moved installed a wheel built earlier in the same run, which
+# would mean rebuilding those wheels here -- ten minutes of cibuildwheel per
+# image, and artifact names the release must not confuse with test.yml's.
+# This builds from the tree instead, twice per cell: the static extension a
+# CPython wheel carries, then the dynamic one, which is the same choice
+# `BTCLIB_LIBSECP256K1_DYNAMIC` gives a developer and covers both branches
+# of `_load_lib`. Two steps of one job rather than two jobs, because the
+# queue is the cost being managed here and a second job pays it again.
+#
+# So this is the platform against the lock, on every interpreter, and
+# latest.yml is the dependencies against the platforms; the two are
+# scheduled on the same morning half an hour apart. A red macOS column in
+# latest.yml with this workflow green is an upgrade; red in both is macOS.
+# One variable each, and the pair reads as a difference.
+#
+# It gates no commit and no merge -- a macOS regression sits on main for at
+# most a week -- but release.yml calls it, so one cannot be published
+
+on:
+  schedule:
+    # Wednesday, the morning latest.yml also runs, and thirty minutes before
+    # it: the two answer halves of the same question and are worth reading
+    # together. A minute that is not the hour, as every cron here, for the
+    # reason links.yml gives, and minute 07 is shared with none of them
+    # (11, 23, 29, 37, 49).
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "07 4 * * 3"
+  # lets release.yml gate a publication on this platform too, which is what
+  # keeps a weekly sentinel from being the only thing that ever asks
+  workflow_call:
+    inputs:
+      concurrency-suffix:
+        description: >
+          Appended to the concurrency group, and the release workflow is
+          the only caller that passes one. See the group below.
+        type: string
+        default: ""
+  # the escape hatch: the platform on demand, for a branch that touches the
+  # build, the loader or anything a toolchain decides
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, dependencies, build scripts) can read the token, so it must not
+# be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs: the subject here is the commit, which a newer one
+# supersedes. Named literally rather than through github.workflow, which in
+# a called workflow is the caller's name -- release.yml calls this one
+# alongside test.yml, and with that expression the two would share a group
+# and cancel each other. The suffix is the second half of the same problem,
+# github.ref inside a called workflow being the caller's ref: see lint.yml
+concurrency:
+  group: macos-${{ github.ref }}${{ inputs.concurrency-suffix }}
+  cancel-in-progress: true
+
+jobs:
+  suite-macos:
+    name: Run the suite on ${{ matrix.python-version }}, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # libsecp256k1 is compiled twice per cell, from a cache that is cold
+    # whenever the lock moved: far above what the suite itself needs, and
+    # what it bounds is a hung job rather than a slow one. The queueing this
+    # workflow exists to move happens before a job starts and is not counted
+    # here
+    timeout-minutes: 40
+    strategy:
+      # every cell to the end: which interpreter fails on which image is the
+      # whole answer, and stopping at the first one hides the rest
+      fail-fast: false
+      matrix:
+        # the two images test.yml no longer runs the suite on. Both, and not
+        # the newest alone: one is Apple silicon and the other Intel, and
+        # what differs between them is the architecture the vendored library
+        # and the extension are compiled for
+        os:
+          - macos-26-intel
+          - macos-latest
+        # the union of the interpreters the two matrices of test.yml ran
+        # here, so that the platform is the only thing this workflow moved.
+        # Spelled as uv spells them, this being uv rather than
+        # setup-python: `pypy3.11`, not the `pypy-3.11` of test.yml
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+          - "pypy3.10"
+          - "pypy3.11"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the vendored library is what gets compiled here
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # the wheels of the test group, not the extension, which is built
+          # from the tree twice below whatever the cache holds
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      # the command CONTRIBUTING.md gives a developer, and the one the
+      # coverage job of test.yml runs on ubuntu: a static build, where
+      # `_load_lib` returns the extension's own `lib`
+      - name: Run pytest against a static build
+        run: uv run --locked --no-default-groups --group test pytest
+
+      # the other branch of `_load_lib`, and the only thing that exercises
+      # the dynamic macOS wheel now that test.yml does not: cffi in ABI
+      # mode, dlopening the shared object beside the module.
+      # --reinstall-package with --no-cache because the extension already
+      # installed by the step above is the other linkage, and neither the
+      # environment nor the build cache is keyed on the variable that
+      # chooses between them
+      - name: Run pytest against a dynamic build
+        env:
+          BTCLIB_LIBSECP256K1_DYNAMIC: "true"
+        run: >
+          uv run --locked --no-default-groups --group test
+          --reinstall-package btclib_libsecp256k1 --no-cache pytest

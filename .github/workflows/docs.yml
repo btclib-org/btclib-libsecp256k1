@@ -1,0 +1,108 @@
+---
+name: docs
+
+# the third gate, and a question of its own: does the documentation build.
+# Nothing else in CI builds it, only read the docs does, on a service whose
+# failure is not a check on a pull request -- so invalid reStructuredText in
+# a docstring, or a module sphinx cannot import because the extension did not
+# compile, would surface after the merge and somewhere else.
+#
+# No hook can take this over: markdownlint does not read .rst, and ruff's
+# pydocstyle rules check the form of a docstring rather than whether its body
+# is valid rst.
+#
+# A workflow of its own rather than a job in lint.yml, where it started: a
+# failed docs build and a failed hook are two different verdicts about two
+# different things, and one badge and one line in the checks list each is
+# what says so. It also installs a different dependency group and needs the
+# submodule and no pre-commit cache, so the two share nothing but a checkout
+
+on:
+  push:
+    # main only, for the reason lint.yml gives at the same key: a push to a
+    # branch with an open pull request would run this twice, in two
+    # concurrency groups that do not cancel each other, and the pull_request
+    # run is the one worth keeping
+    branches: [main]
+  pull_request:
+    # ready_for_review, so a pull request marked ready gets the run the
+    # draft condition below withheld while it was a draft: the default types
+    # do not include it, and without it a readied pull request would wait
+    # for its next push to be checked at all
+    types: [opened, reopened, synchronize, ready_for_review]
+  # allows the release workflow to reuse this gate
+  workflow_call:
+    inputs:
+      concurrency-suffix:
+        description: >
+          Appended to the concurrency group, and the release workflow is
+          the only caller that passes one. See the group below.
+        type: string
+        default: ""
+  # the escape hatch: a run on demand for a branch whose pull request is
+  # not open yet
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, dependencies, build scripts) can read the token, so it must not
+# be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs on the same branch/PR, named literally and
+# discriminated by an input rather than left to github.ref alone, for the
+# two reasons lint.yml gives at length: release.yml calls this workflow
+# beside lint.yml and test.yml, and a group computed from github.workflow
+# would have the three cancel each other
+concurrency:
+  group: docs-${{ github.ref }}${{ inputs.concurrency-suffix }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    # the name is a required check, and it did not change when this job left
+    # lint.yml: branch protection matches a context by name and not by the
+    # workflow that reported it, which is what let the move happen without
+    # touching the rule
+    name: Build the documentation
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # every automodule directive imports this package, which compiles
+          # the vendored libsecp256k1 to do that -- unlike btclib's own
+          # docs job, which builds nothing
+          submodules: true
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      # the same command .readthedocs.yaml runs and docs/README.rst
+      # documents, so what CI checks is what gets published. -W turns a
+      # module sphinx cannot import into a failed build rather than a bare
+      # heading; --keep-going reports every problem in one run
+      - name: Build the docs
+        run: >
+          uv run --locked --no-default-groups --group docs
+          sphinx-build -W --keep-going -b html docs/source docs/build/html
+
+      # the one defect the build above cannot report on itself, matching
+      # btclib's own second step and the reasoning in its docs/source/conf.py:
+      # a relative link myst cannot resolve becomes an anchor on the page it
+      # is already on -- href="#SECURITY.md", an id nothing has -- rather
+      # than a warning, which conf.py's RootFileLinks transform exists to
+      # prevent. This is the same claim made about the artifact rather than
+      # about the configuration, and what would catch a suppression added
+      # back. No "./" prefix in the pattern, unlike btclib's: the root files
+      # here link to each other by bare name ("SECURITY.md"), never "./SECURITY.md"
+      - name: Check the built pages for unresolved links
+        run: |
+          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
+            echo "::error::the links above resolve to no page"
+            exit 1
+          fi

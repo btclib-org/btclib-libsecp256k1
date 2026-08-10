@@ -19,10 +19,22 @@ on:
 permissions:
   contents: read
 
+# never cancel a release, unlike the gates it calls: what cancel-in-progress
+# is right about elsewhere is that the subject of a run is a commit, which a
+# newer commit supersedes. A publication is not -- a version is consumed by
+# the upload that carries it, and a run cancelled between the two uploads
+# leaves TestPyPI holding a version PyPI never got. Two tags pushed in a row
+# queue instead. Named literally, for the reason lint.yml gives at length
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # the same gate a push gets: a release is not the moment to discover
-  # that the tagged commit does not lint
+  # the same gates a push gets, all three of them: a release is not the
+  # moment to discover that the tagged commit does not lint, does not build
+  # its documentation, or does not pass the suite on a platform
   lint:
+    name: Run the lint workflow
     uses: ./.github/workflows/lint.yml
     with:
       # what keeps this run out of the branch concurrency groups: inside a
@@ -31,6 +43,24 @@ jobs:
       # branch share a group and cancel each other. The reasoning is in
       # lint.yml, next to the group; the value only has to be a string no
       # branch group can contain
+      concurrency-suffix: "-release"
+
+  docs:
+    name: Run the docs workflow
+    uses: ./.github/workflows/docs.yml
+    with:
+      # see the lint job above
+      concurrency-suffix: "-release"
+
+  # the platform test.yml does not run the suite on, for the reason its own
+  # header measures: a week is the right sample rate for a regression that
+  # can sit on main for a week, and the wrong one for a version that cannot
+  # be unpublished
+  macos:
+    name: Run the macos workflow
+    uses: ./.github/workflows/macos.yml
+    with:
+      # see the lint job above
       concurrency-suffix: "-release"
 
   # what a version cannot survive being wrong about, checked before
@@ -93,24 +123,24 @@ jobs:
           fi
 
       # CONTRIBUTING.md and RELEASING.md both say a release is a tag on
-      # the merge commit on master; nothing enforced it. The deployment
-      # tag policy of the pypi environment constrains the *name* of the
-      # ref and nothing else, so a v* tag on a branch head, on an old dev
-      # state or on a fork-synced commit reaches the environment exactly
+      # a commit on main; nothing enforced it. The deployment tag policy
+      # of the pypi environment constrains the *name* of the ref and
+      # nothing else, so a v* tag on a branch head, on a stale state or
+      # on a fork-synced commit reaches the environment exactly
       # as the release tag does -- and the reviewer approving sees the
       # tag name, not its ancestry. This is the ancestry, before the
       # matrix builds anything.
-      # origin/master rather than a fetch of its own: the checkout above
+      # origin/main rather than a fetch of its own: the checkout above
       # takes the whole history, remote-tracking branches included, and a
-      # missing origin/master fails the step, which is the safe way round
-      - name: Check that the tag is on master
+      # missing origin/main fails the step, which is the safe way round
+      - name: Check that the tag is on main
         if: github.event_name == 'push'
         run: |
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
-            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which is not on master"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which is not on main"
             exit 1
           fi
-          echo "$GITHUB_SHA is on master"
+          echo "$GITHUB_SHA is on main"
 
       # the fourth invariant, and the last one that was checked only
       # after the point of no return: github-release reads the tag's
@@ -188,7 +218,8 @@ jobs:
 
   # reuse the whole build/test pipeline: every artifact the release ships
   # is built and tested here, by the very matrices that run on a push
-  build:
+  test:
+    name: Run the test workflow
     # a minute of checking, ahead of an hour of building: a tag that does
     # not match the tree is worth discovering before the matrices start
     needs: version-check
@@ -222,7 +253,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch'
       && github.repository == 'btclib-org/btclib-libsecp256k1'
-    needs: [lint, build]
+    needs: [test, lint, docs, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -256,7 +287,7 @@ jobs:
     name: Publish to PyPI
     # see publish-testpypi for the repository condition
     if: github.event_name == 'push' && github.repository == 'btclib-org/btclib-libsecp256k1'
-    needs: [lint, build]
+    needs: [test, lint, docs, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -288,7 +319,7 @@ jobs:
   # what can already be installed, and the download url in pyproject.toml
   # points at the page this creates
   github-release:
-    name: Create the GitHub release
+    name: Attach the files to the GitHub release
     needs: publish-pypi
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -331,3 +362,21 @@ jobs:
             gh release create "$GITHUB_REF_NAME" dist/* \
               --title "$GITHUB_REF_NAME" --generate-notes
           fi
+
+  # the sentinel on what users can install, run at the one moment its answer
+  # changes -- and a call rather than a workflow_run trigger, which zizmor
+  # rates dangerous and rightly: that one runs the default branch's copy of a
+  # workflow with a token nobody reviewed, where a call runs inside the
+  # release that gated it, in its graph and in its log.
+  # It waits for the index to serve the version this tag names before
+  # installing anything, so it cannot pass by testing the release before this
+  # one, and it runs beside github-release rather than before it: a release
+  # announcing files that do not install is worse than a release announced a
+  # few minutes later, but the announcement is not what makes them
+  # installable
+  published:
+    name: Install the published version from PyPI
+    needs: publish-pypi
+    uses: ./.github/workflows/published.yml
+    with:
+      version: ${{ github.ref_name }}

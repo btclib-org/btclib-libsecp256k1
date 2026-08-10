@@ -1,18 +1,43 @@
 ---
 name: test
 
+# the merge gate: everything this package ships, built and then tested on
+# the platforms it claims, minus the one platform a reviewer would wait for.
+#
+# macOS is that platform, and the split is a measurement rather than a
+# preference. Over six pull request runs of this workflow, ninety-eight jobs
+# each, thirty-five of them on the two macOS images: a macOS job waited 20.8
+# and 19.0 minutes on average for a runner, against 2.1 to 2.6 elsewhere,
+# and the wait grows with the number of cells asking at once -- in the
+# slowest of the six the macOS suite cells took the last thirty places
+# before the aggregate, their queue rising from 16.7 to 70.2 minutes, and
+# the run took 95 minutes for 105 minutes of work spread over 98 jobs. The
+# command that re-derives it, for whoever doubts the split later:
+#
+#     id=$(gh run list --workflow=test.yml --limit 1 \
+#         --json databaseId --jq '.[0].databaseId')
+#     gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100"
+#
+# So the macOS *suite* cells moved to macos.yml, which runs them weekly and
+# before a release. The macOS *wheel builds* stay here, and the same
+# measurement is why: the release publishes the artifacts of this run, so a
+# macOS wheel not built here is a macOS wheel not on PyPI -- and those four
+# jobs are not what stretched the run, finishing at 24.6 minutes against the
+# 23.5 of the ubuntu-latest build beside them. Four macOS jobs queue;
+# thirty-one contend.
+
 on:
   push:
-    # master only: a push to a branch that has an open pull request would
+    # main only: a push to a branch that has an open pull request would
     # run this workflow twice, once per event, and the two runs land in
-    # different concurrency groups (refs/heads/dev against
+    # different concurrency groups (refs/heads/<branch> against
     # refs/pull/N/merge) so neither cancels the other. The pull_request
     # run is the one worth keeping, because it tests the merge commit and
     # is the only run a fork's pull request produces at all.
-    # master keeps a trigger of its own because a merge creates a commit
+    # main keeps a trigger of its own because a merge creates a commit
     # that is not the one the pull request tested, and nothing else would
     # ever test it. Tag pushes are covered by the release workflow
-    branches: [master]
+    branches: [main]
   pull_request:
     # ready_for_review, so a pull request marked ready gets the run the
     # draft condition below withheld while it was a draft: the default
@@ -59,19 +84,15 @@ jobs:
   # platform: measuring it once is enough, and the fail_under ratchet in
   # pyproject.toml is what makes the number mean something
   coverage:
-    name: Coverage
+    name: Measure coverage, gated at 100%
     # a draft pull request is work in progress: every push to one spends
     # the whole matrix on a tree its author is not asking anyone to
     # review yet. The gate below carries the same condition, so a draft
     # skips uniformly and the gate does not read that skip as a job that
-    # should have run.
-    # The exception is by base branch, and it is the release pull
-    # request: dev -> master stays a draft from one release to the
-    # next, and nothing here triggers on a push to dev, so without it
-    # a commit merged into dev would be tested by nothing at all
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    # should have run. A run on the merge result still happens the moment
+    # the pull request is marked ready, which is why ready_for_review is a
+    # trigger type above
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     # every job below caps its own runtime, this one included: the default
     # is six hours, and with tens of jobs compiling C a single hang is
@@ -109,9 +130,7 @@ jobs:
 
   build-cibuildwheel:
     name: Build wheels on ${{ matrix.os }}
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     # the interpreter uv runs the build tools with is the one setup-python
@@ -199,9 +218,7 @@ jobs:
 
   build-dynamic:
     name: Build dynamic wheel on ${{ matrix.os }}
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     # see build-cibuildwheel; here the platform tag of the wheel is the
@@ -277,9 +294,7 @@ jobs:
 
   build-sdist:
     name: Build sdist
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # see build-cibuildwheel
@@ -334,19 +349,20 @@ jobs:
   # is least like the others: MSVC compiles the extension while a gcc on
   # the PATH preprocesses the headers for cffi, and what the sdist has to
   # carry for it is not what a POSIX build reads
-  test-sdist:
+  suite-sdist:
     name: >-
-      Test sdist install on ${{ matrix.os }}${{
+      Install from the sdist and run the suite on ${{ matrix.os }}${{
       matrix.architecture && format(' ({0})', matrix.architecture) }}
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # macOS is macos.yml's, for the reason the header gives; what that
+        # workflow runs there is a source build of the same tree, which is
+        # what an install from the sdist is
+        os: [ubuntu-latest, windows-latest]
         # the wheel jobs all build with an interpreter of the runner's own
         # architecture, so nothing else exercises a build whose target is
         # not the host: an emulated x86-64 interpreter on Windows arm64,
@@ -403,9 +419,7 @@ jobs:
 
   build-windows:
     name: "Build on Linux for Windows"
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # see build-cibuildwheel
@@ -453,10 +467,8 @@ jobs:
   # that does not render cannot be fixed by reuploading, a version can
   # only be yanked and burnt
   check-dist:
-    name: Validate distributions
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    name: Inspect the distribution files and install one
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [build-cibuildwheel, build-dynamic, build-sdist, build-windows]
@@ -533,21 +545,26 @@ jobs:
       - name: Rate the packaging metadata
         run: uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
 
-  test-dynamic:
-    name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+  suite-dynamic:
+    # the linkage is in the name, and it has to be: this job and the one
+    # below run the same interpreters on the same images against two
+    # different wheels, so one name for both produced two check runs
+    # called the same thing -- and a branch rule matches a context by name
+    # alone, which is what makes an ambiguous one worth avoiding even where
+    # no rule names it today
+    name: >-
+      Run the suite on the dynamic wheel,
+      ${{ matrix.python-version }}, ${{ matrix.os }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        # the two macOS images are macos.yml's; see the header
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-          - macos-26-intel
-          - macos-latest
           - windows-latest
         # 3.14t, the free-threaded interpreter, matters here in particular:
         # the dynamic wheel is tagged py3-none, so it is what a
@@ -603,21 +620,26 @@ jobs:
       - name: Test
         run: pytest
 
-  test-static:
-    name: "Test ${{ matrix.python-version }} on ${{ matrix.os }}"
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+  suite-static:
+    # the linkage is in the name: see suite-dynamic
+    name: >-
+      Run the suite on the static wheel,
+      ${{ matrix.python-version }}, ${{ matrix.os }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        # the two macOS images are macos.yml's; see the header. What is
+        # given up here is narrower than elsewhere, and cibuildwheel is
+        # why: it runs the suite against every wheel it builds, on the
+        # runner that built it, so the macOS wheels this workflow ships are
+        # still tested by the job that produces them. What moves is pip's
+        # selection among them
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-          - macos-26-intel
-          - macos-latest
           - windows-latest
           - windows-11-arm
         python-version:
@@ -673,35 +695,38 @@ jobs:
         run: pytest
 
   # one context for the branch rule, instead of the matrix's own. A rule
-  # naming `Test 3.10 on ubuntu-latest` names a context that stops being
-  # produced the moment the matrix changes, and a required check that
-  # produces no run blocks every merge with nothing in the tree to explain
-  # why -- the rule living outside the repository. So the rule names this
-  # job, and a job added to this workflow belongs in the `needs` below or
-  # it gates nothing. REPOSITORY.md carries the branch rule itself.
+  # naming `Run the suite on the static wheel, 3.10, ubuntu-latest` names a
+  # context that stops being produced the moment the matrix changes, and a
+  # required check that produces no run blocks every merge with nothing in
+  # the tree to explain why -- the rule living outside the repository. So
+  # the rule names this job, and a job added to this workflow belongs in
+  # the `needs` below or it gates nothing. REPOSITORY.md carries the branch
+  # rule itself.
+  #
+  # The name carries the workflow because a context is keyed by name alone:
+  # two workflows with a job named the same thing produce one ambiguous
+  # check, and macos.yml is a second workflow over the same matrix shape.
   #
   # `if: always()` because a job with unmet `needs` is skipped, and a
   # skipped check is not a failed one: without it a failing matrix cell
   # would leave this context reported as skipped, which satisfies a
   # required check rather than blocking on it. Cancelled is a failure here
   # too, a superseded run being no evidence either way
-  tests-passed:
-    name: tests-passed
+  test-passed:
+    name: "test: every job passed"
     # and the draft condition every job above carries, so a draft
     # skips uniformly rather than tripping the skip check below
-    if: >-
-      ${{ always() && (!github.event.pull_request.draft
-      || github.base_ref == 'master') }}
+    if: ${{ always() && !github.event.pull_request.draft }}
     needs:
       - coverage
       - build-cibuildwheel
       - build-dynamic
       - build-sdist
-      - test-sdist
+      - suite-sdist
       - build-windows
       - check-dist
-      - test-dynamic
-      - test-static
+      - suite-dynamic
+      - suite-static
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

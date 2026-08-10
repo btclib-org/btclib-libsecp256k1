@@ -10,16 +10,16 @@ name: lint
 
 on:
   push:
-    # master only: a push to a branch that has an open pull request would
+    # main only: a push to a branch that has an open pull request would
     # run this workflow twice, once per event, and the two runs land in
-    # different concurrency groups (refs/heads/dev against
+    # different concurrency groups (refs/heads/<branch> against
     # refs/pull/N/merge) so neither cancels the other. The pull_request
     # run is the one worth keeping, because it tests the merge commit and
     # is the only run a fork's pull request produces at all.
-    # master keeps a trigger of its own because a merge creates a commit
+    # main keeps a trigger of its own because a merge creates a commit
     # that is not the one the pull request tested, and nothing else would
     # ever test it. Tag pushes are covered by the release workflow
-    branches: [master]
+    branches: [main]
   pull_request:
     # ready_for_review, so a pull request marked ready gets the run the
     # draft condition below withheld while it was a draft: the default
@@ -49,11 +49,11 @@ permissions:
 # literally, not through github.workflow: concurrency groups are
 # per-repository, and what that context resolves to inside a called
 # workflow is not documented (the explicit note covers job.workflow_ref
-# only). Were it the caller's name, this workflow and the test one would
-# compute the same group when the release workflow calls both, and
-# cancel-in-progress would have the second cancel the first: a release
-# losing either its lint gate or its whole build matrix, on a path that
-# runs once per release and where nobody is watching for a cancellation.
+# only). Were it the caller's name, this workflow and every
+# other one the release workflow calls would compute the same group, and
+# cancel-in-progress would have each cancel the last: a release losing its
+# lint gate, its docs build or its whole build matrix, on a path that runs
+# once per release and where nobody is watching for a cancellation.
 #
 # github.ref has the same shape of problem one level down, and it is why
 # the suffix is there. Inside a called workflow that context is the
@@ -77,14 +77,8 @@ jobs:
     # these checks on a tree its author is not asking anyone to review
     # yet. A run on the merge result still happens the moment the pull
     # request is marked ready, which is why ready_for_review is a
-    # trigger type above.
-    # The exception is by base branch, and it is the release pull
-    # request: dev -> master stays a draft from one release to the
-    # next, and nothing here triggers on a push to dev, so without it
-    # a commit merged into dev would be linted by nothing at all
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
+    # trigger type above
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -120,56 +114,3 @@ jobs:
       # matches pyproject.toml, which nothing rewrites on this path
       - name: Run pre-commit
         run: uv run --locked --only-group lint pre-commit run --all-files --show-diff-on-failure
-
-  # matching btclib's own second lint job: nothing else in CI builds the
-  # documentation, only read the docs does, on a service whose failure is
-  # not a check on the pull request. A separate job because the branch
-  # rule, once one names this workflow, names "Lint and type-check" as a
-  # literal string -- a step added to that job would silently change what
-  # gates a merge, where a new job gates nothing until added on purpose.
-  # It also installs a different dependency group and runs in parallel
-  docs:
-    name: Build the documentation
-    if: >-
-      ${{ !github.event.pull_request.draft
-      || github.base_ref == 'master' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          # every automodule directive imports this package, which compiles
-          # the vendored libsecp256k1 to do that -- unlike btclib's own
-          # docs job, which builds nothing
-          submodules: true
-
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-
-      # the same command .readthedocs.yaml runs and docs/README.rst
-      # documents, so what CI checks is what gets published. -W turns a
-      # module sphinx cannot import into a failed build rather than a bare
-      # heading; --keep-going reports every problem in one run
-      - name: Build the docs
-        run: >
-          uv run --locked --no-default-groups --group docs
-          sphinx-build -W --keep-going -b html docs/source docs/build/html
-
-      # the one defect the build above cannot report on itself, matching
-      # btclib's own second step and the reasoning in its docs/source/conf.py:
-      # a relative link myst cannot resolve becomes an anchor on the page it
-      # is already on -- href="#SECURITY.md", an id nothing has -- rather
-      # than a warning, which conf.py's RootFileLinks transform exists to
-      # prevent. This is the same claim made about the artifact rather than
-      # about the configuration, and what would catch a suppression added
-      # back. No "./" prefix in the pattern, unlike btclib's: the root files
-      # here link to each other by bare name ("SECURITY.md"), never "./SECURITY.md"
-      - name: Check the built pages for unresolved links
-        run: |
-          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
-            echo "::error::the links above resolve to no page"
-            exit 1
-          fi
