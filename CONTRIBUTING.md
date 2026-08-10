@@ -159,6 +159,19 @@ installs it as a managed one, and `uv sync` then prefers it to a system
 3.14, so `uv python install 3.14` is what makes the default environment
 reproducible again.
 
+### The editor
+
+`.vscode/settings.json` and `.vscode/extensions.json` are tracked, and they
+hold no preference: the recommended extensions are the tools
+`.pre-commit-config.yaml` already runs, and the settings put the fixing ones
+on save. Installing them is optional and changes nothing about what a commit
+enforces — what they buy is learning of a finding while typing rather than
+at the commit that trips over it.
+
+Anything machine-local — an interpreter path, a telemetry answer, a theme —
+belongs in the editor's own user settings instead, those two files being
+read by every checkout of this repository.
+
 ### Running what CI runs
 
 Each job of the `lint` and `test` workflows, and the local command that

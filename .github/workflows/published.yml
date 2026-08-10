@@ -95,14 +95,12 @@ jobs:
         # free-threaded interpreter, which must select the cp314t static
         # wheel and not fall through to the py3-none dynamic one
         os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-          ]
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-26-intel
+          - macos-latest
+          - windows-latest
+          - windows-11-arm
         python-version: ["3.10", "3.14", "3.14t"]
         exclude:
           # CPython has no Windows arm64 build before 3.11

@@ -1,7 +1,7 @@
 [project]
-name="btclib_libsecp256k1"
-version="0.7.1.4"
-description="Simple python bindings to libsecp256k1"
+name = "btclib_libsecp256k1"
+version = "0.7.1.4"
+description = "Simple python bindings to libsecp256k1"
 readme = "README.md"
 # PEP 639: a SPDX expression and the files it refers to, replacing the
 # deprecated license table and the License :: classifier
@@ -36,50 +36,50 @@ authors = [{ name = "The btclib developers", email = "devs@btclib.org" }]
 # cipher and a framing layer this package has no part of.
 #
 # elliptic-curves stays out: this is one curve, and secp256k1 names it.
-keywords=[
-        "libsecp256k1",
-        "secp256k1",
-        "bitcoin",
-        "cryptography",
-        "python-bindings",
-        "cffi",
-        "ecdsa",
-        "schnorr",
-        "bip340",
-        "musig2",
-        "ecdh",
-        "ellswift",
-        "bip324",
-        "public-key-recovery",
-        "rfc-6979",
+keywords = [
+    "libsecp256k1",
+    "secp256k1",
+    "bitcoin",
+    "cryptography",
+    "python-bindings",
+    "cffi",
+    "ecdsa",
+    "schnorr",
+    "bip340",
+    "musig2",
+    "ecdh",
+    "ellswift",
+    "bip324",
+    "public-key-recovery",
+    "rfc-6979",
 ]
-classifiers=[
-        "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: 3.13",
-        "Programming Language :: Python :: 3.14",
-        "Programming Language :: Python :: Implementation :: CPython",
-        "Programming Language :: Python :: Implementation :: PyPy",
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: Developers",
-        "Intended Audience :: Education",
-        "Natural Language :: English",
-        # the three systems the wheels are built for, and not
-        # "OS Independent": this package is platform-specific compiled
-        # wheels, eleven kinds of them, and the classifier PyPI filters on
-        # should say so rather than the opposite
-        "Operating System :: POSIX",
-        "Operating System :: MacOS",
-        "Operating System :: Microsoft :: Windows",
-        "Topic :: Security :: Cryptography",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        # btclib_libsecp256k1/py.typed is in the wheel, and the typed cffi
-        # boundary is the design point README.md leads with
-        "Typing :: Typed",
-    ]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Natural Language :: English",
+    # the three systems the wheels are built for, and not
+    # "OS Independent": this package is platform-specific compiled
+    # wheels, eleven kinds of them, and the classifier PyPI filters on
+    # should say so rather than the opposite
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    # btclib_libsecp256k1/py.typed is in the wheel, and the typed cffi
+    # boundary is the design point README.md leads with
+    "Typing :: Typed",
+]
 # the wrappers call ffi.unpack on every path, which cffi grew in 1.6;
 # below 3.13 any cffi new enough to compile for the interpreter already
 # satisfies that, so 1.6 is the honest floor there. The two newest
@@ -389,39 +389,39 @@ preview = true
 preview = true
 explicit-preview-rules = true
 select = [
-    "F",     # pyflakes
-    "E",     # pycodestyle errors
-    "W",     # pycodestyle warnings
-    "I",     # isort
-    "UP",    # pyupgrade
-    "B",     # flake8-bugbear
-    "C4",    # flake8-comprehensions
-    "C90",   # mccabe complexity
-    "S",     # flake8-bandit
-    "SIM",   # flake8-simplify
-    "PTH",   # flake8-use-pathlib
-    "RET",   # flake8-return
-    "D",     # pydocstyle
-    "PL",    # pylint
-    "RUF",   # ruff-specific
+    "F",   # pyflakes
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "C90", # mccabe complexity
+    "S",   # flake8-bandit
+    "SIM", # flake8-simplify
+    "PTH", # flake8-use-pathlib
+    "RET", # flake8-return
+    "D",   # pydocstyle
+    "PL",  # pylint
+    "RUF", # ruff-specific
     # ISC earns its place here: a test vector too long for one line is
     # written as adjacent string literals, which is what a list of vectors
     # missing a comma also looks like
-    "ISC",   # flake8-implicit-str-concat
-    "PT",    # flake8-pytest-style
-    "PGH",   # pygrep-hooks: a blanket noqa or type: ignore
-    "TRY",   # tryceratops
-    "FURB",  # refurb
-    "PIE",   # flake8-pie
+    "ISC",  # flake8-implicit-str-concat
+    "PT",   # flake8-pytest-style
+    "PGH",  # pygrep-hooks: a blanket noqa or type: ignore
+    "TRY",  # tryceratops
+    "FURB", # refurb
+    "PIE",  # flake8-pie
     # also selected in btclib's own pyproject.toml; added here to match,
     # each measured zero-finding on this tree with `uv run ruff check
     # --select <code> --no-cache btclib_libsecp256k1 tests`
-    "A",     # flake8-builtins: a name that shadows a builtin
-    "BLE",   # flake8-blind-except
-    "ERA",   # eradicate: code that was commented out instead of deleted
-    "RSE",   # flake8-raise
-    "T20",   # flake8-print: a library writes to no stream of its own
-    "TID",   # flake8-tidy-imports: absolute, so the layering is readable
+    "A",   # flake8-builtins: a name that shadows a builtin
+    "BLE", # flake8-blind-except
+    "ERA", # eradicate: code that was commented out instead of deleted
+    "RSE", # flake8-raise
+    "T20", # flake8-print: a library writes to no stream of its own
+    "TID", # flake8-tidy-imports: absolute, so the layering is readable
     # a fresh survey, of rule sets neither project had named before:
     # FA, FIX, FLY and T10 are clean here too. TD is the other
     # zero-finding set it turned up and is not selected, matching
@@ -431,20 +431,20 @@ select = [
     # the opposite reason from btclib: it checks tuple and NamedTuple
     # subclasses specifically, and this package has none, so selecting
     # it would enforce nothing rather than ratchet something clean
-    "FA",    # flake8-future-annotations
-    "FIX",   # flake8-fixme: a TODO left behind is a thing not finished
-    "FLY",   # flynt: string concatenation ruff can turn into an f-string
-    "T10",   # flake8-debugger: a breakpoint() left in
+    "FA",  # flake8-future-annotations
+    "FIX", # flake8-fixme: a TODO left behind is a thing not finished
+    "FLY", # flynt: string concatenation ruff can turn into an f-string
+    "T10", # flake8-debugger: a breakpoint() left in
     # the one finding PYI has, on stubs/_btclib_libsecp256k1.pyi, is
     # exempted below rather than fixed: see per-file-ignores
-    "PYI",   # flake8-pyi
+    "PYI", # flake8-pyi
     # flake8-copyright, replacing the copyright-notice pre-commit hook:
     # a rule living inside ruff's own file-selection logic checks
     # whatever files it is given the same way regardless of who is
     # asking, unlike the retired hook, which checked only staged files
     # unless given --enforce-all -- the gap btclib's own ed6e8014 found
     # and closed by hand there
-    "CPY",   # flake8-copyright
+    "CPY", # flake8-copyright
 ]
 # here and in per-file-ignores below, a rule is named rather than coded.
 # `select` above has no choice, a family having no name form, but an entry
