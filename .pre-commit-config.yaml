@@ -67,6 +67,13 @@ repos:
       # the vector files are json: a malformed one is worth a red hook
       # rather than a test error that reads like a failing assertion
       - id: check-json
+        # `.vscode` is jsonc and not json: VSCode reads a comment in its own
+        # settings.json and extensions.json, and what those two files carry
+        # besides the settings is the reason for each of them. A json parser
+        # rejects the file at the first one. It is not a gap: prettier below
+        # is given that directory and fails on what it cannot parse, which
+        # is the question this hook asks
+        exclude: ^\.vscode/
       # off, and the reason is the two files it would reach: the only json
       # tracked here is tests/ecdsa_sig.json and
       # tests/ecdsa_custom_nonce_sig.json, whose bytes are recorded in
@@ -149,6 +156,46 @@ repos:
       - id: markdownlint-cli2
         name: markdownlint-cli2 (in place fixes)
         args: [--fix]
+  # what ruff-format is for Python, on the structured files ruff does not
+  # read: yaml, and the jsonc that carries a comment. Before yamllint above
+  # in effect and not in order -- pre-commit runs this file top to bottom, so
+  # the linter here reads what the previous run formatted, which is the same
+  # file either way once both hooks are green.
+  #
+  # Not the archived pre-commit/mirrors-prettier, which stopped at prettier
+  # 2. The default configuration and no .prettierrc: what this tree already
+  # writes is what prettier writes, the exception being an inline sequence
+  # long enough to be exploded, and a block sequence -- which prettier
+  # leaves alone -- is the spelling that keeps one entry per line whatever
+  # the width.
+  #
+  # `files` is an allow list and not an exclude, because prettier reads more
+  # than it should be given here: markdown is markdownlint's, whose config
+  # settles the styles prettier would also have an opinion about, and
+  # .secrets.baseline is detect-secrets' own output. The vendored secp256k1
+  # is a submodule and therefore not a file this repository tracks, so no
+  # pattern has to say so. What is in scope is the yaml, `.vscode` and
+  # .markdownlint.jsonc, and prettier is also what parses the last two --
+  # check-json cannot read a comment
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.6
+    hooks:
+      - id: prettier
+        name: prettier (yaml and jsonc, in place fixes)
+        files: ^(.*\.ya?ml|\.vscode/.*\.json|\.markdownlint\.jsonc)$
+  # the same for toml, which here is pyproject.toml and the mutation
+  # session under .github: .taplo.toml holds the formatting choices and the
+  # reasoning for them, as .yamllint.yaml does for the width of a yaml line.
+  # uv.lock is toml to identify and therefore matched by the hook's own
+  # types, and it is uv's file to write. taplo-lint is not enabled beside
+  # this: it validates against a schema catalogue it fetches, and pyroma
+  # below reads the metadata offline
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+        name: taplo (toml, in place fixes)
+        exclude: ^uv\.lock$
   # ruff replaces black, isort, flake8, autoflake, pyupgrade, bandit,
   # copyright_notice_precommit, pydocstringformatter and yesqa: one tool,
   # one config section in pyproject.toml, and a fraction of the runtime.

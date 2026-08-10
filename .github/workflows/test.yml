@@ -142,14 +142,12 @@ jobs:
         # Actions drops x86_64 macOS in August 2027, after which no runner
         # can build a macosx x86_64 wheel at all
         os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-          ]
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-26-intel
+          - macos-latest
+          - windows-latest
+          - windows-11-arm
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -546,29 +544,25 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-          ]
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-26-intel
+          - macos-latest
+          - windows-latest
         # 3.14t, the free-threaded interpreter, matters here in particular:
         # the dynamic wheel is tagged py3-none, so it is what a
         # free-threaded interpreter installs, and unlike the static wheels
         # nothing else exercises it (cibuildwheel tests every wheel it
         # builds, including cp314t; this job has no such counterpart)
         python-version:
-          [
-            "3.10",
-            "3.11",
-            "3.12",
-            "3.13",
-            "3.14",
-            "3.14t",
-            "pypy-3.10",
-            "pypy-3.11",
-          ]
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+          - "pypy-3.10"
+          - "pypy-3.11"
     needs: [build-windows, build-dynamic]
 
     steps:
@@ -620,14 +614,12 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            macos-26-intel,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-          ]
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-26-intel
+          - macos-latest
+          - windows-latest
+          - windows-11-arm
         python-version:
           ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
         # cibuildwheel already runs the suite against every wheel it
