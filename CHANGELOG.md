@@ -30,6 +30,20 @@ release-notes length in the first place, and are still in
   after would have done the same. Where the file starts is the fact it
   was reaching for, and that one does not move.
 
+### CI
+
+- **Dependabot's three ecosystems no longer name `target-branch: "dev"`.**
+  That branch does not exist: `main` is this repository's only branch,
+  and also its default, so leaving `target-branch` unset already opens
+  every update against it — the same choice bitcoin-core-rpc's own
+  `dependabot.yml` already makes, for the same reason.
+
+### Dependencies
+
+- **`pre-commit` moves to 4.6.2, from 4.6.1**: `uv lock --upgrade`, the
+  only locked package with a newer compatible release right now. No
+  `pyproject.toml` change.
+
 ## v0.7.1.3
 
 ### Documentation
