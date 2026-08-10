@@ -40,18 +40,37 @@ name: published
 # support, and this workflow went green on it the same day: nineteen cells
 # out of nineteen, against nineteen out of nineteen red on the scheduled
 # run the day before. That inversion is what the sentinel is for, and
-# checking it is a step of the release: see RELEASING.md
+# release.yml now calls it rather than leaving it to be remembered
 
 on:
+  # after a release, which is the one moment this workflow's answer can
+  # change: RELEASING.md documented dispatching it by hand right here, and a
+  # call does not forget. Called by release.yml rather than triggered by
+  # workflow_run, which zizmor rates a dangerous trigger and rightly -- it
+  # runs the default branch's copy of a workflow with the token of a push
+  # nobody reviewed -- where a call runs inside the release that gated it, in
+  # its graph and in its log. The caller passes the tag, and only the caller
+  # does: the monthly run and a dispatch have no particular version in mind,
+  # which is the point of them
+  workflow_call:
+    inputs:
+      version:
+        description: >
+          The tag whose version the index must serve before the matrix
+          installs anything, empty on a run with no release behind it.
+        type: string
+        default: ""
   schedule:
-    # weekly, on a minute that is not the hour: what everyone schedules on
-    # the hour queues together, and a run that waits is a failure noticed
-    # later. Tuesday, matching btclib's own published.yml, and the day
-    # after links.yml's Monday for the same reason every one of these
-    # sentinels picks a distinct morning: a fixed, already-released
-    # artifact is checked first, before latest.yml asks the more volatile
-    # question of what the newest dependency does to a tree not yet
-    # released.
+    # monthly, on the first, where this was weekly: what it watches is
+    # external rot -- a new runner image, a new interpreter, a yanked
+    # dependency, a cffi ABI change -- and nothing in this repository moves
+    # it, so a week was a sample rate without a reason. After a release the
+    # trigger above answers immediately, which is what the weekly was
+    # standing in for.
+    # A minute that is not the hour: what everyone schedules on the hour
+    # queues together, and a run that waits is a failure noticed later. The
+    # minute and the hour are the ones this workflow always had, so a
+    # comparison with an older run compares like with like.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone.
     # One caveat has no fix inside this file: GitHub suspends a schedule
@@ -59,7 +78,7 @@ on:
     # quiet period a sentinel exists to cover, and announces it only by
     # email. A silence from this workflow is worth a look at the Actions
     # tab before it is read as green
-    - cron: "23 6 * * 2"
+    - cron: "23 6 1 * *"
   workflow_dispatch:
 
 # least privilege for the GITHUB_TOKEN: everything running in a job
@@ -68,16 +87,16 @@ on:
 permissions:
   contents: read
 
-# never cancel a sentinel, unlike every other workflow here: the manual
-# run RELEASING.md dispatches right after a release and the weekly one
-# share this group, each is a sample worth keeping, and neither is
-# superseded by the other. A concurrent run queues instead
+# never cancel a sentinel, unlike every other workflow here: the run a
+# release calls, the monthly one and a dispatch share this group, each is a
+# sample worth keeping, and none supersedes the others. A concurrent run
+# queues instead
 concurrency:
   group: published-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  test-published:
+  install-published:
     name: >-
       ${{ matrix.no-binary && 'Build' || 'Install' }}
       ${{ matrix.python-version }} from PyPI on ${{ matrix.os }}
@@ -125,6 +144,35 @@ jobs:
             kind: dynamic
 
     steps:
+      # the index does not serve a new file the instant the upload returns,
+      # and every cell below installs whatever the resolver picks: a run that
+      # starts too early tests the *previous* version and reports a pass for
+      # it, which is worse than reporting nothing. So the release path waits
+      # for the version its tag names, and fails if it never arrives rather
+      # than measuring the wrong thing. Only there: the input is empty on
+      # every other trigger.
+      # Twenty attempts fifteen seconds apart, i.e. five minutes: an upload
+      # PyPI has accepted is served in seconds, and what this bounds is the
+      # case where it is not served at all
+      - name: Wait for the index to serve the released version
+        if: inputs.version != ''
+        shell: bash
+        env:
+          TAG: ${{ inputs.version }}
+        run: |
+          version="${TAG#v}"
+          for attempt in $(seq 20); do
+            if curl -sf --max-time 10 -o /dev/null \
+                "https://pypi.org/pypi/btclib_libsecp256k1/${version}/json"; then
+              echo "the index serves ${version}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${version} is not served yet"
+            sleep 15
+          done
+          echo "::error::${version} never appeared on the index"
+          exit 1
+
       # no checkout on purpose: nothing from this repository takes part,
       # which is also what guarantees that the import below resolves to
       # what pip installed and not to a source tree

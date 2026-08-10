@@ -17,8 +17,9 @@ ci:
   # where the workflow token cannot write and every action is pinned to
   # a commit SHA: a failing hook has to be fixed by its author
   autofix_prs: false
-  # onto dev, as Dependabot does: master only receives merges from it
-  autoupdate_branch: dev
+  # onto main, as Dependabot targets it: the sole long-lived branch, and a
+  # branch that does not exist is a pull request with nowhere to land
+  autoupdate_branch: main
   autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
   autoupdate_schedule: weekly
   # the one hook pre-commit.ci cannot run, and the only entry this list
@@ -103,6 +104,25 @@ repos:
     hooks:
       - id: check-hooks-apply
       - id: check-useless-excludes
+  # a rev is a released version, and nothing but pre-commit autoupdate
+  # writes one: it offers whatever tag the remote's HEAD carries, which
+  # twice was not a release -- `v1`, a floating major tag its owner moves
+  # under the pin, and `5.1b1`, a prerelease with no `5.1` behind it. Both
+  # were merged before anybody read the diff, so the review is not the
+  # check. A tag that names a major version alone can change what a hook
+  # does without changing this file, and a prerelease is a hook whose
+  # findings its own author has not committed to yet. pre-commit says so
+  # itself for the moving tag -- a [WARNING] about a mutable reference --
+  # and a warning is not an exit code, which is the gap this closes.
+  # pygrep, so the pattern is the whole hook: a bare integer with an
+  # optional v, or a version carrying a PEP 440 pre-release segment
+  - repo: local
+    hooks:
+      - id: pinned-rev
+        name: every pre-commit rev names a released version
+        language: pygrep
+        entry: '^ *rev: "?v?([0-9]+|[0-9][0-9.]*(a|b|rc|dev)[0-9]+)"?$'
+        files: ^\.pre-commit-config\.yaml$
   # .github/dependabot.yml is validated by nothing else, and a typo in it
   # updates nothing and says nothing: the whole point of that file is to
   # move the pins this repository depends on for its security updates.

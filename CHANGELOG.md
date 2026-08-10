@@ -22,6 +22,84 @@ release-notes length in the first place, and are still in
 
 ## v0.7.1.4 (work in progress, not released yet)
 
+### CI
+
+- **The macOS suite cells left the merge gate for `macos.yml`.** Over six
+  pull request runs of `test.yml`, ninety-eight jobs each and thirty-five of
+  them on the two macOS images, a macOS job waited 20.8 and 19.0 minutes on
+  average for a runner against 2.1 to 2.6 elsewhere — and the wait grows
+  with the number of cells asking at once, so in the slowest of the six the
+  thirty-one macOS suite cells took the last thirty places before the
+  aggregate, their queue rising from 16.7 to 70.2 minutes and the run taking
+  95 minutes for 105 minutes of work. The command that re-derives all of it
+  is in `test.yml`'s header, next to the matrices those cells left. What
+  moved is the suite; the macOS
+  *wheel builds* stay, because the release publishes the artifacts of that
+  run and the same measurement clears them — they finished at 24.6 minutes
+  against the 23.5 of the ubuntu-latest build beside them. Four macOS jobs
+  queue, thirty-one contend. `macos.yml` runs the two images over every
+  interpreter `test.yml` ran there, half an hour before `latest.yml` on the
+  same morning, so the pair reads as a difference: red in both is the
+  platform, red in `latest` alone is the upgrade. It builds from the tree
+  twice per cell, static and then dynamic, rather than rebuilding the
+  wheels the cells used to install — ten minutes of `cibuildwheel` per
+  image, and artifact names a release must not confuse with `test.yml`'s.
+  It gates nothing, so a macOS regression can sit on `main` for a week;
+  `release.yml` calls it, so it cannot be published.
+- **The documentation build is `docs.yml`, not the second job of
+  `lint.yml`.** A failed docs build and a failed hook are two different
+  verdicts about two different things, and one badge and one line in the
+  checks list each is what says so — the badge being a `docs` one added to
+  the second README row, beside `test` and `lint`, where the row already
+  ends with what read the docs makes of the same source. The job's display
+  name is unchanged,
+  which is what let it move without touching the branch rule: a required
+  context is matched by name, not by the workflow that reported it.
+- **Every job is named for the question it answers, and the aggregate is
+  `test: every job passed`.** `Coverage` said which job it was rather than
+  what it gates; the two suite matrices were *both* named
+  `Test <version> on <os>`, so every run produced pairs of check runs with
+  one name between them, which is the ambiguity a branch rule cannot see
+  past — the linkage is in the name now. Renaming the aggregate renames a
+  required check, the one change a pull request cannot make on its own:
+  REPOSITORY.md carries the `PATCH` that moves the rule first.
+- **`release.yml` calls every gate, and the published sentinel after
+  itself.** It called `lint` and `test`; `docs` and `macos` are gates it
+  was not waiting for, and `published` answers, at the one moment its
+  answer changes, whether what was just uploaded can be installed. That
+  last one waits for the index to serve the version the tag names before
+  installing anything, so it cannot report a pass for the release before
+  this one. A call rather than a `workflow_run` trigger, which zizmor rates
+  dangerous and rightly: that one runs the default branch's copy of a
+  workflow with a token nobody reviewed. The workflow also has a
+  concurrency group at last, and it is the one here that must not cancel:
+  a version is consumed by the upload that carries it.
+- **`published.yml` is monthly, where it was weekly.** What it watches is
+  external rot, which nothing in this repository moves, so a week was a
+  sample rate without a reason — and the release now asks immediately,
+  which is what the weekly was standing in for.
+- **The workflows no longer name `master` and `dev`.** Neither branch
+  exists. Two of those references were not merely stale: `branches:
+  [master]` meant no push to `main` ran the gate at all, and the release
+  workflow's ancestry check runs `git merge-base --is-ancestor
+  "$GITHUB_SHA" origin/master`, which fails on a ref that is gone — the
+  next tag would have been stopped by it. The draft exception that let the
+  release pull request through (`github.base_ref == 'master'`) can never be
+  true again and is gone with them.
+
+### The gate
+
+- **`pinned-rev` refuses a `rev` that does not name a released version.**
+  Nothing but `pre-commit autoupdate` writes a `rev`, and it offers
+  whatever tag the remote's HEAD carries: twice that was not a release —
+  `v1`, a floating major tag its owner moves under the pin, and `5.1b1`, a
+  prerelease with no `5.1` behind it — and both were merged before anybody
+  read the diff, so the review is not the check. pre-commit says as much
+  itself for the moving tag, a `[WARNING]` about a mutable reference, and a
+  warning is not an exit code. A `pygrep` hook, so the pattern is the whole
+  hook, and it was verified in both directions: it names no `rev` this file
+  holds, and it names those two by line when they are put back.
+
 ### Documentation
 
 - **This file's own preamble says where it starts, not what it holds.**

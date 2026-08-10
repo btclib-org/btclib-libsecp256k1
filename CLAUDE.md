@@ -139,22 +139,31 @@ uv lock
 uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
 ```
 
-## The workflows that gate, and the four that do not
+## The workflows that gate, and the ones that do not
 
-`lint` and `test` are the gate, and `release` reuses both. The other four
-are sentinels: each is a workflow of its own, has no aggregate job, is named
-by no branch rule, and opens no issue on failure. That is deliberate in
-every case — each is expected to go red for a reason no pull request
-introduced, and a red check nobody can act on from a branch is noise. Their
-crons are on four different mornings, because four sentinels landing in one
-inbox on one morning are one sentinel.
+`lint`, `docs` and `test` are the gate, and `release` reuses all three. The
+rest are sentinels: each is a workflow of its own, has no aggregate job, is
+named by no branch rule, and opens no issue on failure (`vendored-vectors`
+excepted, for the reason its own header gives). That is deliberate in every
+case — each is expected to go red for a reason no pull request introduced,
+and a red check nobody can act on from a branch is noise. Their crons are on
+different mornings, because sentinels landing in one inbox on one morning
+are one sentinel.
 
 | workflow | asks | when |
 | --- | --- | --- |
-| `published` | can the world install what PyPI serves | Mon |
-| `links` | do the URLs in the prose still resolve | Tue |
-| `latest` | does the tree survive every dependency at its newest | Fri |
-| `mutation` | would the suite notice a wrong line | Sat |
+| `links` | do the URLs in the prose still resolve | Mon |
+| `macos` | does the suite pass on macOS | Wed, and a release |
+| `latest` | does the tree survive every dependency at its newest | Wed |
+| `mutation` | would the suite notice a wrong line | Sun |
+| `published` | can the world install what PyPI serves | 1st, a release |
+| `vendored-vectors` | do the vendored vectors still match upstream | 1st |
+
+`macos` is the one sentinel a pull request would otherwise have waited for,
+and the reason it is one is measured in `test.yml`'s header: the macOS
+runners queue for tens of minutes where every other platform queues for two.
+A release calls it, so what a merge no longer waits for a publication still
+does.
 
 `latest` is the one that covers a gap nothing else does. Every uv command
 elsewhere passes `--locked`, the dependency groups declare no version, and
@@ -245,9 +254,10 @@ findings.
   API call that shows each still off: the two secret-scanning extensions
   are the ones that answer a PATCH with 200 and change nothing. Do not
   spend a session rediscovering them
-- **`release.yml` and `published.yml` are inert until they are on
-  `master`**: `schedule` and `workflow_dispatch` only run from the default
-  branch, so a rehearsal cannot be dispatched from `dev`
+- **every `schedule` and `workflow_dispatch` here is inert off `main`**:
+  both only run from the default branch, so a rehearsal of `release.yml`
+  cannot be dispatched from a branch, and `macos.yml`, `latest.yml` and the
+  other sentinels are reachable there through nothing at all until merged
 - **a hand-applied mutation can outlive its restore.** `(0, 1, 2, 3)` and
   `(0, 1, 1, 3)` are the same length, so restoring the file with `cp` in the
   same second leaves mtime *and* size matching what the `.pyc` recorded, and

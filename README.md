@@ -16,6 +16,7 @@ bitcoin-core-rpc carry the same three lines. -->
 
 [![test workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml)
 [![lint workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml)
+[![docs workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib-libsecp256k1/master.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib-libsecp256k1/master)
 [![documentation build](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
 
