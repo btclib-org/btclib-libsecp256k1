@@ -555,6 +555,14 @@ three merge buttons are enabled on this repository, so which one is used
 is a choice made at the merge rather than one GitHub enforces — check it
 before clicking, GitHub preselecting whichever was used last.
 
+Auto-merge moves that check earlier rather than removing it: the method is
+picked in the dialog that switches it on, so a pull request set to merge
+itself once the checks go green has already answered this, and the answer
+is `gh pr view <n> --json autoMergeRequest`. Enabling it is the way to not
+wait for a matrix that compiles C on every platform; GitHub only offers it
+while something is still pending, and it merges nothing the branch rule
+would not have let through by hand.
+
 Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.
 
