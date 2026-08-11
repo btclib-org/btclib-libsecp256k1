@@ -54,12 +54,13 @@ queue for tens of minutes, measured in `test.yml`'s header, and
 
 A check can be bound to the app that produces it — `checks` with an
 `app_id` rather than the bare `contexts` list — so that nothing else can
-satisfy it, and 15368 is Actions, which produces them all. The rule is not
-uniform in this: `test: every job passed` and `codeql: every job passed`
-carry the binding, while `Lint and type-check` and `Build the
-documentation` report `app_id: null`, meaning any app may satisfy those
-two, and the `PATCH` below is what binds them. A `PATCH` dates that
-sentence, so read it back rather than trust it:
+satisfy it, and 15368 is Actions, which produces them all. All four carry
+that binding, and the two that did not are why it is worth stating: an
+unbound context reads `app_id: null` and is satisfied by *any* app
+reporting a check run of that name, so anything installed on the
+organization with `checks: write` could turn one green with no workflow
+having run. A `PATCH` dates that sentence, so read it back rather than
+trust it:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
