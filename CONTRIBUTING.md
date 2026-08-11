@@ -188,6 +188,7 @@ read by every checkout of this repository.
 | --- | --- | --- |
 | `test` | pull request, push | every platform but macOS, every interpreter |
 | `lint`, `docs` | pull request, push | — |
+| `codeql` | pull request, push, Tuesday | the two scanned languages |
 | `vendored-vectors` | monthly, a change to itself | — |
 | `macos` | Wednesday, a release | both macOS images, both linkages |
 | `latest` | Wednesday | the dependencies, at their newest |
@@ -195,7 +196,7 @@ read by every checkout of this repository.
 | `published` | monthly, a release | what PyPI serves |
 | `release` | a tag | calls the gates, `macos` and `published` |
 
-The first two rows are what a merge waits for. macOS is not among them on
+The first three rows are what a merge waits for. macOS is not among them on
 purpose, and the numbers are in `test.yml`'s header: it is the one platform
 whose runners queue for tens of minutes rather than for two, so it answers
 weekly, and before a release, rather than before a review. The wheels it
@@ -204,11 +205,19 @@ suite against each one as it builds it — what waits a week is pip's
 selection among them and the dynamic build. Everything but the first two
 rows also takes `workflow_dispatch`.
 
+`codeql` is the one gate with no local command: reproducing it means the
+CodeQL CLI, a bundle GitHub distributes rather than a dependency `uv.lock`
+can pin, so what answers a finding is the run itself and the Security tab
+beside it. What it scans, with which queries and on what schedule is in the
+file, `.github/workflows/codeql.yml`; the branch rule that names its
+aggregate is in REPOSITORY.md.
+
 ### Running what CI runs
 
 Each job of the `lint`, `docs` and `test` workflows, and the local command
 that reproduces it. Two of them cannot be reproduced on a machine that is
-not the runner, and that is worth knowing before trying.
+not the runner, and that is worth knowing before trying; the fourth gate,
+`codeql`, has no command at all, for the reason above.
 
 - `Lint and type-check`
 

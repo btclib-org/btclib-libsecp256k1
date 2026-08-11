@@ -141,14 +141,19 @@ uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
 
 ## The workflows that gate, and the ones that do not
 
-`lint`, `docs` and `test` are the gate, and `release` reuses all three. The
-rest are sentinels: each is a workflow of its own, has no aggregate job, is
-named by no branch rule, and opens no issue on failure (`vendored-vectors`
-excepted, for the reason its own header gives). That is deliberate in every
-case — each is expected to go red for a reason no pull request introduced,
-and a red check nobody can act on from a branch is noise. Their crons are on
-different mornings, because sentinels landing in one inbox on one morning
-are one sentinel.
+`lint`, `docs`, `test` and `codeql` are the gate, and `release` reuses the
+first three. It does not reuse `codeql`, and does not have to: a tag is an
+ancestor of `main` before the matrix builds anything (`version-check` in
+`release.yml`), so the tree it publishes is one the merge gate has already
+scanned — and `codeql` is weekly besides, which is what covers the code
+nobody touched. The rest are sentinels: each is a workflow of its own, has
+no aggregate job, is named by no branch rule, and opens no issue on failure
+(`vendored-vectors` excepted, for the reason its own header gives). That is
+deliberate in every case — each is expected to go red for a reason no pull
+request introduced, and a red check nobody can act on from a branch is
+noise. Their crons are on different mornings, because sentinels landing in
+one inbox on one morning are one sentinel, and `codeql` keeps a morning of
+its own for the same reason.
 
 | workflow | asks | when |
 | --- | --- | --- |

@@ -35,7 +35,7 @@ gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
 | `test: every job passed` | `test.yml`, aggregate over the matrix |
 | `Lint and type-check` | `lint.yml`, its only job |
 | `Build the documentation` | `docs.yml`, its only job |
-| `CodeQL` | code scanning's default setup |
+| `codeql: every job passed` | `codeql.yml`, aggregate over the languages |
 
 `Build the documentation` is named on its own on purpose: a rule naming
 `Lint and type-check` alone would leave a red documentation build outside
@@ -52,14 +52,13 @@ the suite: what a merge no longer waits for is the platform whose runners
 queue for tens of minutes, measured in `test.yml`'s header, and
 `release.yml` calls it so that a publication still does.
 
-Each check is bound to the app that produces it — `checks` with an `app_id`
-rather than the bare `contexts` list — so nothing else can satisfy one.
-15368 is Actions and 57789 is `github-advanced-security`, which is the app
-that reports `CodeQL`: the two Actions jobs of code scanning's default setup
-are called `Analyze (actions)` and `Analyze (python)`, and the `CodeQL`
-context is a separate check run that appears seconds after both finish.
-Reading it too early is how one concludes that the rule names a context
-nothing produces:
+A check can be bound to the app that produces it — `checks` with an
+`app_id` rather than the bare `contexts` list — so that nothing else can
+satisfy it, and 15368 is Actions, which produces all four. Only
+`test: every job passed` is bound today: the endpoint above reports
+`app_id: null` for the other three, meaning any app may report them, and
+the `PATCH` below is what binds them. Which app reported what is read from
+the commit rather than assumed:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
@@ -71,32 +70,53 @@ gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
   --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
 ```
 
-**CodeQL is code scanning's default setup, not a workflow of this
-repository** — `state: configured`, python and actions, the default query
-suite, weekly — so there is no file here to read its triggers off:
+**CodeQL is `.github/workflows/codeql.yml`, and code scanning's default
+setup is off** — the two are mutually exclusive, GitHub refusing to run an
+advanced workflow while the setting is configured, and the file is the one
+that can be reviewed in a diff. What the setting holds is read from the
+endpoint, `state` being the field that says whether it holds anything:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
 ```
 
-That absence of a file is also why the check was first left out of the
-rule, on a measurement that was the wrong one: it was taken on a pull
-request against the branch that used to sit between a contributor and the
-trunk, and default setup analyzes push events on the default branch and
-pull requests *against* it, nothing else — so a pull request like #43
-produced no CodeQL check run at all, measured, zero analyses. With `main`
-the only long-lived branch every pull request is the kind default setup
-analyzes, which is the kind #21, the 0.7.1 release merge, already was:
-its analyses are under `refs/pull/21/head`.
+Turning the setting off takes `state` and nothing else — the languages, the
+query suite and the runner it also accepts describe an analysis that is not
+going to run:
+
+```shell
+gh api -X PATCH \
+  repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup \
+  -F state=not-configured
+```
+
+The order matters in both directions, and it is the branch rule that
+decides it: while the setting is on, `codeql.yml` produces nothing, and
+while it is off, nothing produces `codeql: every job passed` until that
+workflow has run. So the rule drops the context first, the setting moves
+second, the checks are re-run, and the rule names the new context last —
+each step leaving the merge path open, where any other order closes it on a
+context nothing reports. `enforce_admins` being off is what makes that
+window survivable rather than a lock.
+
+What the file asks for is read off its own triggers; what was actually
+analyzed, and under which ref and category, is the API's answer:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
-  --jq '.[] | {ref, category, created_at}'
+  --jq '.[] | {ref, category, analysis_key, created_at}'
 ```
 
-`Dependency Graph` is not a candidate either: its runs are `dynamic`,
-GitHub submitting the graph after a push rather than checking a pull
-request.
+The category is what ties an upload to the ones before it, so
+`codeql.yml` spells it exactly as the setting did, `/language:python` and
+`/language:actions`: an upload under a new category closes every open alert
+as fixed and opens a copy of it. The `analysis_key` is the one thing that
+does change, from `dynamic/github-code-scanning/codeql:analyze` to this
+workflow's path, and no alert is keyed on it.
+
+`Dependency Graph` is not a candidate for the rule either: its runs are
+`dynamic`, GitHub submitting the graph after a push rather than checking a
+pull request.
 
 **PATCH the sub-endpoint, never PUT the whole protection object**: a
 partial PUT drops the reviews, the signatures and the rest. And `-F`,
@@ -109,7 +129,19 @@ gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
   -F 'checks[][context]=test: every job passed' -F 'checks[][app_id]=15368' \
   -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
   -F 'checks[][context]=Build the documentation' -F 'checks[][app_id]=15368' \
-  -F 'checks[][context]=CodeQL' -F 'checks[][app_id]=57789'
+  -F 'checks[][context]=codeql: every job passed' \
+  -F 'checks[][app_id]=15368'
+```
+
+`checks[][…]` repeated is how one array of objects is written: `-F` pairs
+each `context` with the `app_id` that follows it, and sends the number as a
+number. Reading the body before sending it is a probe against a path that
+does not exist, which reports a 404 and changes nothing:
+
+```shell
+gh api --verbose -X POST "repos/{owner}/{repo}/zzz-probe" \
+  -F 'checks[][context]=A' -F 'checks[][app_id]=15368' \
+  | sed -n '/^{/,/^}/p'
 ```
 
 Renaming a required check is the one change that cannot be made in a pull
