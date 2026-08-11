@@ -17,9 +17,10 @@ ci:
   # where the workflow token cannot write and every action is pinned to
   # a commit SHA: a failing hook has to be fixed by its author
   autofix_prs: false
-  # onto main, as Dependabot targets it: the sole long-lived branch, and a
-  # branch that does not exist is a pull request with nowhere to land
-  autoupdate_branch: main
+  # no autoupdate_branch, as dependabot declares no target-branch: the
+  # default is the default branch, which is the only branch a change
+  # lands on -- and a branch named here that does not exist is a pull
+  # request with nowhere to land
   autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
   autoupdate_schedule: weekly
   # the one hook pre-commit.ci cannot run, and the only entry this list
