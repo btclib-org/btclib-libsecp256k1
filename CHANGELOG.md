@@ -302,6 +302,17 @@ release-notes length in the first place, and are still in
 
 ### The gate
 
+- **Every required check names the app that produces it.** `test: every
+  job passed` and `codeql: every job passed` carried `app_id: 15368` and
+  the other two carried none, which REPOSITORY.md recorded as a rule that
+  was not uniform in this. An unbound context is satisfied by *any* app
+  reporting a check run of that name, so anything installed on the
+  organization with `checks: write` could turn `Lint and type-check` green
+  with no workflow having run. Both are Actions checks -- the check-runs
+  endpoint answers 15368 for each -- so the binding changes nothing a run
+  can see, and closes that. The `PATCH` this file already documented is
+  what applied it; btclib and bitcoin-core-rpc are bound the same way, so
+  the three now read `app_id: 15368` for every context they require
 - **`pinned-rev` refuses a `rev` that does not name a released version.**
   Nothing but `pre-commit autoupdate` writes a `rev`, and it offers
   whatever tag the remote's HEAD carries: twice that was not a release —
