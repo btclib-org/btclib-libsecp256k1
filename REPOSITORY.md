@@ -253,6 +253,47 @@ branch is never deleted, protection winning over it — which used to reach
 the release pull request, whose head branch was protected. No head branch
 is protected now.
 
+## Auto-merge
+
+`allow_auto_merge` is on, since 11 August 2026:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1 --jq '.allow_auto_merge'
+```
+
+It bypasses nothing, and it is not the admin escape hatch above: GitHub
+offers the button **only on a pull request that cannot be merged
+immediately**, and then merges it when the last thing blocking it clears —
+one of the four required checks, the approving review, an unresolved
+conversation. Where nothing is pending there is nothing to wait for and the
+button is not offered at all, so this setting does something here precisely
+because the rule on `main` is what it is: the matrix is tens of jobs
+compiling C, and `test.yml`'s header measures what waiting for it costs.
+
+**Required signatures survive it**, measured rather than assumed, because
+GitHub composes the squash commit server-side and signs it with its own key
+exactly as the merge button does. A merge from the CLI is where that stops
+being true — `--rebase --admin` replays the author's commits as they were,
+unsigned — so the check is worth making on whatever landed:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha> \
+  --jq '.commit.verification | {verified, reason}'
+```
+
+**The merge method is chosen when auto-merge is switched on, not when the
+merge happens.** All three buttons are enabled, so which one runs is a
+choice rather than something GitHub enforces (CONTRIBUTING.md has the rest,
+including that GitHub preselects whichever was used last) — and the dialog
+that enables auto-merge carries that same dropdown. The answer is therefore
+given once, possibly hours before anything merges, by whoever switched it
+on, and nothing asks again. What a pull request is holding is readable, and
+reading it is the only way to catch a wrong method before it lands:
+
+```shell
+gh pr view <n> --json autoMergeRequest
+```
+
 ## Token permissions
 
 **The default `GITHUB_TOKEN` is read-only repository-wide**, so a job
