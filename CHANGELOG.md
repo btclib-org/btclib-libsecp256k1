@@ -81,6 +81,33 @@ release-notes length in the first place, and are still in
   `finally` wipes them, an invalid key later in the list being able to
   raise between them.
 
+### Mutation testing
+
+- **A session over the new module found three mutants no test killed**,
+  and the three are in tests/ now. The scope needed no change —
+  `module-path` is the package, so a module added to it is in scope — and
+  what the session cost was worth having:
+    - `0 <= m < 2**32` mutated to `0 <= m != 2**32` survived a test that
+    drove *both ends* of the bound. `-1` fails the first comparison and
+    `2**32` fails the second, so both still raise; the one input that
+    tells `<` from `!=` is a value above the bound, and `2**32 + 1` is now
+    in the parametrization with the reason written beside it.
+    - the two `finally` loops that wipe a secret survived being turned into
+    `for buffer in []`, which is a new shape here: every other wipe in the
+    package is one statement about one buffer, and these are the first
+    over a list. The buffers are locals, invisible from any answer, so
+    what kills the mutant is a spy on `wipe` — recording each buffer and
+    wiping it for real, then asserting one per secret the call was given
+    and every one of them zeroed. The sender's refusal path is asserted
+    too: an invalid key later in the list has to leave the ones before it
+    wiped, which is why both lists are built inside the `try`.
+- **Run it with the filter, or read 110 survivors that mean nothing.**
+  `cr-filter-operators` between `init` and `exec` is a step of the
+  workflow and not of the toml, so a hand-run session that skips it
+  reports every `bytes | int` annotation mutant as a survivor — 110 of
+  113 on the first pass here. With it: 94 executed, **0 survived**, 110
+  skipped.
+
 ### External vectors
 
 - **`tests/bip352_send_and_receive_test_vectors.json`**, vendored from
