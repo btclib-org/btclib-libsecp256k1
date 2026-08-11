@@ -186,6 +186,45 @@ the inverse map, and libsecp256k1 exposes no entry point for it --
 randomness it is given, and the case is not an argument -- so there is
 nothing here those vectors could be compared against.
 
+### `tests/bip352_send_and_receive_test_vectors.json`
+
+```text
+repo    bitcoin/bips
+path    bip-0352/send_and_receive_test_vectors.json
+commit  c2ac36f48f71615984087fd151f410457edfed72  2026-04-16
+blob    3a189757ddbc90e5ec538d643f7ac238a51704e8
+pulled  2026-08-11
+behind  0 revisions; that commit is the tip of the path
+```
+
+Verdict: **identical**. Every case, both directions of each. It is also
+the blob libsecp256k1 vendors, at
+`src/modules/silentpayments/bip352_send_and_receive_test_vectors.json`
+in the submodule: byte for byte the same file, which is worth saying
+because it makes the copy here look redundant and it is not. The wheel
+test jobs check out without `submodules: recursive` -- what they exercise
+is the module inside an installed wheel, not a build -- so a test reading
+the submodule would silently not run there.
+
+Read in part, and the part is a decision rather than a limit. Each case
+carries its transaction as scriptSig, witness and prevout scriptPubKey
+hex, and BIP352's eligibility rules are rules about those; this package
+reads no script, so `test_vectors.py` takes the `input_pub_keys` the file
+publishes for the eligible inputs and pairs them with the inputs in
+order. The one script question left is whether a prevout is P2TR, which
+is what decides between the x-only and the full key argument and can be
+read off nothing else.
+
+Two shapes of this file are worth knowing before its assertions are
+read. A sending case's `outputs` is a list of alternative output *sets*,
+not orderings of one: where recipients share a scan public key the
+assignment of k among them is undetermined and each assignment gives
+different keys, which is why cases 15 and 17 have entries that are not
+permutations of each other. And a receiving case's published
+`shared_secret` is null exactly where the transaction is not a Silent
+Payments one, which is what tells "the recipient skips it" apart from
+"the recipient finds nothing in it".
+
 ## rustyrussell/secp256k1-py
 
 ### `tests/ecdsa_sig.json`
@@ -231,7 +270,8 @@ git ls-files 'tests/*.csv' 'tests/*.json'
   `bip324_packet_encoding_test_vectors.csv`.
 - identical byte for byte: `bip327_key_agg_vectors.json`,
   `bip327_nonce_agg_vectors.json`, `bip327_sign_verify_vectors.json`,
-  `bip327_sig_agg_vectors.json`.
+  `bip327_sig_agg_vectors.json`,
+  `bip352_send_and_receive_test_vectors.json`.
 - JSON-equal, reformatted: `ecdsa_sig.json`, `ecdsa_custom_nonce_sig.json`.
 
 Not vendored, and outside the scope of this file: `test_vectors.py`

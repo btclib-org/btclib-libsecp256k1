@@ -43,12 +43,74 @@ release-notes length in the first place, and are still in
   `ValueError("invalid private key")` on a zero return, and the docstring
   already said a key that is not a valid scalar raises; what changed is
   which keys libsecp256k1 calls invalid.
-- **The new `silentpayments` module is not enabled by this change.** It is
-  a module of libsecp256k1 0.8.0, and this repository asks for every
-  module it wraps explicitly rather than taking upstream's defaults, so
-  turning it on belongs with the binding that uses it. Until then it is
-  absent from the build, which is why the surface this change adds is
-  none: the same entry points, minus the two symbols upstream removed.
+
+### Silent Payments
+
+- **`silentpayments` wraps BIP352**, the module libsecp256k1 0.8.0 adds,
+  through five functions rather than the seven entry points it has: the
+  label parse and serialize are not API of their own, a label being 33
+  bytes on the way in and out like every other key here. The build asks
+  for `SECP256K1_ENABLE_MODULE_SILENTPAYMENTS` explicitly and concatenates
+  `secp256k1_silentpayments.h` after `secp256k1_extrakeys.h`, whose types
+  it needs — the same ordering constraint musig already had.
+- **The prevouts summary crosses as opaque bytes.** libsecp256k1 gives no
+  parser or serializer for it, guaranteeing only that it is a fixed size
+  and safe to copy, so the binding returns the bytes of the struct and
+  writes them back into one of the same size. Its length is therefore the
+  only thing checkable about it, and `SUMMARY_SIZE` is asked of the struct
+  with `ffi.sizeof` rather than written down, so a libsecp256k1 that
+  changes it changes this too.
+- **The label lookup is a python callback, and the ECDH hash is still
+  not.** The two look alike and are not: the ECDH hash callback would put
+  python in the middle of a computation that has an entry point of its own
+  (`keys.pubkey_tweak_mul` is the shared point), where a labeled output
+  cannot be recognized at all without a lookup only the caller can answer.
+  So `scan_outputs` takes the label cache as a mapping and calls back into
+  it. Every tweak is copied into a buffer this package owns *before* the
+  scan starts, because the pointer the callback returns has to stay valid
+  after it returns; and the callback body is a `dict.get` over keys already
+  normalized, because cffi has nowhere to put an exception raised inside a
+  callback — it prints the traceback and returns a default, which for a
+  lookup means "no label", indistinguishable from having worked.
+- **`ffi.addressof` joins the stub.** A found output carries its x-only
+  public key and its label by value, and each has to reach its own
+  serializer as a pointer.
+- **The secrets are taken back.** A found output holds the tweak that
+  spends it, and the sender's keypairs and secret keys hold private keys:
+  all are wiped, and the two key lists are built *inside* the `try` whose
+  `finally` wipes them, an invalid key later in the list being able to
+  raise between them.
+
+### External vectors
+
+- **`tests/bip352_send_and_receive_test_vectors.json`**, vendored from
+  `bitcoin/bips` and byte-identical to the blob libsecp256k1 vendors
+  itself, drives both directions of every case. Two things it taught,
+  both of them assumptions this change made and had to drop:
+    - the published `outputs` of a sending case are **alternative output
+    sets, not orderings of one**. Where several recipients share a scan
+    public key, which of them gets k = 0 is not determined, and each
+    assignment gives different keys; comparing with the first entry
+    passes 26 cases and fails 15 and 17. What is asserted is that the set
+    produced is one of the sets accepted.
+    - an input's public key cannot be matched to it by containment alone.
+    Case 22's third input is a bare multisig whose redeem script names the
+    key of the *first* input, so a key already claimed gets claimed twice
+    and the sum comes out wrong. The keys are consumed in order instead,
+    which is the order the file publishes them in.
+- **The eligibility rules are not reimplemented.** BIP352 states them
+  over scripts — a bare multisig, an uncompressed key, a NUMS-point script
+  path — and reading scripts is what this package does not do. The vectors
+  publish the extracted keys of exactly the eligible inputs, so the test
+  walks those and the inputs in step; the one script question left is
+  whether a prevout is P2TR, which is what decides between the two key
+  arguments and cannot be read off anything else.
+- **The three failure cases assert their own message.** No eligible input
+  is refused here (`at least one private key`), input keys summing to zero
+  is refused by libsecp256k1 (`silent payment output creation failed`),
+  and on the recipient's side both are `prevouts_summary` refusing to make
+  one — keyed on the vector's own published null `shared_secret`, which is
+  what distinguishes them from the case whose scan simply finds nothing.
 
 ### CI
 
@@ -127,6 +189,21 @@ release-notes length in the first place, and are still in
   warning is not an exit code. A `pygrep` hook, so the pattern is the whole
   hook, and it was verified in both directions: it names no `rev` this file
   holds, and it names those two by line when they are put back.
+
+- **The bytes-like sweep grew a mapping and a tuple.** `retyped` now
+  descends into both, which is what `create_outputs`' pairs of keys and
+  `scan_outputs`' label cache need. A mapping has its values retyped and
+  its keys left alone, and that is the signature rather than the test
+  being lenient: `Mapping` is invariant in its key type, and neither a
+  `bytearray` nor a `memoryview` is hashable, so `labels` is declared
+  `Mapping[bytes, BytesLike]` — bytes is the only one of the three a
+  mapping key can be. mypy is what said so.
+- **`silentpayments` is in `MODULES`**, so `test_the_sweep_is_whole` holds
+  the new entry points to the sweep the way it holds every other.
+- **Both detect-secrets baselines were regenerated.** The tree's picked up
+  only line-number shifts; the vendored one picked up 68 `Secret Keyword`
+  findings, every one of them a `private_key` or `priv_key` field of the
+  new BIP352 file, which is what a published vector file is made of.
 
 ### Documentation
 

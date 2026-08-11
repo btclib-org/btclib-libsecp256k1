@@ -306,7 +306,8 @@ class Secp256k1CFFIExtension(FFIExtension):
         self.include_dir = self.wd / "include"
         # #include directives are stripped before preprocessing, so the
         # concatenation order must satisfy the inter-header dependencies:
-        # musig needs the extrakeys types, everything needs secp256k1.h
+        # musig and silentpayments need the extrakeys types, everything
+        # needs secp256k1.h
         self.headers = [
             "secp256k1.h",
             "secp256k1_ecdh.h",
@@ -315,6 +316,7 @@ class Secp256k1CFFIExtension(FFIExtension):
             "secp256k1_schnorrsig.h",
             "secp256k1_musig.h",
             "secp256k1_ellswift.h",
+            "secp256k1_silentpayments.h",
         ]
         # the library is built out of tree, so that the vendored sources
         # are never written to: build/ is where a wheel build puts its
@@ -416,6 +418,7 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON",
             "-DSECP256K1_ENABLE_MODULE_MUSIG=ON",
             "-DSECP256K1_ENABLE_MODULE_ELLSWIFT=ON",
+            "-DSECP256K1_ENABLE_MODULE_SILENTPAYMENTS=ON",
             "-DSECP256K1_BUILD_BENCHMARK=OFF",
             "-DSECP256K1_BUILD_TESTS=OFF",
             "-DSECP256K1_BUILD_EXHAUSTIVE_TESTS=OFF",

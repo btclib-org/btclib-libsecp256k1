@@ -60,6 +60,13 @@ btclib\_libsecp256k1.recovery module
    :members:
    :show-inheritance:
 
+btclib\_libsecp256k1.silentpayments module
+-------------------------------------------
+
+.. automodule:: btclib_libsecp256k1.silentpayments
+   :members:
+   :show-inheritance:
+
 btclib\_libsecp256k1.ssa module
 --------------------------------
 

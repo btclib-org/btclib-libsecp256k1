@@ -23,6 +23,10 @@ list, depending on the cdata type; the package only ever unpacks
 that of the memory rather than of a pointer to it: `_secret` reads both
 from it. `memoryview` is what it is used as -- sliced, assigned to, and
 measured -- so that is what it is declared to return.
+
+`addressof` is how a field of a struct is passed where libsecp256k1 wants
+a pointer to it: the found outputs of `silentpayments` carry an x-only
+public key and a label by value, and each has to reach its own serializer.
 """
 
 from typing import Any
@@ -30,6 +34,7 @@ from typing import Any
 class _FFI:
     NULL: Any
     def new(self, cdecl: str, init: Any = ...) -> Any: ...
+    def addressof(self, cdata: Any, field: str) -> Any: ...
     def sizeof(self, cdecl_or_cdata: Any) -> int: ...
     def buffer(self, cdata: Any, size: int = ...) -> memoryview: ...
     def unpack(self, cdata: Any, length: int) -> bytes: ...

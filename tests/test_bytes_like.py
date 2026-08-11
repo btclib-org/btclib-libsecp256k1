@@ -33,6 +33,7 @@ from btclib_libsecp256k1 import (
     keys,
     mult,
     recovery,
+    silentpayments,
     ssa,
     xonly,
 )
@@ -50,6 +51,20 @@ RECOVERABLE, RECID = recovery.sign(MSG, PRVKEY)
 ELL_A = ellswift.create(PRVKEY, bytes(32))
 ELL_B = ellswift.create(TWEAK, bytes(32))
 TWEAKED, TWEAKED_PARITY = xonly.tweak_add(XONLY, TWEAK)
+
+# a silent payment of the input PRVKEY funds to an address of its own,
+# scanned back: the outpoint is zeros, which is a serialization like any
+# other here, and PRVKEY's public key is the one input
+SCAN_PRVKEY = (13).to_bytes(32, "big")
+SPEND_PRVKEY = (17).to_bytes(32, "big")
+SCAN_PUBKEY = keys.pubkey_from_prvkey(SCAN_PRVKEY)
+SPEND_PUBKEY = keys.pubkey_from_prvkey(SPEND_PRVKEY)
+OUTPOINT = bytes(36)
+SP_OUTPUTS = silentpayments.create_outputs(
+    [(SCAN_PUBKEY, SPEND_PUBKEY)], OUTPOINT, prvkeys=[PRVKEY]
+)
+SP_SUMMARY = silentpayments.prevouts_summary(OUTPOINT, pubkeys=[PUBKEY])
+SP_LABEL, SP_LABEL_TWEAK = silentpayments.label(SCAN_PRVKEY, 0)
 
 # every entry point taking an argument that crosses as a bare pointer,
 # with the arguments it takes: the bytes ones are retyped below
@@ -94,6 +109,41 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("ellswift.encode", ellswift.encode, (PUBKEY, bytes(32)), {}),
     ("ellswift.decode", ellswift.decode, (ELL_A,), {}),
     ("ellswift.xdh", ellswift.xdh, (ELL_A, ELL_B, PRVKEY, 0), {}),
+    # the silentpayments arguments are passed positionally, keyword
+    # defaults though they are: what is retyped below is `args`, so a
+    # sequence of keys handed in as a keyword would be swept as bytes and
+    # the sweep would say it passed
+    (
+        "silentpayments.create_outputs",
+        silentpayments.create_outputs,
+        ([(SCAN_PUBKEY, SPEND_PUBKEY)], OUTPOINT, (), [PRVKEY]),
+        {},
+    ),
+    ("silentpayments.label", silentpayments.label, (SCAN_PRVKEY, 0), {}),
+    (
+        "silentpayments.labeled_spend_pubkey",
+        silentpayments.labeled_spend_pubkey,
+        (SPEND_PUBKEY, SP_LABEL),
+        {},
+    ),
+    (
+        "silentpayments.prevouts_summary",
+        silentpayments.prevouts_summary,
+        (OUTPOINT, (), [PUBKEY]),
+        {},
+    ),
+    (
+        "silentpayments.scan_outputs",
+        silentpayments.scan_outputs,
+        (
+            SP_OUTPUTS,
+            SCAN_PRVKEY,
+            SP_SUMMARY,
+            SPEND_PUBKEY,
+            {SP_LABEL: SP_LABEL_TWEAK},
+        ),
+        {},
+    ),
 ]
 
 MODULES = {
@@ -104,6 +154,7 @@ MODULES = {
     "keys": keys,
     "mult": mult,
     "recovery": recovery,
+    "silentpayments": silentpayments,
     "ssa": ssa,
     "xonly": xonly,
 }
@@ -117,8 +168,14 @@ NOT_SWEPT = {"keys.serialize", "keys.parse"}
 def retyped(value: Any, kind: type) -> Any:
     """Return the argument as a bytearray or a memoryview, if it is bytes.
 
-    A list of them is retyped element by element, which is what the two
-    functions taking a sequence of public keys are given.
+    A list or a tuple of them is retyped element by element, which is
+    what the functions taking a sequence of keys are given, the pairs of
+    `create_outputs` included.
+
+    A mapping has its values retyped and its keys left alone, and that is
+    not an omission: `scan_outputs` takes a label cache keyed on the 33
+    bytes of a label, and neither a `bytearray` nor a `memoryview` is
+    hashable, so bytes is the only one of the three a key can be.
 
     Args:
         value: one argument of a call below.
@@ -131,6 +188,10 @@ def retyped(value: Any, kind: type) -> Any:
         return kind(value)
     if isinstance(value, list):
         return [retyped(item, kind) for item in value]
+    if isinstance(value, tuple):
+        return tuple(retyped(item, kind) for item in value)
+    if isinstance(value, dict):
+        return {key: retyped(item, kind) for key, item in value.items()}
     return value
 
 

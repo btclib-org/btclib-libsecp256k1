@@ -237,6 +237,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `schnorrsig`        | `ssa`                                     |
 | `musig`             | raw `lib` bindings, by decision           |
 | `ellswift`          | `ellswift` (BIP324)                       |
+| `silentpayments`    | `silentpayments` (BIP352)                 |
 
 `keys` provides the public key of a private key (`pubkey_from_prvkey`,
 compressed by default, of which `mult.mult_` is the uncompressed
@@ -257,6 +258,39 @@ the libsecp256k1 default. The hash function is not exposed: libsecp256k1
 takes it as a C callback, and a protocol needing another derivation has
 the shared point itself as `keys.pubkey_tweak_mul(pubkey, prvkey)`,
 constant time like the ECDH call and without python in the middle of it.
+
+`silentpayments` is BIP352, and the elliptic curve half of it, which is
+what libsecp256k1 implements: `create_outputs` is the sender's side and
+takes the private keys of the inputs the payment is funded from,
+`prevouts_summary` and `scan_outputs` the recipient's, and `label` and
+`labeled_spend_pubkey` the several addresses one scan key can receive
+at. What is not there is what BIP352 states over scripts -- which inputs
+of a transaction are eligible, and which of those are taproot -- because
+that is a script question and there is no script here: the two kinds of
+key are two arguments, and the caller says which is which.
+`tests/test_vectors.py` drives both directions of every BIP352 vector,
+and reads that eligibility off the keys the vector file itself publishes
+rather than off its scripts, for the same reason.
+
+Two things about it are worth knowing before it is used. The summary
+`prevouts_summary` returns is opaque and not a serialization: what is
+inside is libsecp256k1's own, portable across neither platforms nor
+versions, and the only thing to do with it is hand it to `scan_outputs`
+in the same process. And the label cache is a mapping the caller owns:
+libsecp256k1 recognizes a label by calling back to look it up, so a
+labeled output is found only if its label is in the mapping handed in --
+which is also why the keys of that mapping are `bytes` and only bytes,
+a `bytearray` and a `memoryview` not being hashable.
+
+`secp256k1_context_set_sha256_compression`, new in libsecp256k1 0.8.0,
+has no binding, by the decision that keeps the ECDH hash out: it replaces
+the SHA256 compression function the library uses internally, and its
+purpose is to route it to a hardware implementation. Reached from python
+it would do the opposite -- a python call per 64-byte block, in the
+innermost loop of every hash the library computes -- so what it is for is
+unreachable through these bindings and what it would be is a way to make
+them slow. It remains available through `lib` for a caller who has a C
+function pointer to give it.
 
 MuSig2 has no binding module, by decision. What its two-round protocol
 needs is a session whose secret nonce cannot be reused, and that is a
