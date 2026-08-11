@@ -27,7 +27,7 @@ bitcoin-core-rpc carry the same three lines. -->
 
 Simple python bindings to
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
-([v0.7.1](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.7.1)).
+([v0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)).
 As used by the
 [btclib](https://github.com/btclib-org/btclib) library.
 

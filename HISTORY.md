@@ -5,7 +5,35 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
-## v0.7.1.4 (work in progress, not released yet)
+## v0.8.0 (work in progress, not released yet)
+
+[libsecp256k1 0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)
+(6e2c8bc), up from 0.7.1: a minor version of the wrapped library, so a
+minor version here, the numbers tracking each other. **One breaking
+change, and only for a caller reaching through `lib`.**
+
+- **Two libsecp256k1 symbols are gone**, removed upstream after being
+  deprecated: `secp256k1_context_no_precomp`, whose replacement is
+  `secp256k1_context_static`, and the `secp256k1_schnorrsig_sign` alias,
+  whose replacement is `secp256k1_schnorrsig_sign32`. Nothing in these
+  bindings used either, so code calling only the wrappers is unaffected;
+  code reaching for one of the two through `lib` has to move to its
+  replacement, and will fail to import the attribute rather than
+  misbehave.
+- **`ellswift.xdh` refuses a private key at or above the group order**,
+  where it used to reduce it modulo the order and answer. That was
+  upstream's bug and is upstream's fix; what changes here is that such a
+  key now raises `ValueError` naming an invalid private key, which is
+  what the docstring already said it did. No securely generated key is
+  affected: the probability of one landing there is about 2**-128.
+- **ECDSA and BIP340 verification are faster on GCC and MSVC**, by up to
+  about 11% upstream's measure, the 64-bit field multiplication and
+  squaring now being force-inlined. Clang, which is what the macOS wheels
+  are built with, is largely unaffected; the compiled library is somewhat
+  larger everywhere.
+- **A new libsecp256k1 module, `silentpayments`, is not wrapped by this
+  release** — it is compiled in and reachable through `lib`, and the
+  binding for it lands separately.
 
 ## v0.7.1.3
 
