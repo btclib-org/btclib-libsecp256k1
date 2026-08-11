@@ -20,7 +20,35 @@ This file starts at v0.7.1.2. The releases before it were documented at
 release-notes length in the first place, and are still in
 [HISTORY.md](./HISTORY.md) rather than duplicated here.
 
-## v0.7.1.4 (work in progress, not released yet)
+## v0.8.0 (work in progress, not released yet)
+
+### The wrapped library
+
+- **libsecp256k1 moves from 0.7.1 (1a53f49) to 0.8.0 (6e2c8bc)**, and the
+  package version with it, the two tracking each other by the rule in the
+  README's Versioning section. The submodule bump is what decides that
+  number, so it is what carries it: `pyproject.toml`, this file and
+  HISTORY.md all say 0.8.0, and the fourth-number placeholder 0.7.1.4 that
+  was open is gone rather than released — nothing had shipped under it.
+- **The symbols upstream removed were not used here.** Checked rather
+  than assumed: `secp256k1_context_no_precomp` and the
+  `secp256k1_schnorrsig_sign` alias appear nowhere in the package, the
+  stubs or the tests, `ssa` having always called `sign32` and
+  `sign_custom`. The macro `SECP256K1_GNUC_PREREQ` is also gone from the
+  headers, which matters here only in that the headers are preprocessed
+  into the cffi definitions: `gcc -E` expands what it finds, and it no
+  longer finds that.
+- **`ellswift.xdh`'s refusal of an out-of-range key is upstream's**, and
+  the suite did not have to change for it. The wrapper already raised
+  `ValueError("invalid private key")` on a zero return, and the docstring
+  already said a key that is not a valid scalar raises; what changed is
+  which keys libsecp256k1 calls invalid.
+- **The new `silentpayments` module is not enabled by this change.** It is
+  a module of libsecp256k1 0.8.0, and this repository asks for every
+  module it wraps explicitly rather than taking upstream's defaults, so
+  turning it on belongs with the binding that uses it. Until then it is
+  absent from the build, which is why the surface this change adds is
+  none: the same entry points, minus the two symbols upstream removed.
 
 ### CI
 
