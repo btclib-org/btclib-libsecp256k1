@@ -159,6 +159,16 @@ installs it as a managed one, and `uv sync` then prefers it to a system
 3.14, so `uv python install 3.14` is what makes the default environment
 reproducible again.
 
+Naming the environment keeps the default one instead, at the price of a
+second build of the extension:
+
+```shell
+UV_PROJECT_ENVIRONMENT=.venv-3.10 uv run --python 3.10 --no-cache pytest
+```
+
+`.gitignore` matches that name with `.venv*/`, the comment beside the
+pattern saying what ships the environment when nothing matches it.
+
 ### The editor
 
 `.vscode/settings.json` and `.vscode/extensions.json` are tracked, and they

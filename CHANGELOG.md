@@ -213,6 +213,34 @@ release-notes length in the first place, and are still in
   after would have done the same. Where the file starts is the fact it
   was reaching for, and that one does not move.
 
+### Packaging metadata
+
+- **`.gitignore` matches a versioned environment, and the sdist stops
+  shipping one.** `.venv`, `venv/` and `venv*/` between them do not match
+  `.venv-3.10`, which is what
+  `UV_PROJECT_ENVIRONMENT=.venv-3.10 uv run --python 3.10 --no-cache pytest`
+  creates — the way of trying another interpreter that keeps the default
+  environment rather than replacing it, and CONTRIBUTING.md now gives it
+  beside the run that replaces one. Nothing downstream caught the leftover:
+  uv writes a `.gitignore` holding `*` inside the environment it creates, so
+  `git status` was clean, while hatchling builds the sdist from the root file
+  alone and shipped the directory — 377 paths against 297 and 13,132,264
+  bytes against 3,076,714, measured on `38ee75b` with the environment present
+  either way (`tar -tzf dist/*.tar.gz | wc -l`), the rest of the archive
+  identical. The totals move with the vendored library and the difference
+  does not: it is the environment's `bin` and the four files beside it,
+  `lib/` being matched already by the Distribution section above.
+  `twine check --strict` passed on it; `pyroma --min 10` raised
+  `tarfile.AbsoluteLinkError` on `.venv-3.10/bin/python`, the tarfile data
+  filter refusing a link to an absolute path, so the packaging gate failed
+  on one symlink rather than on the stray paths, which are the difference
+  between those two counts. `check-manifest` names every one of them — it
+  compares the sdist with what git tracks — and is not in the `check` group;
+  the pattern states the same fact where a file becomes invisible rather
+  than where an archive is built. It is `.venv*/`, in place of the `.venv`
+  beside `venv*/`: a directory of that exact name is matched by it, and by
+  the stock `# Environments` block above.
+
 ## v0.7.1.3
 
 ### Documentation

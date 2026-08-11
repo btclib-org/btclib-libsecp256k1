@@ -92,8 +92,15 @@ celerybeat-schedule
 # dotenv
 .env
 
-# virtualenv
-.venv
+# virtualenv. `.venv*/` and not `.venv`: a suffix makes a different name,
+# and `UV_PROJECT_ENVIRONMENT=.venv-3.10 uv run --python 3.10 --no-cache
+# pytest` -- CONTRIBUTING.md's other-interpreter run, kept from replacing
+# the default environment -- creates one. Nothing downstream catches it: uv
+# writes a `.gitignore` holding `*` inside the environment, so `git status`
+# is clean, while hatchling reads this file alone and ships the directory in
+# the sdist, where `bin/python` is a link to an absolute path that `pyroma`
+# refuses to extract
+.venv*/
 venv*/
 ENV/
 
