@@ -6,29 +6,33 @@
 #
 # every pull request here runs the whole build and test matrix, tens of
 # jobs compiling libsecp256k1 from source, so each ecosystem groups its
-# updates into a single pull request. Weekly, matching btclib: latest.yml
-# upgrades everything and runs that same matrix against it every
-# Wednesday, off the critical path, so a Thursday pull request is a diff
-# whose result is already known, and a smaller one is easier to read and
-# to revert than a month of drift arriving at once. That is what makes
-# the extra machine time worth it here too, tens of jobs compiling
-# libsecp256k1 from source included. Each still waits a week before
-# proposing a release regardless: a version yanked within days of
-# publication would otherwise be a pull request that opens, runs that
-# matrix, and is then closed
+# updates into a single pull request. None declares a target-branch:
+# without one dependabot opens against the default branch, which is the
+# only branch a change lands on -- and a target-branch naming a branch
+# that is not there is not an error anywhere, it is a repository where
+# nothing is ever proposed.
+#
+# Weekly, matching btclib: latest.yml upgrades everything and runs that
+# same matrix against it every Wednesday, off the critical path, so a
+# Thursday pull request is a diff whose result is already known, and a
+# smaller one is easier to read and to revert than a month of drift
+# arriving at once. That is what makes the extra machine time worth it
+# here too, tens of jobs compiling libsecp256k1 from source included.
+# Each still waits a week before proposing a release regardless: a
+# version yanked within days of publication would otherwise be a pull
+# request that opens, runs that matrix, and is then closed
 version: 2
 updates:
   # what this buys is the exact pins: every action is pinned to a commit
   # SHA, which nothing but this moves
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "thursday"
-    target-branch: "main"
+      interval: weekly
+      day: thursday
     groups:
       # one PR for all action bumps instead of one PR each
-      github-actions:
+      actions:
         patterns: ["*"]
     cooldown:
       default-days: 7
@@ -40,12 +44,11 @@ updates:
   # request are the pre-commit revisions, updated by pre-commit.ci; these
   # are what an editor and an ad hoc run see, and they should not drift
   # away from those
-  - package-ecosystem: "uv"
-    directory: "/"
+  - package-ecosystem: uv
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "thursday"
-    target-branch: "main"
+      interval: weekly
+      day: thursday
     groups:
       dev-tooling:
         patterns: ["*"]
@@ -55,11 +58,10 @@ updates:
   # signal upstream movement of the vendored secp256k1 submodule;
   # note: Dependabot tracks the upstream default branch, so releases
   # still need a manual bump to the tagged commit
-  - package-ecosystem: "gitsubmodule"
-    directory: "/"
+  - package-ecosystem: gitsubmodule
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "thursday"
-    target-branch: "main"
+      interval: weekly
+      day: thursday
     cooldown:
       default-days: 7
