@@ -169,8 +169,13 @@ does.
 elsewhere passes `--locked`, the dependency groups declare no version, and
 the one runtime dependency is cffi — which this package does not merely
 import but *compiles against*, so a cffi, setuptools or cmake release can
-break the build rather than a test. Dependabot is monthly here on purpose,
-that being a cost decision now rather than a visibility one, and this is why.
+break the build rather than a test — and none of those three is something
+Dependabot moves, `[build-system] requires` being resolved at build time
+and pinned by no lock file. Dependabot is weekly, on the Thursday after
+this runs, which is the other half of the arrangement: the sentinel
+answers on Wednesday, so the pull requests that arrive the next morning
+are a diff whose result is already known. `.github/dependabot.yml` carries
+that reasoning where the day is set.
 
 `mutation` is scoped by `.github/mutation/bindings.toml`, which is also
 what a local run reads, so there is one statement of what is mutated and

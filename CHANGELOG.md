@@ -305,6 +305,21 @@ release-notes length in the first place, and are still in
   fails `-W` under the other is found after the merge, on the service
   whose failure is not a check on the pull request. The file already said
   it matches btclib's, and btclib's moved.
+- **Two documented cadences the schedules contradicted.** CLAUDE.md said
+  "Dependabot is monthly here on purpose", where
+  `.github/dependabot.yml` has declared `interval: weekly` with
+  `day: thursday` on all three ecosystems since it was moved there to
+  match btclib; and RELEASING.md's step 7 said `published` "runs weekly
+  on its own", where its cron is `23 6 1 * *` and this file's own v0.8.0
+  entry records the move from weekly to monthly. Neither is a claim
+  anything checks, which is why both survived the change they describe.
+  The CLAUDE.md sentence was making an argument as well as a statement —
+  that `latest` covers for an infrequent Dependabot — and the argument
+  was the wrong way round: `latest` runs on the Wednesday *before*
+  Dependabot proposes on the Thursday, so what it buys is a diff whose
+  result is already known. What it covers that nothing else does is
+  `[build-system] requires`, resolved at build time and pinned by no
+  lock file, so Dependabot never moves it at any interval.
 
 ### Packaging metadata
 
