@@ -1,0 +1,205 @@
+---
+name: codeql
+
+# the fourth gate, and the one that used to have no file: code scanning ran
+# from GitHub's default setup, a repository setting, so the only required
+# check on main whose definition a diff could not review was the one looking
+# for vulnerabilities. Every other check here is a file with pinned SHAs, and
+# this makes CodeQL one too -- the languages, the query suite, the schedule
+# and the permissions all readable, reviewable and moved by dependabot.
+#
+# It reproduces what the setting held rather than inventing a configuration,
+# which is what keeps the alert history continuous. Read from the API before
+# this file was written:
+#
+#     gh api repos/{owner}/{repo}/code-scanning/default-setup
+#     # languages: actions, python; query_suite: default; schedule: weekly
+#
+# The one thing that cannot be reproduced is the analysis *key*: default
+# setup's runs are `dynamic/github-code-scanning/codeql:analyze`, and an
+# advanced workflow's carry this file's path. The alerts survive that,
+# because what matches an alert across runs is the category below, which is
+# spelled exactly as default setup spelled it:
+#
+#     gh api repos/{owner}/{repo}/code-scanning/analyses \
+#       --jq '.[] | {ref, category, analysis_key}'
+#     # /language:python and /language:actions
+#
+# **While default setup is enabled GitHub refuses to run this workflow**, so
+# the pull request that adds it cannot show it passing. The switch has an
+# order, given in that pull request's own description: the branch rule drops
+# the `CodeQL` context, default setup is turned off, the checks are re-run,
+# and only then does the rule name the aggregate job at the end of this
+# file. REPOSITORY.md carries the commands, this being a rule that lives
+# outside the repository
+
+on:
+  pull_request:
+    # no path filter, unlike the sentinels here: the aggregate below is a
+    # required check on main, and a required check that produces no run at
+    # all blocks the merge instead of passing it -- so a documentation-only
+    # pull request has to run this too.
+    # ready_for_review, so a pull request marked ready gets the run the
+    # draft condition below withheld while it was a draft: the default
+    # types do not include it, and without it a readied pull request would
+    # wait for its next push to be checked at all
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    # main only, for the reason lint.yml gives at the same key -- but with a
+    # second one this workflow does not share with the other gates: an
+    # analysis of the default branch is what an alert is measured against,
+    # so the branch every pull request is compared to has to be scanned
+    # itself, and a merge creates a commit no pull request tested
+    branches: [main]
+  schedule:
+    # Tuesday 04:33 UTC. Weekly, which is what default setup ran, and it
+    # earns the slot: a CodeQL release can find in unchanged code what the
+    # queries of the week before did not look for, so a repository that
+    # sits still is not a repository that stays clean.
+    # Not on the hour: GitHub queues scheduled workflows across every
+    # repository that asked for the same minute, and a run can be dropped
+    # outright when that queue is long. Tuesday and minute 33 are shared
+    # with no other cron here, nor with btclib's or bitcoin-core-rpc's --
+    # `grep -rn 'cron:' .github/workflows/*.yml` in each is what re-derives
+    # that, and the other days are Monday (links), Wednesday (macos,
+    # latest), Sunday (mutation) and the 1st (published, vendored vectors).
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "33 4 * * 2"
+  # the escape hatch: a scan on demand for a branch whose pull request is
+  # not open yet
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job can read
+# it, and the analysis job below is the only one that writes anything
+permissions:
+  contents: read
+
+# cancel superseded runs on the same branch/PR, named literally rather than
+# through github.workflow for the reason lint.yml gives at length. No
+# concurrency-suffix input here, unlike the three gates release.yml calls:
+# nothing calls this workflow, so github.ref is this run's own ref
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    # one job per language, so a failure says which analysis failed instead
+    # of leaving two to be told apart in a log. Default setup's own two jobs
+    # were `Analyze (actions)` and `Analyze (python)`; these are named for
+    # the question they answer, as every job here is, and neither name is a
+    # required check -- the aggregate below is
+    name: Analyze ${{ matrix.language }} with CodeQL
+    # a draft pull request is work in progress and spends no runner here
+    # either: the same condition lint.yml, docs.yml and test.yml carry, and
+    # ready_for_review is a trigger type above for the same reason
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    # the two analyses of default setup took 41 to 48 seconds each, measured
+    # on the last pull request it ran on, so this is tolerance for a cold
+    # tools download rather than a budget:
+    #
+    #     gh api repos/{owner}/{repo}/commits/<sha>/check-runs --paginate \
+    #       --jq '.check_runs[] | select(.name | test("Analyze"))
+    #             | {name, started_at, completed_at}'
+    timeout-minutes: 15
+    permissions:
+      # what uploads the SARIF and what the alerts are written with; the
+      # only write permission any job in this repository asks for outside
+      # release.yml
+      security-events: write
+      contents: read
+      # what CodeQL reads workflow run data with, required for a private
+      # repository and inert in a public one. Declared so that making this
+      # repository private is not also a broken required check
+      actions: read
+
+    strategy:
+      # fail-fast would cancel the other language on the first failure, and
+      # a cancelled analysis is not a verdict: the aggregate below reads
+      # `cancelled` as a failure precisely because it is no evidence either
+      # way, so leaving it on would turn one real finding into two red cells
+      # with one cause between them
+      fail-fast: false
+      matrix:
+        # exactly what default setup analyzed. `actions` is the workflows
+        # themselves, and it is worth as much here as the package is: what
+        # they do is check out a tree, run a build script and hold a
+        # publishing token, and `zizmor` is a hook rather than the only
+        # thing that reads them for a reason. The vendored C is not among
+        # them and was not before -- libsecp256k1 is upstream's code,
+        # upstream scans it, and adding `c-cpp` would report its findings on
+        # every pull request that touches a docstring
+        language: [actions, python]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # no `submodules:`, and that is the analysis default setup ran:
+          # the vendored tree is not checked out, so nothing of upstream's
+          # is scanned here, and the python extractor has less to walk
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: ${{ matrix.language }}
+          # nothing is compiled to be analyzed, which for these two
+          # languages is both the only mode available and the default --
+          # stated anyway, because this package *does* build C, and a reader
+          # who knows that would otherwise have to check whether the scan
+          # waits for cmake. It does not
+          build-mode: none
+          # no `queries:`, no `packs:` and no `config:`, which is how the
+          # `default` query suite default setup reported is asked for: there
+          # is no input that names it, and the suite widens the moment one
+          # of those three appears. `security-extended` would be a decision
+          # about how much noise a pull request is worth, and the setting
+          # this file replaces had not taken it
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          # the category is what ties an upload to the analyses before it,
+          # so it is spelled as default setup spelled it -- see the header.
+          # Get this wrong and every existing alert is closed as fixed while
+          # a copy of it is opened by this workflow
+          category: "/language:${{ matrix.language }}"
+
+  # one context for the branch rule, instead of the matrix's own, for the
+  # reason test.yml gives at its own aggregate: a rule naming
+  # `Analyze python with CodeQL` names a context that stops being produced
+  # the moment the matrix changes, and a required check that produces no run
+  # blocks every merge with nothing in the tree to explain why. A job added
+  # to this workflow belongs in the `needs` below or it gates nothing.
+  #
+  # The name carries the workflow because a context is keyed by name alone:
+  # two workflows with a job named `every job passed` would produce one
+  # ambiguous check
+  codeql-passed:
+    name: "codeql: every job passed"
+    needs: [analyze]
+    # not success(): a job whose dependencies failed is skipped, and a
+    # skipped check reports `skipped`, which branch protection counts as
+    # satisfied. The gate has to run to be able to fail -- and it carries
+    # the draft condition every job above carries, so a draft skips
+    # uniformly rather than tripping the skip check below
+    if: ${{ always() && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # the condition reads the whole needs context rather than testing each
+      # job by name, so a job added to needs above is covered without
+      # touching this. `skipped` is a failure here too: nothing in this
+      # workflow is conditional, so a skip means something upstream did not
+      # run
+      - name: Fail unless every job above succeeded
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          contains(needs.*.result, 'cancelled') ||
+          contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::a job this gate depends on did not succeed"
+          exit 1

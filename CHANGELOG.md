@@ -234,6 +234,25 @@ release-notes length in the first place, and are still in
   next tag would have been stopped by it. The draft exception that let the
   release pull request through (`github.base_ref == 'master'`) can never be
   true again and is gone with them.
+- **CodeQL is `codeql.yml`, not code scanning's default setup.** It was the
+  one required check on `main` whose definition no diff could review: a
+  repository setting, so the languages it scanned, the queries it ran and
+  the day it ran them were readable only through
+  `gh api repos/{owner}/{repo}/code-scanning/default-setup`. The workflow
+  reproduces exactly what that reported — `actions` and `python`, the
+  `default` query suite, weekly — one job per language so a failure names
+  the language, `github/codeql-action` pinned to a commit SHA like every
+  other action here, and `security-events: write` declared on that job
+  alone. The category is spelled as the setting spelled it,
+  `/language:<language>`, which is what carries the existing alerts across:
+  an upload under a new category closes every one of them as fixed and
+  opens a copy. The aggregate is `codeql: every job passed`, for the reason
+  `test.yml`'s own is: a branch rule must name an outcome and not a matrix
+  cell. Turning the setting off and moving the rule are two steps only a
+  maintainer can take, in an order REPOSITORY.md gives — GitHub refuses to
+  run an advanced workflow while default setup is enabled, so the two
+  cannot overlap, and the rule has to stop naming a context nothing
+  produces before it can name the one this file does.
 
 ### The gate
 
