@@ -43,6 +43,23 @@ Wheels and sdist are published with PEP 740 attestations, so that a
 distribution can be traced back to the workflow run and the commit it
 was built from.
 
+The sdist is also attached to the GitHub release, and that copy carries a
+build provenance attestation of its own, signed in the run that built it:
+
+```shell
+repo=btclib-org/btclib-libsecp256k1
+gh attestation verify btclib_libsecp256k1-<version>.tar.gz \
+  --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml"
+```
+
+`--signer-workflow` is what makes that say which workflow signed, rather
+than accepting any attestation this repository has. The signed statement
+is attached to the release as well, as `<tag>.attestation.jsonl`, so
+`--bundle <tag>.attestation.jsonl` runs the same check reading it from
+disk instead of asking GitHub for it — the form for whoever mirrors the
+releases page rather than trusting it live. The wheels are on PyPI and
+nowhere else, so what verifies them is their PEP 740 attestation there.
+
 ## Limitations of the binding layer
 
 These are known and inherent, not vulnerabilities:

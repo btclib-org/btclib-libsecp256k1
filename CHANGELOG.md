@@ -141,6 +141,37 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **The sdist attached to a GitHub release carries provenance** (#97),
+  where only the copy on PyPI did: the publish job generates a PEP 740
+  attestation for what it uploads to the index, and the byte-identical
+  file on the releases page carried nothing, so whoever pinned to a
+  release asset url or mirrored the page had no way to check where it
+  came from. `release.yml` gains an `attest` job — `actions/attest`, one
+  SLSA build provenance statement, signed with a short-lived Sigstore
+  certificate — and `gh attestation verify <file> --repo
+  btclib-org/btclib-libsecp256k1 --signer-workflow …` is what checks it,
+  the last flag being what makes the answer name a workflow rather than
+  accept any attestation this repository has. The signed bundle is
+  attached to the release too, as `<tag>.attestation.jsonl`, so
+  `--bundle` verifies the same signature without asking the attestations
+  API for it. The digest is the index's own, the job downloading the
+  `sdist` artifact rather than rebuilding it. The wheels are not signed
+  a second time: they are attached to no release, so their only public
+  copy is the one PyPI already attests. A job of its own and not two more
+  permissions on `github-release`: `id-token: write` and `attestations:
+  write` stay off the job that writes releases, and further off the
+  matrix that compiles the vendored library. It runs after whichever
+  publish job ran, so a dispatch from an arbitrary branch signs nothing
+  an environment approval did not let through — and the TestPyPI
+  rehearsal exercises it, which on the release path would otherwise
+  happen for the first time after PyPI has the files and the tag can no
+  longer be moved. `github-release` names both `publish-pypi` and
+  `attest` in `needs`: naming `attest` alone would let a dispatch cut a
+  release, that job running in a rehearsal too. Not the
+  `attest-build-provenance` wrapper the issue proposed, which is a
+  composite whose only step is `actions/attest` pinned there to v4.2.1 —
+  calling the action directly is what leaves the version that signs
+  pinned here.
 - **The macOS suite cells left the merge gate for `macos.yml`.** Over six
   pull request runs of `test.yml`, ninety-eight jobs each and thirty-five of
   them on the two macOS images, a macOS job waited 20.8 and 19.0 minutes on

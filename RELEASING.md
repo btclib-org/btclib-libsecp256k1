@@ -7,6 +7,9 @@ it uploads is not an input to choose at dispatch time: a `v*` tag
 publishes to PyPI, a manual run publishes to TestPyPI. Both go through
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so no
 long-lived token exists anywhere, and both upload PEP 740 attestations.
+The `attest` job then signs a build provenance statement for the sdist,
+which is the file the GitHub release attaches and therefore the one copy
+the index's attestation says nothing about.
 
 The version published is the one in `pyproject.toml`; the tag only
 decides which index is reached. The `version-check` job cross-checks
@@ -229,9 +232,27 @@ Then:
    installable to find the day before
 1. check the GitHub release the workflow created once PyPI had accepted
    the upload: its notes are the tag's section of `HISTORY.md`, and the
-   sdist is attached. A run that warns `HISTORY.md has no v0.7.1 section`
-   generated the notes from the merged pull requests instead, and they
-   are worth replacing by hand
+   sdist is attached, with `<tag>.attestation.jsonl` beside it. A run
+   that warns `HISTORY.md has no v0.7.1 section` generated the notes from
+   the merged pull requests instead, and they are worth replacing by hand
+1. verify the sdist on the releases page, which is the copy PyPI's
+   attestation says nothing about — the step above says the file is
+   there, this one says where it came from:
+
+   ```shell
+   repo=btclib-org/btclib-libsecp256k1
+   dir=$(mktemp -d)
+   gh release download v0.7.1 --repo "$repo" --dir "$dir"
+   gh attestation verify "$dir/btclib_libsecp256k1-0.7.1.tar.gz" \
+     --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml"
+   ```
+
+   `--signer-workflow` is the flag that makes it say *which* workflow
+   signed: without it a valid attestation from any workflow in this
+   repository passes. Adding `--bundle "$dir/v0.7.1.attestation.jsonl"`
+   asks the same question of the statement downloaded beside the file
+   rather than of the attestations API, which is the form for whoever
+   mirrors the page instead of trusting it live
 1. realign `dev` onto `master`, before anything else is committed to it.
    Rebase and merge replays `dev`'s commits with new SHAs, so the moment
    a release is merged the two branches hold the same tree through
@@ -441,14 +462,32 @@ without rebuilding anything.
    under `/integrity/<project>/<version>/<filename>/provenance`, whose
    `attestation_bundles[].publisher` should name this repository and
    `release.yml`
+1. check the statement the `attest` job signed, which on this path has no
+   release to be attached to: it went to the attestations API all the
+   same, keyed by the digest of the file, so the sdist the run built is
+   what asks for it.
+
+   ```shell
+   repo=btclib-org/btclib-libsecp256k1
+   dir=$(mktemp -d)
+   gh run download <run id> --repo "$repo" --name sdist --dir "$dir"
+   gh attestation verify "$dir"/*.tar.gz \
+     --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml"
+   ```
+
+   This is the whole reason `attest` runs in a rehearsal at all: the
+   permissions and the API it needs are exercised here, where a failure
+   costs a dispatch, rather than for the first time on release day, where
+   it lands after PyPI has the files and the tag can no longer be moved
 
 There is no version commit to revert, and nothing to clean up: the
 suffix only ever exists inside the run that built it.
 
 What the rehearsal covers is the OIDC exchange, the approval gate, the
 artifacts the publish job collects — sixty-three wheels and one sdist, at
-0.7.1 — the PEP 740 attestations, and a real Warehouse accepting the
-metadata, which is more than `twine check --strict` can say. What it
+0.7.1 — the PEP 740 attestations, the Sigstore signature `attest` writes,
+and a real Warehouse accepting the metadata, which is more than
+`twine check --strict` can say. What it
 cannot cover is the trusted publisher on PyPI itself, a separate
 registration that can be wrong on its own, nor the deployment branch
 policy of the `pypi` environment, which the environment a rehearsal does
