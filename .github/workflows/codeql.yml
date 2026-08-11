@@ -25,13 +25,20 @@ name: codeql
 #       --jq '.[] | {ref, category, analysis_key}'
 #     # /language:python and /language:actions
 #
-# **While default setup is enabled GitHub refuses to run this workflow**, so
-# the pull request that adds it cannot show it passing. The switch has an
-# order, given in that pull request's own description: the branch rule drops
-# the `CodeQL` context, default setup is turned off, the checks are re-run,
-# and only then does the rule name the aggregate job at the end of this
-# file. REPOSITORY.md carries the commands, this being a rule that lives
-# outside the repository
+# **Default setup does not stop this workflow running.** It runs, the
+# analysis completes, the SARIF uploads, and processing refuses it --
+#
+#     Code Scanning could not process the submitted SARIF file:
+#     CodeQL analyses from advanced configurations cannot be processed
+#     when the default setup is enabled
+#
+# -- so while the setting is on the jobs below are red rather than absent,
+# and the pull request that adds this file cannot show it passing. That is
+# what gives the switch its order: the branch rule drops the `CodeQL`
+# context, default setup is turned off, the checks are re-run, and only
+# then does the rule name the aggregate job at the end of this file.
+# REPOSITORY.md carries the commands, this being a rule that lives outside
+# the repository
 
 on:
   pull_request:

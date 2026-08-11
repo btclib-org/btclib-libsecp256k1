@@ -54,11 +54,19 @@ queue for tens of minutes, measured in `test.yml`'s header, and
 
 A check can be bound to the app that produces it — `checks` with an
 `app_id` rather than the bare `contexts` list — so that nothing else can
-satisfy it, and 15368 is Actions, which produces all four. Only
-`test: every job passed` is bound today: the endpoint above reports
-`app_id: null` for the other three, meaning any app may report them, and
-the `PATCH` below is what binds them. Which app reported what is read from
-the commit rather than assumed:
+satisfy it, and 15368 is Actions, which produces them all. The rule is not
+uniform in this: `test: every job passed` and `codeql: every job passed`
+carry the binding, while `Lint and type-check` and `Build the
+documentation` report `app_id: null`, meaning any app may satisfy those
+two, and the `PATCH` below is what binds them. A `PATCH` dates that
+sentence, so read it back rather than trust it:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
+  --jq '[.required_status_checks.checks[] | {context, app_id}]'
+```
+
+Which app reported what is read from the commit rather than assumed:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
@@ -71,10 +79,20 @@ gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
 ```
 
 **CodeQL is `.github/workflows/codeql.yml`, and code scanning's default
-setup is off** — the two are mutually exclusive, GitHub refusing to run an
-advanced workflow while the setting is configured, and the file is the one
-that can be reviewed in a diff. What the setting holds is read from the
-endpoint, `state` being the field that says whether it holds anything:
+setup is off** — the two are mutually exclusive, and what that costs is not
+a workflow GitHub declines to start. The workflow runs, the analysis
+completes, the SARIF uploads, and processing answers:
+
+```text
+Code Scanning could not process the submitted SARIF file:
+CodeQL analyses from advanced configurations cannot be processed when
+the default setup is enabled
+```
+
+So while the setting is on the analysing jobs and the aggregate are red
+rather than absent, and the file is still the one that can be reviewed in a
+diff. What the setting holds is read from the endpoint, `state` being the
+field that says whether it holds anything:
 
 ```shell
 gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
@@ -91,13 +109,31 @@ gh api -X PATCH \
 ```
 
 The order matters in both directions, and it is the branch rule that
-decides it: while the setting is on, `codeql.yml` produces nothing, and
-while it is off, nothing produces `codeql: every job passed` until that
-workflow has run. So the rule drops the context first, the setting moves
-second, the checks are re-run, and the rule names the new context last —
-each step leaving the merge path open, where any other order closes it on a
-context nothing reports. `enforce_admins` being off is what makes that
-window survivable rather than a lock.
+decides it: while the setting is on, `codeql.yml` produces a red
+`codeql: every job passed` rather than none at all, and while it is off,
+nothing produces that context until the workflow has run. So the rule drops
+the `CodeQL` context first, the setting moves second, the checks are
+re-run, and the rule names the new context last — each step leaving the
+merge path open, where any other order closes it on a context nothing
+reports. `enforce_admins` being off is what makes that window survivable
+rather than a lock.
+
+That exchange has been made: the endpoint above answers `not-configured`,
+and the rule names `codeql: every job passed`. The order is kept here
+because the setting can be configured again.
+
+A `CodeQL` check and an `Analyze (python)` job outlive it, and neither
+comes from this tree: GitHub keeps a generated
+`dynamic/github-code-scanning/codeql` workflow, which uploads *code
+quality* results rather than security ones — `python.quality.sarif` in its
+log, where the security analysis produced `python.sarif`. That is a
+separate setting, and the endpoint above does not report it:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1/actions/workflows \
+  --jq '.workflows[] | select(.path | startswith("dynamic/"))
+        | {name, path, state}'
+```
 
 What the file asks for is read off its own triggers; what was actually
 analyzed, and under which ref and category, is the API's answer:
