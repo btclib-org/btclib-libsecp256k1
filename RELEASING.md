@@ -178,12 +178,33 @@ Then:
    sitting beside them are Dependabot's own updater failing to compute an
    update, not a workflow of this repository, and say nothing about the
    tree
-1. tag the tip `main` now points at, and push that tag alone:
+1. tag the tip `main` now points at, signed, and push that tag alone:
 
    ```shell
-   git tag v0.7.1
+   git tag -s v0.7.1 -m "btclib_libsecp256k1 v0.7.1"
+   git tag -v v0.7.1        # Good signature, before anything is pushed
    git push origin v0.7.1
    ```
+
+   `-s` rather than a bare `git tag`, which makes a lightweight tag: a
+   name pointing at a commit, carrying no signature, no tagger and no
+   date of its own. That is the wrong shape for the one ref this release
+   is identified by — the PEP 740 attestation binds to it, the GitHub
+   release is created from it, and `version-check` refuses a tree that
+   does not match it — so the tag is the thing most worth being able to
+   attest, and a lightweight one cannot be. libsecp256k1 itself tags this
+   way, and `secp256k1/README.md` documents verifying it with
+   `git tag -v`; this repository holds itself to what it vendors.
+
+   `-s` explicitly rather than relying on `tag.gpgsign` being true in the
+   git config: a global setting is not visible in this document, and the
+   command here is the instruction. `-m` because signing implies
+   annotating, and an annotated tag with no message opens an editor,
+   which is not what a release step should do.
+
+   `git tag -v` before the push, not after: a tag that has been pushed is
+   a tag the release workflow has already started acting on, and the
+   signature is the one thing about it that no later check looks at.
 
    `git push --tags` would push whatever other local tags happen to
    exist. The workflow then builds and tests every artifact the release
