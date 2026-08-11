@@ -129,10 +129,10 @@ def included(shim: Path) -> tuple[str, str]:
 
 # repository-relative path -> the docname whose page renders it
 INCLUDED = dict(map(included, sorted(Path(__file__).parent.glob("*_link.md"))))
-# master, not a permalink pinned to a commit: these are navigation links
-# to files that keep changing, and a reader following one wants the file
-# as it stands
-BLOB = f"{PYPROJECT['project']['urls']['repository']}/blob/master/"
+# the branch, not a permalink pinned to a commit: these are navigation
+# links to files that keep changing, and a reader following one wants the
+# file as it stands
+BLOB = f"{PYPROJECT['project']['urls']['repository']}/blob/main/"
 
 
 class RootFileLinks(SphinxPostTransform):

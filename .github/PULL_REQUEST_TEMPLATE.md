@@ -5,7 +5,7 @@
      still checked. The suppression has to sit immediately above the
      heading, `disable-next-line` reaching exactly one line -- with this
      comment between the two it silenced the comment and MD041 still
-     fired. Targets dev; master only ever receives merges from it. -->
+     fired. Targets main, the only branch a change lands on. -->
 
 <!-- markdownlint-disable-next-line first-line-heading -->
 ## What this changes, and why

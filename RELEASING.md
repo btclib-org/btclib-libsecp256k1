@@ -18,7 +18,7 @@ reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
 The same job checks that `uv.lock` carries the version the tree declares,
 that the libsecp256k1 release named in `README.md` is the commit the
 submodule is pinned to, that `HISTORY.md` has a section for the tag, and
-that the tagged commit is on `master`. Every invariant a release rests on
+that the tagged commit is on `main`. Every invariant a release rests on
 is checked there, before the point of no return.
 
 ## Which version string is which
@@ -30,7 +30,7 @@ hand. Telling them apart is most of what can go wrong:
   published, on either index, and the only one a human edits
 - **`0.7.1.1`**, a fourth number on an already-final version, plays two
   roles this list would otherwise leave out: right after 0.7.1 ships,
-  step 10 opens `dev` on it as a placeholder, nothing having moved the
+  step 10 opens the tree on it as a placeholder, nothing having moved the
   submodule since to renumber it; and if 0.7.1 itself shipped broken,
   "When a release turns out to be broken" ships the very same string
   as the fix, tagged. Both are typed by hand, like `0.7.1` above, and
@@ -115,21 +115,25 @@ Then:
 1. give the pull request its title and its body before merging it, not
    after. The title is the version; the body says what the release is —
    what moved, what did not, and which of the two a user would notice.
-   A rebase leaves no merge commit, so none of that reaches `master`'s
-   history: the pull request is where it stays, and where a reader of
-   any commit in it arrives. A template left unfilled, or a bot's
+   The pull request is where that stays, and where a reader of the commit
+   arrives from `main`'s history. A template left unfilled, or a bot's
    summary of the diff, is not a substitute — the summary can stay, but
    what the diff cannot say has to be written, and what a reader should
    not have to discover at the button belongs there too.
 
-   The previous cycle's step 11 opened this pull request asking for the
-   body to fill in one merged pull request at a time, and says so itself:
-   "a promise kept only if someone remembers to keep it." Check it against
-   `git log v<previous version>..dev --oneline` regardless of how current
-   it looks, rather than trust that every line landed when it should have.
-   `latest`'s result belongs here too, a line rather than a screenshot: it
-   gates nothing, and a pull request that never mentions it having run
-   reads exactly like one that skipped it.
+   What the cycle actually contained is not this pull request's diff,
+   which is a version bump and two headings: it is everything merged
+   since the last tag. Read it off the log rather than off the branch,
+
+   ```shell
+   git log v<previous version>..main --oneline
+   ```
+
+   and against the open sections of `CHANGELOG.md` and `HISTORY.md`,
+   which step 2 has just closed and which are where each change was
+   described as it landed. `latest`'s result belongs here too, a line
+   rather than a screenshot: it gates nothing, and a pull request that
+   never mentions it having run reads exactly like one that skipped it.
 
    A deliberate skip and an item nobody has gotten to yet are different
    facts and do not fit under one checkbox: 0.7.1.2's own checklist
@@ -139,38 +143,42 @@ Then:
    first. Separate lines for independent questions cost nothing and stay
    accurate without an edit.
 
-   Then merge `dev` into `master` with a green CI, using **Rebase and
-   merge** and never *Squash and merge*.
-   Which button that is has to be read before it is pressed: all three
-   methods are enabled on this repository, and GitHub preselects the one
-   used last. *Squash and merge* is what 0.7.1 got, and it left a single
-   commit on `master` where `dev` carried ninety-two, each of them the
-   record of a decision. The trees were identical, so nothing published
-   was wrong, but the history could not be put back afterwards: `master`
-   refuses force pushes with `enforce_admins` on, six of those ninety-two
-   commits were unsigned where `master` requires signatures, and the tag
+   Then merge it into `main` with a green CI. It is an ordinary pull
+   request against the only branch there is, and it merges the way every
+   other one here does; the button is still worth reading before it is
+   pressed, all three methods being enabled and GitHub preselecting the
+   one used last. A merge commit is not among the choices whichever is
+   selected: `main` requires linear history.
+
+   What that button cannot cost any more is the history of a cycle. It
+   could once: 0.7.1 was *Squash and merge* on a release pull request
+   carrying ninety-two commits from a development branch, and it left one
+   commit where ninety-two records of a decision had been. The trees were
+   identical, so nothing published was wrong, but it could not be put
+   back — the trunk refuses force pushes with `enforce_admins` on, six of
+   the ninety-two were unsigned where signatures are required, and the tag
    could not have followed a rewrite either, the PEP 740 attestation
    binding 0.7.1 to that commit and to `refs/tags/v0.7.1` alike. They are
-   kept at the tag `history/dev-0.7.1`. A merge commit is not among the
-   choices: `master` requires linear history.
+   kept at the tag `history/dev-0.7.1`. With one branch the question does
+   not arise: every change reached `main` in its own pull request as it
+   landed, and this one carries the release and nothing else.
 
-   Development happens on `dev`, and `master` only receives merges from
-   it. What has to be green is `lint` and `test` on the commit `master`
-   ends up at — a rebase leaves no merge commit of its own — which is
-   worth asking for by commit rather than reading off a branch:
+   What has to be green is `lint`, `docs` and `test` on the commit `main`
+   ends up at, which is worth asking for by commit rather than reading
+   off a branch:
 
    ```shell
-   gh run list --commit "$(git rev-parse origin/master)"
+   gh run list --commit "$(git rev-parse origin/main)"
    ```
 
-   and worth waiting for rather than assuming: the push a rebase-and-merge
-   makes to `master` fires `lint` and `test` again from their `push`
-   trigger, a run of its own rather than the `pull_request` run already
-   green on the pull request a moment earlier. The red `Dependabot
-   Updates` runs sitting beside them are Dependabot's own updater failing
-   to compute an update, not a workflow of this repository, and say
-   nothing about the tree
-1. tag the tip `master` now points at, and push that tag alone:
+   and worth waiting for rather than assuming: the push the merge makes
+   to `main` fires those workflows again from their `push` trigger, runs
+   of their own rather than the `pull_request` runs already green on the
+   pull request a moment earlier. The red `Dependabot Updates` runs
+   sitting beside them are Dependabot's own updater failing to compute an
+   update, not a workflow of this repository, and say nothing about the
+   tree
+1. tag the tip `main` now points at, and push that tag alone:
 
    ```shell
    git tag v0.7.1
@@ -253,109 +261,9 @@ Then:
    asks the same question of the statement downloaded beside the file
    rather than of the attestations API, which is the form for whoever
    mirrors the page instead of trusting it live
-1. realign `dev` onto `master`, before anything else is committed to it.
-   Rebase and merge replays `dev`'s commits with new SHAs, so the moment
-   a release is merged the two branches hold the same tree through
-   different histories, and the merge base between them stops advancing.
-   Left alone this is not the cosmetic issue it looks like: it is what the
-   pull request that added this very step hit, during 0.7.1.1's own
-   release -- its branch built against `dev` before this step's own reset
-   ran, so once that reset moved `dev`, GitHub reported the pull request
-   `CONFLICTING` and `gh pr merge --rebase` on it refused with `the merge
-   commit cannot be cleanly created`. Reapplying "add this line" where a
-   rebase-and-merge already added it under a different SHA is a conflict,
-   not a no-op, and GitHub does not drop the commit the way a local
-   `git rebase` would. Archive what is about to become unreachable, then
-   move the branch:
-
-   ```shell
-   git fetch origin
-   git tag -a history/dev-0.7.1 dev -m "dev's own commits for 0.7.1"
-   git push origin history/dev-0.7.1
-   git switch dev && git reset --hard origin/master
-   git push --force-with-lease origin dev
-   ```
-
-   the tag is what keeps `dev`'s own commits readable, and it must not
-   start with `v`, `release.yml` triggering on `tags: ["v*"]`. Nothing in
-   the working tree changes, the two trees being identical, and
-   `git diff origin/master origin/dev` is how to say so rather than
-   assume it.
-
-   `git switch dev` assumes a checkout free to hold it, which the
-   convention this repository asks every session to follow — its own
-   worktree, never the primary checkout — does not give a worktree
-   already busy with a branch of its own, and should not be made to have
-   by switching branches inside it. Without a local checkout of `dev` at
-   all:
-
-   ```shell
-   git push --force-with-lease=refs/heads/dev:<old dev sha> origin \
-     origin/master:refs/heads/dev
-   ```
-
-   pushes the read-only remote-tracking ref `origin/master` straight to
-   `refs/heads/dev`, the lease keyed to the `dev` tip a `git fetch`
-   already holds rather than to a branch checked out locally.
-
-   That last push can fail on its own, distinctly from everything above
-   it: `dev`'s branch protection blocking force pushes is not one of the
-   rules `enforce_admins` being off exempts an administrator from. That
-   toggle covers required reviews, required status checks, required
-   signatures and required linear history -- what a *pull request*
-   enforces -- and force-push protection is a rule of its own that GitHub
-   applies to every push over the git protocol regardless of who is
-   pushing, admin included. 0.7.1.1 is where this was learned: the
-   maintainer's own push, run by hand, came back
-   `remote: - Cannot force-push to this branch`, and no `--admin`-like
-   flag on `git push` exists to ask around it. What worked instead was
-   flipping the one setting that governs it, immediately before the push
-   and immediately after:
-
-   ```shell
-   gh api repos/<owner>/<repo>/branches/dev/protection --jq \
-     '{required_status_checks, enforce_admins: .enforce_admins.enabled,
-       required_pull_request_reviews, restrictions,
-       required_linear_history: .required_linear_history.enabled,
-       allow_force_pushes: true, allow_deletions: .allow_deletions.enabled,
-       block_creations: .block_creations.enabled,
-       required_conversation_resolution: .required_conversation_resolution.enabled,
-       lock_branch: .lock_branch.enabled,
-       allow_fork_syncing: .allow_fork_syncing.enabled}' \
-     | gh api -X PUT repos/<owner>/<repo>/branches/dev/protection --input -
-   ```
-
-   read the four nullable fields back first (`required_status_checks`,
-   `required_pull_request_reviews`, `restrictions`, and `required_signatures`,
-   which is its own endpoint and this PUT does not touch) and carry
-   whatever they hold into the payload unchanged -- a PUT that drops one
-   silently disables it, the same warning the master section above makes
-   about reviews and signatures. On `dev` today all three are unset, which
-   is what makes the jq filter above safe to run as shown; a `dev` with
-   any of them configured needs its current values read and kept, not
-   assumed absent. Push, then set `allow_force_pushes` back to `false`
-   through the same PUT at once: the setting, not only this one push, is
-   what stands open in between, and every other push to `dev` shares that
-   window while it is.
-
-   Every branch still open against `dev` has had its base
-   moved out from under it, and reports the whole release as its own diff
-   until it is rebased:
-
-   ```shell
-   git rebase --onto origin/master <the old dev tip> <branch>
-   ```
-
-   GitHub's own `mergeable`/`mergeStateStatus` on that branch's pull
-   request can still read `CONFLICTING`/`DIRTY` for a few seconds after
-   the force-push that follows, before it finishes recomputing against
-   the new tip — worth a second look rather than read as the rebase
-   above having failed.
-
-   this comes before step 10 rather than after it: the bump step 10 makes
-   is on `dev`, and the force update above would discard it
-1. open the next version on `dev`: bump `pyproject.toml` to a fourth
-    number over what was just published — `0.7.1.1` after `0.7.1` — and
+1. open the next version, in a pull request of its own and before
+    anything else lands: bump `pyproject.toml` to a fourth number over
+    what was just published — `0.7.1.1` after `0.7.1` — and
     run `uv lock`. It is a placeholder, and step 1 renumbers it if the
     submodule moves before the next release; what it buys is a tree that
     no longer claims to be a version it is not. `__version__` reads
@@ -372,17 +280,9 @@ Then:
     same time, headed
     `## v<version> (work in progress, not released yet)` and empty: what
     lands next then has somewhere to be written down as it lands, which
-    is the whole of step 2
-1. open a draft pull request from `dev` to `master` for the version step
-    10 just opened, title included, and leave its body for what step 3
-    already asked for: written before the release is cut, not
-    reconstructed from the diff at the last minute. A draft one is
-    exactly what step 3 could not be until now — everything that lands on
-    `dev` between one release and the next has a place to be described as
-    it lands, rather than a promise kept only if someone remembers to keep
-    it. Marking it ready and pressing **Rebase and merge** is what step 3
-    still is; this step is what makes reaching it with a body already
-    written the ordinary case rather than the exception
+    is the whole of step 2 — and, with one branch and no long-lived
+    release pull request to hold a body, the whole of what step 3 reads
+    the cycle off at the end of it
 
 ## Rehearsing on TestPyPI
 
@@ -493,7 +393,7 @@ registration that can be wrong on its own, nor the deployment branch
 policy of the `pypi` environment, which the environment a rehearsal does
 reach has none of, nor the checks of `version-check` that need a tag: the
 version comparison, the `HISTORY.md` section, and the ancestry on
-`master`.
+`main`.
 
 ## When a release turns out to be broken
 
@@ -551,8 +451,8 @@ next fork.
   ```
 
   What that rule constrains is the *name* of the ref, and nothing else: a
-  `v*` tag pushed on a branch head, on an old `dev` state or on a
-  fork-synced commit satisfies it exactly as the release tag does, and
-  the reviewer approving sees the tag name rather than its ancestry.
-  The ancestry is checked in `version-check` instead, which fails a tag
-  that is not on `master` before the matrix builds anything
+  `v*` tag pushed on a branch head, on a commit `main` has since moved
+  past or on a fork-synced commit satisfies it exactly as the release tag
+  does, and the reviewer approving sees the tag name rather than its
+  ancestry. The ancestry is checked in `version-check` instead, which
+  fails a tag that is not on `main` before the matrix builds anything

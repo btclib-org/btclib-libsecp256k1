@@ -375,9 +375,8 @@ run locally.
 
 ## What a change has to satisfy
 
-Development happens on `dev`, so that is what a pull request targets;
-`master` only ever receives merges from it, and a tag on `master` is a
-release.
+`main` is the only long-lived branch, so that is what a pull request
+targets and where every change lands; a tag on `main` is a release.
 
 - **the pre-commit hooks pass.** `uv run pre-commit run --all-files` runs
   the formatter, the linters and the type checker; the `lint` workflow
@@ -535,18 +534,17 @@ commits the review is attached to: the reviewer loses the diff they read,
 one of those matrix jobs starts again from a commit nobody has seen. Add
 the fix on top, with a message saying what it fixes, and reply to the
 comment with the sha. The one force-push that stays right is the one
-carrying no new work — a `git rebase origin/dev` on a branch whose base has
-moved — and it wants the gates re-run after it, not only before, and a note
-in the pull request saying the head moved.
+carrying no new work — a `git rebase origin/main` on a branch whose base
+has moved — and it wants the gates re-run after it, not only before, and a
+note in the pull request saying the head moved.
 
-Nothing is lost in `dev`'s history by working that way, because a pull
+Nothing is lost in `main`'s history by working that way, because a pull
 request is squashed on merge: the branch lands as one commit whose subject
 is the pull request title with its number, so the review's commits are the
-record of the review and `dev` keeps one commit per landed change. All
+record of the review and `main` keeps one commit per landed change. All
 three merge buttons are enabled on this repository, so which one is used
 is a choice made at the merge rather than one GitHub enforces — check it
-before clicking, `dev` into `master` being the case that wants a different
-answer, a release having to keep the commits a tag was cut from.
+before clicking, GitHub preselecting whichever was used last.
 
 Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.

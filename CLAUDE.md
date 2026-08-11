@@ -88,7 +88,7 @@ lose. Reading it is fine — `git log`, `git show`, `git diff`, `gh`, and a
 
 ```shell
 WT=<scratchpad>/wt<issue>
-git worktree add -b <branch> "$WT" origin/dev
+git worktree add -b <branch> "$WT" origin/main
 cd "$WT" && uv sync --locked      # a second venv, and a second build of
                                   # the extension: minutes, not seconds
 # edit, gate and commit here, then
@@ -203,13 +203,14 @@ kill rate, which is the one failure mode that looks like good news.
   it shipped: step 10 of RELEASING.md, and the reason it is a step
 - **the `secp256k1` submodule moves in a change of its own,** with the
   version named in `README.md` and `HISTORY.md` moved with it
-- development happens on `dev`; a pull request targets `dev`, and `master`
-  only ever receives merges from it — with **Rebase and merge**, never
-  *Squash and merge*, which would leave one commit on `master` where `dev`
-  carried the reasoning one commit at a time. Which button GitHub has
-  selected is worth reading before it is pressed: all three are enabled,
-  and it remembers the last one used. Afterwards `dev` is realigned onto
-  `master`, both being steps of RELEASING.md and for reasons given there
+- **`main` is the only long-lived branch**, so a pull request targets it
+  and a tag on it is a release; it is protected, and every change gets
+  there through a pull request. Which button GitHub has selected is worth
+  reading before it is pressed: all three are enabled, and it remembers
+  the last one used — a merge commit is refused whichever is showing,
+  `main` requiring linear history. The `dev` this repository used to
+  develop on, and the release merge into `master` that went with it, are
+  gone; RELEASING.md is the file that describes what replaced them
 
 ## Conventions the workflows hold to
 
