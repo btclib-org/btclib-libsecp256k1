@@ -165,6 +165,24 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **`version-check` refuses a tag whose release notes are still titled
+  "work in progress".** The check it replaces asked only that
+  `HISTORY.md` had a section for the tag, and
+  `## v0.8.0 (work in progress, not released yet)` *is* a section for the
+  tag: it matches `github-release`'s heading regex too, the tag being
+  followed by a space, so a forgotten step 2 of RELEASING.md would have
+  published the release notes with the five words still on them and
+  nothing would have said a word. Measured on this very tree before the
+  retitle, where the old check passed and the new one fails on
+  `HISTORY.md:8`. It now asks three things of `HISTORY.md` **and**
+  `CHANGELOG.md` — a section for the tag, a heading carrying the tag and
+  nothing else, and a body that is not empty — and it is btclib's and
+  bitcoin-core-rpc's step verbatim, so the three repositories refuse the
+  same tag for the same three reasons. The string comparison rather than
+  a regex is what keeps `v0.8.0` from matching `## v0.8.0.1`, which here
+  is the neighbouring heading rather than a hypothetical: the fourth
+  number a release opens as its placeholder. Release-only, like the tag
+  comparison beside it: a rehearsal is what runs *before* the retitle.
 - **The sdist attached to a GitHub release carries provenance** (#97),
   where only the copy on PyPI did: the publish job generates a PEP 740
   attestation for what it uploads to the index, and the byte-identical
