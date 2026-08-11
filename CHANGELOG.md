@@ -265,6 +265,34 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **The prose stops naming `dev` and `master`, which no longer exist.**
+  The workflows were corrected when the branches went; the files that
+  describe how this repository is worked on were not, so RELEASING.md
+  still told a maintainer to merge `dev` into `master` and to read
+  `gh run list --commit "$(git rev-parse origin/master)"` — a command
+  that now fails on a ref that is gone, in the one file a release is
+  executed from. Two of its twelve steps described work that cannot be
+  done and are gone: realigning `dev` onto `master` after a release, and
+  opening the draft release pull request between the two branches, whose
+  job — somewhere to describe the cycle as it lands — the open sections
+  of `CHANGELOG.md` and `HISTORY.md` already do. What replaced the
+  release merge is stated rather than implied: the release pull request
+  is an ordinary one against `main`, and the ninety-two-commit squash of
+  0.7.1 cannot recur, every change now reaching `main` in its own pull
+  request as it lands. CONTRIBUTING.md, CLAUDE.md, REPOSITORY.md and the
+  pull request template follow, and REPOSITORY.md's branch protection
+  section describes `main` — where it said "the three checks", the rule
+  has named four since `docs` became one of them.
+- **Seven README links, the `changelog` metadata url and the Sphinx
+  source links pointed at `blob/master`.** They resolve, GitHub
+  redirecting a renamed branch, so nothing was broken and the `links`
+  sentinel stayed green; the `changelog` one is what an index puts behind
+  "Changelog" on the project page, and `docs/source/conf.py` builds every
+  "source" link on Read the Docs from the same string. The pre-commit.ci
+  badge was the one that had stopped meaning anything: pinned to
+  `master.svg`, it answers `passed` for a branch that has not existed
+  since the rename and can never turn red again — measured against a
+  branch name that never existed, which answers `unknown`.
 - **This file's own preamble says where it starts, not what it holds.**
   "Only v0.7.1.2 is here" was true for exactly one release, and v0.7.1.3
   landing under it made it false without anything failing; every release

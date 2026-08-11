@@ -8,7 +8,7 @@ body:
     attributes:
       value: >
         Discussions are not enabled here, so a question is an issue. Check
-        the [README](https://github.com/btclib-org/btclib-libsecp256k1/blob/master/README.md)
+        the [README](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/README.md)
         first: it is the documentation of this package, and its Design and
         Wrapped modules sections answer most of what gets asked.
 

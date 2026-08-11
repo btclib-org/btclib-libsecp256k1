@@ -124,7 +124,7 @@ with none open but the one doing the renaming.
 
 ## Branch protection
 
-`master`, all of it read from the endpoint above: `strict` with the three
+`main`, all of it read from the endpoint above: `strict` with the four
 checks already described, one approving review with
 `dismiss_stale_reviews`, **required signatures**, linear history, no force
 pushes, no deletions, `required_conversation_resolution`, and
@@ -136,44 +136,32 @@ admin bypass is the only way past it without a second maintainer to add.
 
 ```shell
 gh api -X DELETE \
-  repos/btclib-org/btclib-libsecp256k1/branches/master/protection/enforce_admins
+  repos/btclib-org/btclib-libsecp256k1/branches/main/protection/enforce_admins
 ```
 
 Turned off after being on through the 0.7.1 release, whose squash merge
 (see RELEASING.md) is what the previous setting actually cost: with
 `enforce_admins` on, neither the force push nor the six unsigned commits
-among the ninety-two `dev` carried could have gone back onto `master`,
-admin included. Off would not undo that squash today either — `master`'s
-tip is the commit PyPI's PEP 740 attestations for 0.7.1 are bound to, and
-moving it now would desynchronize a published release from what it
-attests to rather than restore anything. What changed is only whether the
-next incident has the same escape hatch btclib already keeps.
+among the ninety-two the development branch carried could have gone back
+onto the trunk, admin included. Off would not undo that squash today
+either — that commit is what PyPI's PEP 740 attestations for 0.7.1 are
+bound to, and moving it now would desynchronize a published release from
+what it attests to rather than restore anything. What changed is only
+whether the next incident has the same escape hatch btclib already keeps.
 
-`dev` is protected too, minimally and identically to btclib's own:
+One protected branch is the whole of it, which is a consequence of there
+being one long-lived branch:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/branches/dev/protection \
-  --jq '{required_linear_history, allow_force_pushes, allow_deletions,
-    enforce_admins, required_conversation_resolution}'
+gh api repos/btclib-org/btclib-libsecp256k1/branches \
+  --jq '.[] | "\(.name) protected=\(.protected)"'
 ```
 
-No force pushes, no deletions, linear history, resolved conversations —
-and nothing beyond that: no required check, no review, no signature, so a
-direct push still works, which is what Dependabot and pre-commit.ci both
-rely on, and where every branch here is cut from. Requiring signatures
-would reject every bot commit outright, and one approving review cannot
-be satisfied by the author on a single-maintainer repository.
-`enforce_admins` off is what keeps the first two rules from becoming a
-lock: the release process (see RELEASING.md) force-pushes `dev` to
-realign it with `master` after every release, and only an admin bypass
-lets that step run at all — the rule still stops anyone, and any
-compromised token, that is not.
-
-Before this, `dev` had no protection at all — a branch cut from and
-pushed to by two bots, force-pushable or deletable under an open pull
-request. What btclib answers with a minimal rule, this repository
-answered with none, which is the gap this section used to describe
-instead of closing.
+The minimal rule that used to sit on the development branch — no force
+pushes, no deletions, linear history, and nothing else — went with the
+branch it protected. Nothing was weakened by that: what it guarded was a
+trunk a pull request did not have to pass through, and every change now
+reaches `main` through the rules above.
 
 ## Head branches after a merge
 
@@ -187,14 +175,15 @@ GitHub deletes the head branch of a pull request when it is merged, which
 is what keeps the branch list a list of live work rather than a history of
 every change ever made. It was turned on after a sweep that removed five
 merged head branches from here, none of which anybody could tell from live
-work without comparing each against `dev` commit by commit.
+work without comparing each against the trunk commit by commit.
 
-Two cases it does not cover, both deliberate. A protected branch is never
-deleted, protection winning over this setting, so the release pull request
-that merges `dev` into `master` leaves `dev` where it is. And a pull
-request **closed without merging** keeps its head branch: GitHub cannot
-know whether that work was abandoned or is waiting, so those are the ones
-still worth looking at now and then.
+The case it does not cover is deliberate: a pull request **closed without
+merging** keeps its head branch, GitHub having no way to know whether that
+work was abandoned or is waiting, so those are the ones still worth
+looking at now and then. The setting has a second exception — a protected
+branch is never deleted, protection winning over it — which used to reach
+the release pull request, whose head branch was protected. No head branch
+is protected now.
 
 ## Token permissions
 
@@ -256,12 +245,14 @@ fails again with `invalid-publisher`, that is the first thing to check.
 
 ## Dependabot
 
-Three ecosystems, and all three target `dev`, `master` only receiving
-merges from it:
+Three ecosystems, and none of them names a target: with no
+`target-branch` Dependabot opens against the default branch, which is the
+only branch a change lands on. A setting that names nothing cannot name
+something that is gone, which is what the `dev` it used to name became.
 
 ```shell
 gh api repos/{owner}/{repo}/contents/.github/dependabot.yml \
-  --jq '.content' | base64 -d | grep -E 'package-ecosystem|target'
+  --jq '.content' | base64 -d | grep -E 'package-ecosystem|target-branch'
 ```
 
 `github-actions` moves the SHA pins, `uv` the locked dependencies, and
@@ -321,5 +312,5 @@ its root is a URL anywhere:
 gh api repos/btclib-org/btclib-libsecp256k1/pages   # 404
 ```
 
-btclib.org is built from the btclib repository's `master` root, which is
+btclib.org is built from the btclib repository's `main` root, which is
 why that project's README is also a web page and this one's is not.

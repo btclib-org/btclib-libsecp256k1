@@ -105,7 +105,7 @@ download = "https://github.com/btclib-org/btclib-libsecp256k1/releases"
 # "Changelog", and what a user following it wants is the release notes,
 # not the record behind them. CHANGELOG.md is linked from the first line
 # of that file
-changelog = "https://github.com/btclib-org/btclib-libsecp256k1/blob/master/HISTORY.md"
+changelog = "https://github.com/btclib-org/btclib-libsecp256k1/blob/main/HISTORY.md"
 issues = "https://github.com/btclib-org/btclib-libsecp256k1/issues"
 pull_requests = "https://github.com/btclib-org/btclib-libsecp256k1/pulls"
 
