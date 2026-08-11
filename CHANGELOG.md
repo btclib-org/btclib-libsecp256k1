@@ -239,6 +239,13 @@ release-notes length in the first place, and are still in
   landing under it made it false without anything failing; every release
   after would have done the same. Where the file starts is the fact it
   was reaching for, and that one does not move.
+- **Read the docs builds on the interpreter `docs.yml` builds on**, 3.14,
+  which is what `.python-version` says. These docs are built twice, once
+  for the website and once as a required check, and two interpreters make
+  those two different questions -- a docstring that renders under one and
+  fails `-W` under the other is found after the merge, on the service
+  whose failure is not a check on the pull request. The file already said
+  it matches btclib's, and btclib's moved.
 
 ### Packaging metadata
 

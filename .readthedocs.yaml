@@ -20,11 +20,13 @@ submodules:
   recursive: false
 
 # the interpreter is declared rather than left to whatever read the docs
-# defaults to, matching btclib's own file
+# defaults to, matching btclib's own file and `.python-version` here: these
+# docs are built twice, on the website and by docs.yml, and one interpreter
+# is what keeps the two from being different questions
 build:
   os: ubuntu-24.04
   tools:
-    python: "3.13"
+    python: "3.14"
   # build.commands rather than the sphinx: and python: keys, which cannot
   # express installing this package's own dependency group and are
   # rejected when it is present. uv installs the docs group from
