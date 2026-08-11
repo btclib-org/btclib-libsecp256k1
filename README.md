@@ -141,7 +141,10 @@ went:
 - provenance is checkable: every wheel and the sdist are built and
   tested in public CI from the pinned source, and published by the
   workflow itself through Trusted Publishing with PEP 740 attestations
-  — no long-lived token, and no maintainer laptop in the path
+  — no long-lived token, and no maintainer laptop in the path. The sdist
+  attached to the GitHub release carries a build provenance attestation
+  besides, which `gh attestation verify` checks; SECURITY.md has the
+  command
 
 ## What the boundary checks
 
@@ -439,7 +442,9 @@ Releases are published to PyPI by the `release` GitHub workflow using
 no long-lived PyPI token exists anywhere; PyPI trusts the workflow
 itself (via GitHub OIDC) and hands out a short-lived upload token at
 run time. Wheels and sdist are uploaded with PEP 740 attestations, so
-their provenance can be verified on PyPI.
+their provenance can be verified on PyPI; the sdist attached to the
+GitHub release is signed a second time, so that copy can be verified
+without the index.
 
 The steps to cut a release, to rehearse one on TestPyPI, and the
 one-time setup each index needs are in

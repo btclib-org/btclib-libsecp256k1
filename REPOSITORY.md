@@ -207,10 +207,12 @@ gh api repos/btclib-org/btclib-libsecp256k1/actions/permissions/workflow \
 ```
 
 Only `release.yml` asks for more: `contents: write` on `github-release`,
-and `id-token: write` on the two publish jobs, which is what Trusted
-Publishing exchanges. The workflow-level `permissions: contents: read` in
-every file is belt and braces; keep it, it is what makes the intent
-readable where the job is.
+`id-token: write` on the two publish jobs, which is what Trusted
+Publishing exchanges, and `id-token: write` with `attestations: write` on
+`attest`. One elevation per job is the shape to keep — the job that writes
+releases holds no OIDC token, and the job that signs writes no release.
+The workflow-level `permissions: contents: read` in every file is belt and
+braces; keep it, it is what makes the intent readable where the job is.
 
 ## Publishing
 

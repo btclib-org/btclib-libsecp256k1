@@ -315,17 +315,101 @@ jobs:
       # generates PEP 740 attestations by default
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
-  # only after PyPI has accepted the upload: a GitHub release announces
-  # what can already be installed, and the download url in pyproject.toml
-  # points at the page this creates
-  github-release:
-    name: Attach the files to the GitHub release
-    needs: publish-pypi
+  # the sdist reaches users by two routes and only one of them carried
+  # provenance: the publish job above attaches a PEP 740 attestation to
+  # the copy on the index, while the copy github-release attaches below
+  # carried nothing at all. This job signs it, and the digest is the
+  # index's own, the artifact being downloaded here rather than rebuilt.
+  # The sdist alone, and not every file published: the wheels are attached
+  # to no release, so their only public copy is the one PyPI already
+  # attests, and a second attestation of a file nobody can obtain
+  # elsewhere closes no gap.
+  # A job of its own rather than two more permissions on github-release:
+  # this workflow elevates one job at a time, and the one that writes
+  # releases has no reason to also hold an OIDC token. Not in the build
+  # matrix for the stronger form of the same reason -- those jobs compile
+  # the vendored library and run the build backend, and a token minted
+  # there is minted beside everything a build resolves.
+  # After a publish rather than after the build, so that a run reaching
+  # here is one the environment approval already let through: without
+  # that, a dispatch from any branch would sign whatever that branch
+  # built. Whichever publish ran, though -- the rehearsal signs its own
+  # .dev sdist, and that is the point of running it there: everything in
+  # this job is a permission and an API that would otherwise be exercised
+  # for the first time on release day, where a failure lands after PyPI
+  # has the files and the tag can no longer be moved
+  attest:
+    name: Attest the source distribution
+    needs: [publish-pypi, publish-testpypi]
+    # always(), the other publish job being skipped rather than run, and a
+    # skipped job is one `needs` treats as failed
+    if: >-
+      always() && (needs.publish-pypi.result == 'success' ||
+      needs.publish-testpypi.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      # the one job that writes to the repository, and what it writes is a
-      # release
+      # OIDC for the short-lived Sigstore signing certificate, and the
+      # write that persists the attestation against the repository
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: dist
+
+      # actions/attest, and not the attest-build-provenance wrapper: that
+      # one is a composite whose only step is this action, pinned there to
+      # v4.2.1, so calling it would leave the version that signs decided
+      # by somebody else's pin rather than by the line below. No predicate
+      # input is what selects SLSA build provenance, which is what the
+      # wrapper's own name promises
+      - name: Sign a build provenance statement for the sdist
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      # the bundle is the signed statement itself, and the job below
+      # attaches it to the release: that is what lets `gh attestation
+      # verify --bundle` read it from disk instead of asking the
+      # attestations API, for whoever mirrors the releases page rather
+      # than trusting it live.
+      # Copied into the workspace rather than uploaded where the action
+      # left it, under $RUNNER_TEMP: an upload takes its layout from the
+      # paths it matched, and one outside the workspace is one more thing
+      # to be right about than a fixed name here
+      - name: Collect the attestation bundle
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" attestation.jsonl
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: attestation
+          path: attestation.jsonl
+
+  # only after PyPI has accepted the upload: a GitHub release announces
+  # what can already be installed, and the download url in pyproject.toml
+  # points at the page this creates.
+  # Both jobs above in `needs`, and not attest alone: attest runs in a
+  # rehearsal too, so naming it by itself would make this job -- which has
+  # no `if` of its own -- cut a release from a dispatch, where publish-pypi
+  # is skipped and a skipped need is what keeps this to the tag. attest
+  # earns its place in the list by producing the bundle attached below; a
+  # failure there leaves the version published and no release cut, which
+  # `gh run rerun --failed` finishes without rebuilding anything
+  github-release:
+    name: Attach the files to the GitHub release
+    needs: [publish-pypi, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # the one job that writes to the repository through its token, and
+      # what it writes is a release; the statement the job above signed
+      # went to the attestations API under permissions of its own
       contents: write
 
     steps:
@@ -341,6 +425,13 @@ jobs:
           name: sdist
           path: dist
 
+      # into a directory of its own, so that the dist/* glob below stays
+      # the distribution files and nothing else
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: attestation
+          path: attestation
+
       - name: Create the release, with HISTORY.md as its notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -354,12 +445,17 @@ jobs:
             /^## / && found {exit}
             found {print}
           ' HISTORY.md > "$RUNNER_TEMP/notes.md"
+          # named for the tag only here, where the ref is one: nothing
+          # inside the bundle says which release it belongs to, the way
+          # the sdist's own file name does
+          bundle="$GITHUB_REF_NAME.attestation.jsonl"
+          cp attestation/attestation.jsonl "$bundle"
           if [ -s "$RUNNER_TEMP/notes.md" ]; then
-            gh release create "$GITHUB_REF_NAME" dist/* \
+            gh release create "$GITHUB_REF_NAME" dist/* "$bundle" \
               --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
           else
             echo "::warning::HISTORY.md has no $GITHUB_REF_NAME section"
-            gh release create "$GITHUB_REF_NAME" dist/* \
+            gh release create "$GITHUB_REF_NAME" dist/* "$bundle" \
               --title "$GITHUB_REF_NAME" --generate-notes
           fi
 
