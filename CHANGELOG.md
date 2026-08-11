@@ -273,10 +273,14 @@ release-notes length in the first place, and are still in
   opens a copy. The aggregate is `codeql: every job passed`, for the reason
   `test.yml`'s own is: a branch rule must name an outcome and not a matrix
   cell. Turning the setting off and moving the rule are two steps only a
-  maintainer can take, in an order REPOSITORY.md gives — GitHub refuses to
-  run an advanced workflow while default setup is enabled, so the two
-  cannot overlap, and the rule has to stop naming a context nothing
-  produces before it can name the one this file does.
+  maintainer can take, in an order REPOSITORY.md gives — while default
+  setup is enabled the workflow still runs and the SARIF is refused at
+  processing, so the jobs are red rather than absent, and the rule has to
+  stop naming a context nothing produces before it can name the one this
+  file does. That exchange has been made; what outlives it is a generated
+  `dynamic/github-code-scanning/codeql` workflow uploading *code quality*
+  results, which is a separate setting the `code-scanning` endpoint does
+  not report.
 
 ### The gate
 
