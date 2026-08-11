@@ -12,6 +12,15 @@ a tag is generated from.
 minor version here, the numbers tracking each other. **One breaking
 change, and only for a caller reaching through `lib`.**
 
+- **Silent Payments are wrapped**, as `silentpayments`, BIP352's new
+  libsecp256k1 module: `create_outputs` pays a list of addresses from the
+  private keys of a transaction's inputs, `prevouts_summary` and
+  `scan_outputs` find what a scan key was paid and the tweak that spends
+  it, and `label` and `labeled_spend_pubkey` are the several addresses one
+  scan key can receive at. What BIP352 states over scripts — which inputs
+  are eligible, and which of those are taproot — stays the caller's, this
+  package reading no script; both directions of all of BIP352's own
+  vectors are what it is tested against.
 - **Two libsecp256k1 symbols are gone**, removed upstream after being
   deprecated: `secp256k1_context_no_precomp`, whose replacement is
   `secp256k1_context_static`, and the `secp256k1_schnorrsig_sign` alias,
@@ -31,9 +40,6 @@ change, and only for a caller reaching through `lib`.**
   squaring now being force-inlined. Clang, which is what the macOS wheels
   are built with, is largely unaffected; the compiled library is somewhat
   larger everywhere.
-- **A new libsecp256k1 module, `silentpayments`, is not wrapped by this
-  release** — it is compiled in and reachable through `lib`, and the
-  binding for it lands separately.
 
 ## v0.7.1.3
 

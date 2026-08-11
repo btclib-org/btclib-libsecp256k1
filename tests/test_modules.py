@@ -33,7 +33,9 @@ from btclib_libsecp256k1 import (
     lib,
     mult,
     recovery,
+    silentpayments,
     ssa,
+    xonly,
 )
 from btclib_libsecp256k1.context import ctx
 
@@ -368,3 +370,374 @@ def test_every_recovery_id_of_the_curve_is_accepted() -> None:
     for recid in (2, 3):
         with pytest.raises(ValueError, match="public key recovery failed"):
             recovery.recover(msg, signature_bytes, recid)
+
+
+# The silent payment this section pays and scans back: an input funded by
+# the private key 7, to an address of the scan key 13 and the spend key
+# 17. The outpoint is 36 zero bytes -- a serialization like any other
+# here, BIP352 reading it as bytes and never as a transaction reference
+SP_INPUT_PRVKEY = (7).to_bytes(32, "big")
+SP_SCAN_PRVKEY = (13).to_bytes(32, "big")
+SP_SPEND_PRVKEY = (17).to_bytes(32, "big")
+SP_INPUT_PUBKEY = keys.pubkey_from_prvkey(SP_INPUT_PRVKEY)
+SP_SCAN_PUBKEY = keys.pubkey_from_prvkey(SP_SCAN_PRVKEY)
+SP_SPEND_PUBKEY = keys.pubkey_from_prvkey(SP_SPEND_PRVKEY)
+SP_OUTPOINT = bytes(36)
+
+
+def sp_summary() -> bytes:
+    """Summarize the one-input transaction this section's payment funds."""
+    return silentpayments.prevouts_summary(SP_OUTPOINT, pubkeys=[SP_INPUT_PUBKEY])
+
+
+def test_a_silent_payment_is_found_by_the_key_it_was_paid_to() -> None:
+    """Pay an address, scan the transaction, and spend what was found.
+
+    The BIP352 vectors are what pin the values; this pins the round trip
+    the three functions make together, and the one thing the vectors
+    cannot say -- that the tweak returned is the tweak that spends the
+    output. Adding it to the spend private key has to give the private
+    key of the taproot output found, which is checked by signing with it.
+    """
+    outputs = silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)],
+        SP_OUTPOINT,
+        prvkeys=[SP_INPUT_PRVKEY],
+    )
+    found = silentpayments.scan_outputs(
+        outputs, SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY
+    )
+
+    assert [pubkey for pubkey, _, _ in found] == outputs
+    for pubkey, tweak, label in found:
+        assert label is None
+        output_prvkey = keys.prvkey_tweak_add(SP_SPEND_PRVKEY, tweak)
+        # the output is x-only, so what has to match is the x of the
+        # tweaked key: signing with it is BIP340's own answer to that
+        assert ssa.verify(msg, pubkey, ssa.sign(msg, output_prvkey))
+
+
+def test_a_labeled_silent_payment_is_found_only_with_its_label() -> None:
+    """A labeled output is invisible to a scan whose cache lacks the label.
+
+    Both halves are the point. The label reaching the scan is what makes
+    the output findable, and the same scan without it finding nothing is
+    what says the label was doing the work -- an unlabeled address would
+    have matched anyway.
+    """
+    label, label_tweak = silentpayments.label(SP_SCAN_PRVKEY, 1)
+    labeled_spend_pubkey = silentpayments.labeled_spend_pubkey(SP_SPEND_PUBKEY, label)
+    outputs = silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, labeled_spend_pubkey)],
+        SP_OUTPOINT,
+        prvkeys=[SP_INPUT_PRVKEY],
+    )
+
+    found = silentpayments.scan_outputs(
+        outputs,
+        SP_SCAN_PRVKEY,
+        sp_summary(),
+        SP_SPEND_PUBKEY,
+        labels={label: label_tweak},
+    )
+    assert [(pubkey, found_label) for pubkey, _, found_label in found] == [
+        (outputs[0], label)
+    ]
+
+    # the tweak reported is the whole of what spends the output, the label
+    # tweak included: one addition to the spend private key, not two. What
+    # says the label is in there is the unlabeled payment to the same scan
+    # key, whose tweak is this one less the label's -- both being the same
+    # shared secret at the same k
+    pubkey, tweak, _ = found[0]
+    assert ssa.verify(
+        msg, pubkey, ssa.sign(msg, keys.prvkey_tweak_add(SP_SPEND_PRVKEY, tweak))
+    )
+    unlabeled = silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)], SP_OUTPOINT, prvkeys=[SP_INPUT_PRVKEY]
+    )
+    unlabeled_tweak = silentpayments.scan_outputs(
+        unlabeled, SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY
+    )[0][1]
+    assert keys.prvkey_tweak_add(unlabeled_tweak, label_tweak) == tweak
+
+    assert (
+        silentpayments.scan_outputs(
+            outputs, SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY
+        )
+        == []
+    )
+    # an empty cache is not the absence of one: it reaches libsecp256k1 as
+    # a lookup function that never matches rather than as no function, and
+    # has to answer the same
+    assert (
+        silentpayments.scan_outputs(
+            outputs, SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY, labels={}
+        )
+        == []
+    )
+
+
+def test_the_outputs_follow_the_recipient_order() -> None:
+    """The n-th output is the n-th recipient's, whatever the order given.
+
+    What the BIP352 vectors pin is the set of outputs, the assignment of
+    a k within a group of recipients sharing a scan key not being
+    determined by them. This is the other half: libsecp256k1 documents
+    the outputs as ordered by the index of the recipient they belong to,
+    and it reorders the array it is handed rather than the objects in it,
+    so a wrong index would show up as an answer permuted with the input.
+
+    The two recipients have *different* scan keys, which is what makes
+    the assertion about the ordering alone: sharing one would put them in
+    a group whose k assignment is libsecp256k1's, so reversing the list
+    would change the output values as well as their places -- which is
+    what this test asserted first, and what it fails on.
+    """
+    recipients = [
+        (SP_SCAN_PUBKEY, SP_SPEND_PUBKEY),
+        (keys.pubkey_from_prvkey(19), keys.pubkey_from_prvkey(23)),
+    ]
+    outputs = silentpayments.create_outputs(
+        recipients, SP_OUTPOINT, prvkeys=[SP_INPUT_PRVKEY]
+    )
+    reversed_outputs = silentpayments.create_outputs(
+        recipients[::-1], SP_OUTPOINT, prvkeys=[SP_INPUT_PRVKEY]
+    )
+
+    assert len(set(outputs)) == 2, "the two recipients share an output"
+    assert reversed_outputs == outputs[::-1]
+
+
+def test_a_taproot_input_pays_as_its_even_y_key() -> None:
+    """The two sides agree on a taproot input, which is where parity is dropped.
+
+    A taproot input contributes the even-y point of its x-only key, so
+    the sender passes the private key as a taproot one and the recipient
+    the 32 bytes: `taproot_prvkeys` negating where the y is odd is what
+    makes the two the same point, and the private key here is chosen to
+    be one that needs it.
+    """
+    # 6, not 3: the negation is only exercised by a key whose y is odd
+    prvkey = (6).to_bytes(32, "big")
+    xonly_pubkey, parity = xonly.from_pubkey(keys.pubkey_from_prvkey(prvkey))
+    assert parity == 1, "this key no longer exercises the negation"
+
+    outputs = silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)], SP_OUTPOINT, taproot_prvkeys=[prvkey]
+    )
+    summary = silentpayments.prevouts_summary(
+        SP_OUTPOINT, taproot_pubkeys=[xonly_pubkey]
+    )
+    found = silentpayments.scan_outputs(
+        outputs, SP_SCAN_PRVKEY, summary, SP_SPEND_PUBKEY
+    )
+
+    assert [pubkey for pubkey, _, _ in found] == outputs
+
+
+def test_the_prevouts_summary_carries_no_secret() -> None:
+    """The summary is public data, and the same for every scan key.
+
+    It holds the sum of the input public keys and the hash of the
+    outpoint, so two recipients scanning one transaction build the same
+    one -- which is why it is a separate function rather than an argument
+    of the scan.
+    """
+    assert sp_summary() == sp_summary()
+    assert len(sp_summary()) == silentpayments.SUMMARY_SIZE
+
+
+def test_a_label_is_a_point_and_round_trips_through_its_33_bytes() -> None:
+    """The 33 bytes of a label parse back into the label they came from.
+
+    `labeled_spend_pubkey` is the only entry point taking one, so the
+    parse is exercised through it: the same 33 bytes have to give the
+    same labeled key, and a label is a point rather than an opaque blob
+    -- the sum below is what says so.
+    """
+    label, _ = silentpayments.label(SP_SCAN_PRVKEY, 0)
+    assert len(label) == silentpayments.LABEL_SIZE
+
+    labeled = silentpayments.labeled_spend_pubkey(SP_SPEND_PUBKEY, label)
+    assert labeled == keys.pubkey_combine([SP_SPEND_PUBKEY, label])
+    assert silentpayments.labeled_spend_pubkey(
+        SP_SPEND_PUBKEY, label, compressed=False
+    ) == keys.pubkey_combine([SP_SPEND_PUBKEY, label], compressed=False)
+
+
+def test_a_label_of_a_scan_key_is_the_scan_key_and_m() -> None:
+    """A different m, or a different scan key, is a different label."""
+    label, tweak = silentpayments.label(SP_SCAN_PRVKEY, 0)
+
+    assert silentpayments.label(SP_SCAN_PRVKEY, 0) == (label, tweak)
+    assert silentpayments.label(SP_SCAN_PRVKEY, 1) != (label, tweak)
+    assert silentpayments.label(SP_SPEND_PRVKEY, 0) != (label, tweak)
+    # the tweak is the label's own private key, m = 2**32 - 1 included
+    assert keys.pubkey_from_prvkey(tweak) == label
+    biggest, biggest_tweak = silentpayments.label(SP_SCAN_PRVKEY, 2**32 - 1)
+    assert keys.pubkey_from_prvkey(biggest_tweak) == biggest
+
+
+def test_silent_payment_creation_refuses_an_empty_recipient_list() -> None:
+    """No recipient is nothing to pay, which is refused before the call."""
+    with pytest.raises(ValueError, match="at least one recipient"):
+        silentpayments.create_outputs([], SP_OUTPOINT, prvkeys=[SP_INPUT_PRVKEY])
+
+
+def test_silent_payment_creation_refuses_a_transaction_with_no_keys() -> None:
+    """No private key is no shared secret, and the two lists are both empty."""
+    with pytest.raises(ValueError, match="at least one private key"):
+        silentpayments.create_outputs([(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)], SP_OUTPOINT)
+
+
+def test_silent_payment_creation_refuses_an_invalid_private_key() -> None:
+    """A taproot private key libsecp256k1 rejects is named as one."""
+    with pytest.raises(ValueError, match="invalid private key"):
+        silentpayments.create_outputs(
+            [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)], SP_OUTPOINT, taproot_prvkeys=[0]
+        )
+
+
+@pytest.mark.parametrize(
+    "recipient, message",
+    [
+        ((b"\x02" + bytes(32), SP_SPEND_PUBKEY), "invalid scan public key"),
+        ((SP_SCAN_PUBKEY, b"\x02" + bytes(32)), "invalid spend public key"),
+    ],
+)
+def test_silent_payment_creation_names_which_key_it_refused(
+    recipient: tuple[bytes, bytes], message: str
+) -> None:
+    """Scan and spend are two arguments, and the exception says which.
+
+    `keys.parse` would answer both with "invalid public key", which for a
+    recipient built out of two keys is the half of the answer that does
+    not help.
+
+    Args:
+        recipient: the pair to pay, one half of it unparsable.
+        message: what the exception has to name.
+    """
+    with pytest.raises(ValueError, match=message):
+        silentpayments.create_outputs(
+            [recipient], SP_OUTPOINT, prvkeys=[SP_INPUT_PRVKEY]
+        )
+
+
+def test_a_label_m_outside_four_bytes_is_refused() -> None:
+    """Refuse an m outside the uint32 the label index is.
+
+    Left to cffi the answer is `OverflowError`, which is neither how this
+    package reports an argument out of domain nor a message naming the
+    argument.
+    """
+    for m in (-1, 2**32):
+        with pytest.raises(ValueError, match="the label m must fit in 4 bytes"):
+            silentpayments.label(SP_SCAN_PRVKEY, m)
+
+
+def test_a_label_of_an_invalid_scan_key_is_refused() -> None:
+    """A scan key outside [1, n-1] has no label, and libsecp256k1 says so."""
+    with pytest.raises(ValueError, match="invalid scan private key"):
+        silentpayments.label(0, 0)
+
+
+def test_a_labeled_spend_pubkey_summing_to_infinity_is_refused() -> None:
+    """The point at infinity has no serialization, and is reachable here.
+
+    Only from a label that is not one BIP352 made: a label is a point,
+    and the negation of the spend public key parses as one, so a caller
+    holding both can ask for the sum that does not exist. The label
+    `label` returns cannot do it -- it is a hash away from the key.
+    """
+    negated = keys.pubkey_negate(SP_SPEND_PUBKEY)
+
+    with pytest.raises(ValueError, match="invalid labeled spend public key"):
+        silentpayments.labeled_spend_pubkey(SP_SPEND_PUBKEY, negated)
+
+
+def test_an_unparsable_label_is_refused() -> None:
+    """33 bytes that are not a point are not a label."""
+    with pytest.raises(ValueError, match="invalid label"):
+        silentpayments.labeled_spend_pubkey(SP_SPEND_PUBKEY, b"\x02" + bytes(32))
+
+
+def test_a_prevouts_summary_of_no_input_is_refused() -> None:
+    """No input public key is no sum, and both lists are empty."""
+    with pytest.raises(ValueError, match="at least one public key"):
+        silentpayments.prevouts_summary(SP_OUTPOINT)
+
+
+def test_a_prevouts_summary_of_an_unparsable_taproot_key_is_refused() -> None:
+    """An x that is not on the curve is not a taproot input key."""
+    with pytest.raises(ValueError, match="invalid taproot public key"):
+        silentpayments.prevouts_summary(SP_OUTPOINT, taproot_pubkeys=[bytes(32)])
+
+
+def test_scanning_refuses_an_empty_output_list() -> None:
+    """A transaction with no taproot output pays no silent payment.
+
+    libsecp256k1 requires the found outputs array to be as long as the
+    outputs one, and an array of length zero is not something cffi will
+    make, so this is refused here rather than there.
+    """
+    with pytest.raises(ValueError, match="at least one transaction output"):
+        silentpayments.scan_outputs([], SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY)
+
+
+def test_scanning_refuses_an_unparsable_output() -> None:
+    """An output that is not an x-only public key is named as one."""
+    with pytest.raises(ValueError, match="invalid transaction output"):
+        silentpayments.scan_outputs(
+            [bytes(32)], SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY
+        )
+
+
+def test_scanning_refuses_a_summary_of_the_wrong_length() -> None:
+    """The summary is opaque, so its length is all that can be checked."""
+    with pytest.raises(ValueError, match="prevouts summary must be"):
+        silentpayments.scan_outputs(
+            [SP_INPUT_PUBKEY[1:]],
+            SP_SCAN_PRVKEY,
+            sp_summary()[:-1],
+            SP_SPEND_PUBKEY,
+        )
+
+
+def test_scanning_refuses_an_invalid_scan_key() -> None:
+    """A scan key outside [1, n-1] is what libsecp256k1 refuses the scan for."""
+    with pytest.raises(ValueError, match="silent payment scanning failed"):
+        silentpayments.scan_outputs(
+            [SP_INPUT_PUBKEY[1:]], 0, sp_summary(), SP_SPEND_PUBKEY
+        )
+
+
+@pytest.mark.parametrize(
+    "labels, message",
+    [
+        ({bytes(33): bytes(31)}, "label tweak must be 32 bytes"),
+        ({bytes(32): bytes(32)}, "label must be 33 bytes"),
+    ],
+)
+def test_scanning_refuses_a_malformed_label_cache(
+    labels: dict[bytes, bytes], message: str
+) -> None:
+    """Both halves of a cache entry are checked, and before the scan starts.
+
+    The tweak has to be copied into a buffer this package owns before the
+    callback can hand a pointer to it back, so a wrong length is caught
+    there rather than inside a lookup that has nowhere to raise.
+
+    Args:
+        labels: a cache with one malformed entry.
+        message: what the exception has to name.
+    """
+    with pytest.raises(ValueError, match=message):
+        silentpayments.scan_outputs(
+            [SP_INPUT_PUBKEY[1:]],
+            SP_SCAN_PRVKEY,
+            sp_summary(),
+            SP_SPEND_PUBKEY,
+            labels=labels,
+        )

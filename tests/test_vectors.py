@@ -16,6 +16,11 @@
   bip327_sign_verify_vectors.json and bip327_sig_agg_vectors.json,
   vendored from
   https://github.com/bitcoin/bips/tree/master/bip-0327/vectors
+- BIP352: bip352_send_and_receive_test_vectors.json, vendored from
+  https://github.com/bitcoin/bips/blob/master/bip-0352/send_and_receive_test_vectors.json;
+  both directions of every case are driven, the eligibility of an input
+  being read off the keys the file itself publishes rather than off its
+  scripts -- see `bip352_eligible`
 - ECDSA RFC6979: (k, r, s) vectors published in
   https://bitcointalk.org/index.php?topic=285142.msg3300992
   as vendored by trezor-firmware (crypto/tests/test_check.c,
@@ -54,6 +59,7 @@ from btclib_libsecp256k1 import (
     lib,
     mult,
     recovery,
+    silentpayments,
     ssa,
 )
 from btclib_libsecp256k1.context import ctx
@@ -534,6 +540,290 @@ def test_bip327_sig_agg_error_vector(case: dict[str, Any]) -> None:
         musig_partial_sig(SIG_AGG["psigs"][i]) for i in case["psig_indices"]
     ]
     assert None in partial_sigs
+
+
+def bip352_vectors() -> list[dict[str, Any]]:
+    """Load the BIP352 send and receive vectors."""
+    path = pathlib.Path(__file__).parent / "bip352_send_and_receive_test_vectors.json"
+    with path.open(encoding="utf-8") as json_file:
+        cases: list[dict[str, Any]] = json.load(json_file)
+    return cases
+
+
+BIP352 = bip352_vectors()
+
+
+def bip352_outpoint(vin: list[dict[str, Any]]) -> bytes:
+    """Choose the lexicographically smallest outpoint of a vector's inputs.
+
+    libsecp256k1 takes it already chosen, BIP352 stating the choice over
+    the transaction rather than over the keys, so it is made here: each
+    outpoint is the txid in internal byte order and the little endian
+    vout, and the smallest of them is the smallest as bytes -- which case
+    4 of these vectors is the one that distinguishes from the smallest
+    vout.
+    """
+    outpoints: list[bytes] = [
+        bytes.fromhex(vin_entry["txid"])[::-1]
+        + int(vin_entry["vout"]).to_bytes(4, "little")
+        for vin_entry in vin
+    ]
+    return min(outpoints)
+
+
+def bip352_is_taproot(vin_entry: dict[str, Any]) -> bool:
+    """Whether an input's prevout is P2TR: OP_1 OP_PUSHBYTES_32 <32 bytes>.
+
+    Which side of `create_outputs` and `prevouts_summary` a key goes to,
+    and the one script question these vectors cannot be driven without:
+    BIP352 reads a taproot input as the even-y point of its x-only key
+    and any other as the full key, so the two are separate arguments and
+    the caller says which is which.
+    """
+    script = bytes.fromhex(vin_entry["prevout"]["scriptPubKey"]["hex"])
+    return len(script) == 34 and script[0] == 0x51 and script[1] == 0x20
+
+
+def bip352_eligible(
+    vin: list[dict[str, Any]], input_pub_keys: list[str]
+) -> list[tuple[dict[str, Any], str]]:
+    """Pair each Silent Payments eligible input with its public key.
+
+    BIP352's eligibility rules are rules about scripts -- a bare
+    multisig, an uncompressed key and a NUMS-point script path are each
+    excluded by one of them -- and scripts are what these bindings
+    deliberately do not read. So the rules are not reimplemented here:
+    the vectors publish the extracted keys of exactly the eligible
+    inputs, in input order, and this walks the two in step. A taproot
+    input is recognized by its prevout carrying the key; any other by
+    pushing it in the scriptSig or the witness.
+
+    Matching by containment alone would be wrong, and case 22 is why: its
+    third input is a bare multisig whose redeem script names the key of
+    the *first* input, so a key already claimed would be claimed twice.
+    Consuming them in order is what refuses it.
+
+    Args:
+        vin: the inputs, as the vector gives them.
+        input_pub_keys: the published 33-byte keys, hex, in input order.
+
+    Returns:
+        One pair per eligible input: the input, and its key as hex.
+    """
+    remaining = list(input_pub_keys)
+    eligible = []
+    for vin_entry in vin:
+        if not remaining:
+            break
+        candidate = remaining[0]
+        if bip352_is_taproot(vin_entry):
+            xonly = vin_entry["prevout"]["scriptPubKey"]["hex"][4:]
+            matched = candidate[2:] == xonly
+        else:
+            pushed = vin_entry["scriptSig"] + vin_entry["txinwitness"]
+            matched = candidate in pushed
+        if matched:
+            eligible.append((vin_entry, remaining.pop(0)))
+    return eligible
+
+
+def bip352_recipients(given: dict[str, Any]) -> list[tuple[bytes, bytes]]:
+    """Pair up the keys to pay, one pair per output the vector asks for."""
+    return [
+        (bytes.fromhex(r["scan_pub_key"]), bytes.fromhex(r["spend_pub_key"]))
+        for r in given["recipients"]
+        for _ in range(r.get("count", 1))
+    ]
+
+
+@pytest.mark.parametrize("case", BIP352, ids=[case["comment"] for case in BIP352])
+def test_bip352_sending_vector(case: dict[str, Any]) -> None:
+    """Create the outputs BIP352 publishes for a transaction and its recipients.
+
+    The published `outputs` is a list of *alternative* output sets, and
+    not orderings of one: where several recipients share a scan public
+    key, which of them gets k = 0, which k = 1 and so on is not
+    determined, and each assignment gives different output keys. Cases 15
+    and 17 are the ones where those sets genuinely differ -- 17 lists
+    twelve of them -- so what is asserted is that the set produced is one
+    of the sets accepted, whichever assignment libsecp256k1 made.
+    Comparing with the first entry alone would fail there while being
+    right about everything else, which is how this was found.
+
+    Order within the set is not compared for the same reason. It is not
+    unspecified -- libsecp256k1 returns one output per recipient in the
+    order the recipients were given -- it is simply not what these
+    vectors pin, and `test_the_outputs_follow_the_recipient_order` in
+    tests/test_modules.py is what holds it.
+
+    A single empty set is the sender making nothing, which here is a
+    `ValueError` rather than an empty list: there is no silent payment
+    with no input to derive it from.
+
+    Args:
+        case: one vector, both directions of it.
+    """
+    for send in case["sending"]:
+        given, expected = send["given"], send["expected"]
+        taproot_prvkeys: list[bytes] = []
+        prvkeys: list[bytes] = []
+        for vin_entry, _ in bip352_eligible(given["vin"], expected["input_pub_keys"]):
+            prvkey = bytes.fromhex(vin_entry["private_key"])
+            keys_of_its_kind = (
+                taproot_prvkeys if bip352_is_taproot(vin_entry) else prvkeys
+            )
+            keys_of_its_kind.append(prvkey)
+
+        recipients = bip352_recipients(given)
+        outpoint = bip352_outpoint(given["vin"])
+        if expected["outputs"] == [[]]:
+            with pytest.raises(ValueError, match=r"silent payment|private key"):
+                silentpayments.create_outputs(
+                    recipients,
+                    outpoint,
+                    taproot_prvkeys=taproot_prvkeys,
+                    prvkeys=prvkeys,
+                )
+            continue
+
+        outputs = silentpayments.create_outputs(
+            recipients, outpoint, taproot_prvkeys=taproot_prvkeys, prvkeys=prvkeys
+        )
+        accepted = [sorted(output_set) for output_set in expected["outputs"]]
+        assert sorted(output.hex() for output in outputs) in accepted
+
+
+@pytest.mark.parametrize("case", BIP352, ids=[case["comment"] for case in BIP352])
+def test_bip352_receiving_vector(case: dict[str, Any]) -> None:
+    """Find the outputs BIP352 publishes as this recipient's, and their tweaks.
+
+    The input public keys are the ones the sending half of the same
+    vector publishes, the transaction being the same one: extracting them
+    from the scripts again would be the script reader this package has
+    no business carrying.
+
+    A transaction whose eligible inputs sum to the point at infinity, or
+    which has none, is BIP352's "not a Silent Payments transaction": the
+    recipient skips it, and here that is `prevouts_summary` refusing it
+    rather than a scan that finds nothing.
+
+    Args:
+        case: one vector, both directions of it.
+    """
+    input_pub_keys = case["sending"][0]["expected"]["input_pub_keys"]
+    for recv in case["receiving"]:
+        given, expected = recv["given"], recv["expected"]
+        taproot_pubkeys: list[bytes] = []
+        pubkeys: list[bytes] = []
+        for vin_entry, pubkey_hex in bip352_eligible(given["vin"], input_pub_keys):
+            pubkey = bytes.fromhex(pubkey_hex)
+            if bip352_is_taproot(vin_entry):
+                taproot_pubkeys.append(pubkey[1:])
+            else:
+                pubkeys.append(pubkey)
+
+        scan_prvkey = bytes.fromhex(given["key_material"]["scan_priv_key"])
+        spend_prvkey = bytes.fromhex(given["key_material"]["spend_priv_key"])
+        spend_pubkey = keys.pubkey_from_prvkey(spend_prvkey)
+        labels = dict(silentpayments.label(scan_prvkey, m) for m in given["labels"])
+
+        outpoint = bip352_outpoint(given["vin"])
+        # a published null shared secret is BIP352's "not a Silent
+        # Payments transaction", and says so about the transaction rather
+        # than about this recipient: there are no eligible inputs, or
+        # they sum to the point at infinity. The recipient skips it, and
+        # here that is prevouts_summary refusing to make one at all --
+        # which is not the same as the scan below finding nothing, the
+        # case whose shared secret exists and matches no output of it
+        if expected["shared_secret"] is None:
+            assert expected["outputs"] == []
+            with pytest.raises(ValueError, match=r"public key|silent payments"):
+                silentpayments.prevouts_summary(
+                    outpoint, taproot_pubkeys=taproot_pubkeys, pubkeys=pubkeys
+                )
+            continue
+
+        summary = silentpayments.prevouts_summary(
+            outpoint, taproot_pubkeys=taproot_pubkeys, pubkeys=pubkeys
+        )
+        found = silentpayments.scan_outputs(
+            [bytes.fromhex(output) for output in given["outputs"]],
+            scan_prvkey,
+            summary,
+            spend_pubkey,
+            labels=labels or None,
+        )
+        # the K_max case publishes how many outputs are found rather than
+        # which: 2324 outputs pay one scan key, and BIP352 stops at 2323
+        if "outputs" not in expected:
+            assert len(found) == expected["n_outputs"]
+            continue
+
+        assert sorted(pubkey.hex() for pubkey, _, _ in found) == sorted(
+            output["pub_key"] for output in expected["outputs"]
+        )
+        assert sorted(tweak.hex() for _, tweak, _ in found) == sorted(
+            output["priv_key_tweak"] for output in expected["outputs"]
+        )
+        # a label is found only because its tweak was in the cache handed
+        # in, so an output reported with one is that lookup having worked
+        assert all(label in labels for _, _, label in found if label is not None)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [case for case in BIP352 if any(r["given"]["labels"] for r in case["receiving"])],
+    ids=[
+        case["comment"]
+        for case in BIP352
+        if any(r["given"]["labels"] for r in case["receiving"])
+    ],
+)
+def test_bip352_labeled_spend_pubkey_vector(case: dict[str, Any]) -> None:
+    """Reproduce a labeled address the senders of a vector were paying to.
+
+    The published recipient keys are the sender's view of an address, and
+    the sender cannot tell a labeled spend public key from an unlabeled
+    one. That is what makes them a check on this side: for each labeled
+    receiving case, the label it uses is the one whose labeled spend
+    public key is among the keys its senders were given.
+
+    Args:
+        case: one vector, whose receiving half uses at least one label.
+    """
+    published = {
+        r["spend_pub_key"]
+        for send in case["sending"]
+        for r in send["given"]["recipients"]
+    }
+    for recv in case["receiving"]:
+        given = recv["given"]
+        if not given["labels"]:
+            continue
+        scan_prvkey = bytes.fromhex(given["key_material"]["scan_priv_key"])
+        spend_prvkey = bytes.fromhex(given["key_material"]["spend_priv_key"])
+        spend_pubkey = keys.pubkey_from_prvkey(spend_prvkey)
+        labeled = {
+            silentpayments.labeled_spend_pubkey(
+                spend_pubkey, silentpayments.label(scan_prvkey, m)[0]
+            ).hex()
+            for m in given["labels"]
+        }
+        assert labeled & published, "no label reproduces a published recipient key"
+
+
+def test_the_bip352_vectors_were_read_at_all() -> None:
+    """Guard the three tests above against a file that parsed to nothing.
+
+    Every one of them is a loop over a vector's own contents, so an empty
+    case list, or cases with empty halves, is a pass that asserted
+    nothing. No count is stated: what is required is that both directions
+    of every case carry something to drive.
+    """
+    assert BIP352
+    for case in BIP352:
+        assert case["sending"], case["comment"]
+        assert case["receiving"], case["comment"]
 
 
 # A signature whose nonce point has an x coordinate above the group
