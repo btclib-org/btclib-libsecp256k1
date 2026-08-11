@@ -17,9 +17,10 @@ them, and runs before anything is built: a `v0.7.1` tag on a tree still
 reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
 The same job checks that `uv.lock` carries the version the tree declares,
 that the libsecp256k1 release named in `README.md` is the commit the
-submodule is pinned to, that `HISTORY.md` has a section for the tag, and
-that the tagged commit is on `main`. Every invariant a release rests on
-is checked there, before the point of no return.
+submodule is pinned to, that `HISTORY.md` and `CHANGELOG.md` each carry a
+section headed by the tag alone and not empty, and that the tagged commit
+is on `main`. Every invariant a release rests on is checked there, before
+the point of no return.
 
 ## Which version string is which
 
@@ -106,9 +107,12 @@ Then:
    section of both against `git log`, drop the
    `(work in progress, not released yet)` from each heading, and
    renumber them if step 1 renumbered the version. `version-check`
-   refuses a tag whose `HISTORY.md` section is missing, so an omission
-   stops the release before the matrix builds anything — it does not
-   read `CHANGELOG.md`, which is the one of the two nothing enforces.
+   refuses a tag whose section in either file is missing, empty, or still
+   carrying anything after the version in its heading, so a forgotten
+   retitle stops the release before the matrix builds anything. Dropping
+   those five words is the whole of what that check asks, and it asks it
+   of both files: it is the step this one exists to be, not a formality
+   downstream of it.
    If the vendored libsecp256k1 moved, update the version named at the
    top of `README.md` too (`grep -n 'wraps libsecp256k1' README.md`
    finds the line without a search through the prose)
