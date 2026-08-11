@@ -232,7 +232,8 @@ Then:
 1. run the `published` workflow from the Actions tab, and expect it green:
    it installs from PyPI what was just uploaded, on every platform and at
    both ends of the supported interpreter range, and verifies BIP340
-   vector 0 with it. From then on it runs weekly on its own, and a failure
+   vector 0 with it. From then on it runs monthly on its own, on the
+   first, and a failure
    means the outside world moved, not this repository — which is why it is
    a workflow of its own rather than a job of this one, besides its
    racing the index if it ran straight after the upload. On 0.7.1 it went
