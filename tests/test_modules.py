@@ -24,6 +24,7 @@ import hashlib
 import pytest
 
 from btclib_libsecp256k1 import (
+    _secret,
     context,
     dsa,
     ecdh,
@@ -631,8 +632,15 @@ def test_a_label_m_outside_four_bytes_is_refused() -> None:
     Left to cffi the answer is `OverflowError`, which is neither how this
     package reports an argument out of domain nor a message naming the
     argument.
+
+    `2**32 + 1` is here because the two ends of the bound are not enough,
+    which a mutation session said: with `<` mutated to `!=` the check
+    reads `0 <= m != 2**32`, and both ends still raise -- `-1` fails the
+    first comparison and `2**32` fails the second. A value *above* the
+    bound is the one input that tells the two apart, so it is the one
+    that kills that mutant.
     """
-    for m in (-1, 2**32):
+    for m in (-1, 2**32, 2**32 + 1):
         with pytest.raises(ValueError, match="the label m must fit in 4 bytes"):
             silentpayments.label(SP_SCAN_PRVKEY, m)
 
@@ -741,3 +749,125 @@ def test_scanning_refuses_a_malformed_label_cache(
             SP_SPEND_PUBKEY,
             labels=labels,
         )
+
+
+def spy_on_wipe(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Record every buffer `silentpayments` wipes, and wipe it for real.
+
+    The buffers holding a secret in these wrappers are locals, gone by the
+    time a caller could look at one, so a spy is the only way to hold what
+    was wiped and check it. What it holds is the buffer itself, wiped: the
+    assertions below read it after the call.
+
+    The spy goes onto `silentpayments` and the real one is read from
+    `_secret`, which is not interchangeable: the module does
+    `from ._secret import wipe`, so it holds a reference of its own and
+    patching `_secret.wipe` would not reach it.
+
+    Args:
+        monkeypatch: the fixture, whose undo is what keeps this local to
+            one test.
+
+    Returns:
+        The list the spy appends to, in the order the wrapper wipes.
+    """
+    wiped: list[object] = []
+
+    def recording_wipe(buffer: object) -> None:
+        wiped.append(buffer)
+        _secret.wipe(buffer)
+
+    monkeypatch.setattr(silentpayments, "wipe", recording_wipe)
+    return wiped
+
+
+def zeroed(buffer: object) -> bool:
+    """Whether a cffi buffer holds nothing but zeros."""
+    memory = ffi.buffer(buffer)
+    return bytes(memory) == bytes(len(memory))
+
+
+def test_the_sender_wipes_every_private_key_it_copied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both kinds of key are wiped, one buffer each, and on the way out.
+
+    A taproot key becomes a `secp256k1_keypair` and any other a 32-octet
+    buffer; both are memory this package owns and both carry the secret,
+    so both are taken back. The count is what a loop that ran no
+    iterations would fail -- which is what a mutation session turned this
+    wipe into, and nothing noticed.
+
+    Args:
+        monkeypatch: the fixture the spy is installed through.
+    """
+    wiped = spy_on_wipe(monkeypatch)
+
+    silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)],
+        SP_OUTPOINT,
+        taproot_prvkeys=[SP_INPUT_PRVKEY],
+        prvkeys=[SP_SPEND_PRVKEY],
+    )
+
+    assert len(wiped) == 2, "one buffer per private key given, and no more"
+    assert all(zeroed(buffer) for buffer in wiped)
+
+
+def test_the_sender_wipes_the_keys_it_had_when_a_later_one_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A key that cannot be made does not leave the ones before it behind.
+
+    Which is why the two lists are built inside the `try` rather than
+    before it: the second key here is invalid, so `_keypair` raises with
+    the first already made, and the `finally` has to be in force for it.
+
+    Args:
+        monkeypatch: the fixture the spy is installed through.
+    """
+    wiped = spy_on_wipe(monkeypatch)
+
+    with pytest.raises(ValueError, match="invalid private key"):
+        silentpayments.create_outputs(
+            [(SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)],
+            SP_OUTPOINT,
+            taproot_prvkeys=[SP_INPUT_PRVKEY, 0],
+        )
+
+    assert len(wiped) == 1, "the key made before the refusal"
+    assert all(zeroed(buffer) for buffer in wiped)
+
+
+def test_scanning_wipes_the_tweaks_and_the_label_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every found output and every cached label tweak is taken back.
+
+    The found outputs are wiped whether libsecp256k1 wrote to them or
+    not -- the array is as long as the outputs one and it says through
+    `n_found` how much of it it used -- so the count is one per
+    transaction output plus one per label in the cache.
+
+    Args:
+        monkeypatch: the fixture the spy is installed through.
+    """
+    label, label_tweak = silentpayments.label(SP_SCAN_PRVKEY, 1)
+    labeled = silentpayments.labeled_spend_pubkey(SP_SPEND_PUBKEY, label)
+    outputs = silentpayments.create_outputs(
+        [(SP_SCAN_PUBKEY, labeled), (SP_SCAN_PUBKEY, SP_SPEND_PUBKEY)],
+        SP_OUTPOINT,
+        prvkeys=[SP_INPUT_PRVKEY],
+    )
+    summary = sp_summary()
+    wiped = spy_on_wipe(monkeypatch)
+
+    found = silentpayments.scan_outputs(
+        outputs, SP_SCAN_PRVKEY, summary, SP_SPEND_PUBKEY, labels={label: label_tweak}
+    )
+
+    assert len(found) == 2, "both outputs are this recipient's"
+    assert len(wiped) == len(outputs) + 1, "every found output slot, and the one label"
+    assert all(zeroed(buffer) for buffer in wiped)
+    # the tweaks reached the caller before the buffers were zeroed
+    assert all(tweak != bytes(32) for _, tweak, _ in found)
