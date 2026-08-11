@@ -22,6 +22,30 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0 (work in progress, not released yet)
 
+### The release path
+
+- **The release tag is signed.** `git tag v0.7.1` made a lightweight tag:
+  a name pointing at a commit, with no signature, no tagger and no date of
+  its own. That is the wrong shape for the one ref a release is identified
+  by — the PEP 740 attestation binds to it, the GitHub release is created
+  from it, and `version-check` refuses a tree that does not match it — so
+  it is the thing most worth being able to attest, and a lightweight tag
+  cannot be attested at all. `git tag -s -m`, with `git tag -v` before the
+  push rather than after, the push being what starts the workflow acting
+  on it. libsecp256k1 signs its own release tags and documents verifying
+  them in `secp256k1/README.md`, so this is the vendored library's
+  standard applied to the wrapper.
+- **`-s` explicitly, not `tag.gpgsign`.** The setting belongs in a git
+  config, where this document cannot show it; the command here is the
+  instruction, and it has to be right on a machine whose config nobody
+  has checked. `-m` comes with it: signing implies annotating, and an
+  annotated tag without a message opens an editor, which a release step
+  must not do.
+- Checked rather than assumed: nothing in `release.yml` reads the tag as
+  anything but `github.ref_name`, which is the same for a lightweight and
+  an annotated tag. The one `refs/tags/...^{}` in that file dereferences
+  *bitcoin-core*'s tags, not this repository's.
+
 ### The wrapped library
 
 - **libsecp256k1 moves from 0.7.1 (1a53f49) to 0.8.0 (6e2c8bc)**, and the
