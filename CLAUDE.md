@@ -151,9 +151,13 @@ no aggregate job, is named by no branch rule, and opens no issue on failure
 (`vendored-vectors` excepted, for the reason its own header gives). That is
 deliberate in every case — each is expected to go red for a reason no pull
 request introduced, and a red check nobody can act on from a branch is
-noise. Their crons are on different mornings, because sentinels landing in
-one inbox on one morning are one sentinel, and `codeql` keeps a morning of
-its own for the same reason.
+noise. Their crons are spread out, because sentinels landing in one inbox
+on one morning are one sentinel, and `codeql` keeps a morning of its own
+for the same reason. Two pairs share a morning even so. `macos` and
+`latest` do it deliberately, and both cron comments say why: half an hour
+apart on Wednesday, they answer halves of one question and are worth
+reading together. `published` and `vendored-vectors` are the other pair,
+both monthly on the 1st.
 
 | workflow | asks | when |
 | --- | --- | --- |

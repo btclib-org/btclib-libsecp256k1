@@ -40,6 +40,13 @@ change, and only for a caller reaching through `lib`.**
   squaring now being force-inlined. Clang, which is what the macOS wheels
   are built with, is largely unaffected; the compiled library is somewhat
   larger everywhere.
+- **Re-randomizing the shared context is documented as needing exclusive
+  access to it.** Nothing changed in the code: `context._randomize` is
+  what it was, and the bindings stay safe to call from several threads.
+  What was missing is that repeating that one call while other threads
+  are in flight is what takes that safety away — libsecp256k1 asks for a
+  read-write lock, or for randomization at creation time, which is what
+  happens at import.
 
 ## v0.7.1.3
 

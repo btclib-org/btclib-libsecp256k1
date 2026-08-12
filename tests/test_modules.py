@@ -686,9 +686,11 @@ def test_a_prevouts_summary_of_an_unparsable_taproot_key_is_refused() -> None:
 def test_scanning_refuses_an_empty_output_list() -> None:
     """A transaction with no taproot output pays no silent payment.
 
-    libsecp256k1 requires the found outputs array to be as long as the
-    outputs one, and an array of length zero is not something cffi will
-    make, so this is refused here rather than there.
+    libsecp256k1 requires at least one -- `n_tx_outputs > 0` is an
+    ARG_CHECK of its own -- and what a violated precondition gets a
+    caller is a bare zero return, which this wrapper can only report as
+    the scan having failed. So it is refused here instead, by the
+    argument's own name.
     """
     with pytest.raises(ValueError, match="at least one transaction output"):
         silentpayments.scan_outputs([], SP_SCAN_PRVKEY, sp_summary(), SP_SPEND_PUBKEY)

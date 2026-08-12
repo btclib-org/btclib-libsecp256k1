@@ -341,6 +341,22 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **Three statements that were not true, found by an audit of the package
+  rather than by a failure.** Each is the kind this repository's own rule
+  is about, a comment saying *why* and the why having stopped being the
+  reason: `context._randomize` invited a caller to re-randomize "whenever
+  it wants fresh blinding", which is the one call that would take the
+  README's thread-safety guarantee away — libsecp256k1 requires exclusive
+  access to a context to mutate one, so the invitation now carries the
+  condition, and the README says the same where a user reads it.
+  `silentpayments._array` explained its NULL by "cffi will not make an
+  array of length zero", which cffi does quite happily, `keys.pubkey_sort`
+  passing one for an empty sequence; the real reason is libsecp256k1's own
+  `ARG_CHECK`, and the same wrong reason was in
+  `test_scanning_refuses_an_empty_output_list`. CLAUDE.md said the
+  sentinel crons "are on different mornings" while the table under it
+  showed two on Wednesday and two on the 1st — corrected when the
+  cadences were, and the sentence left behind.
 - **The prose stops naming `dev` and `master`, which no longer exist.**
   The workflows were corrected when the branches went; the files that
   describe how this repository is worked on were not, so RELEASING.md

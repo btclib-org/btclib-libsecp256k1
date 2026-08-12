@@ -349,6 +349,12 @@ This matters on a free-threaded interpreter, for which a wheel is built
 (`cp314t`), where those calls are no longer serialized;
 `tests/test_concurrency.py` exercises it.
 
+The one way to lose that guarantee is to re-randomize the shared context
+while it is in use. `context._randomize(context.ctx)` is there for a
+caller who wants fresh blinding, and libsecp256k1 asks for exclusive
+access to a context to mutate one: call it before the threads start, or
+hold a read-write lock over every call that takes `ctx`.
+
 What `context.check()` reports is per thread: the callback recording it
 runs on the thread of the call that triggered it, which is what
 attributes a message to the right caller.
