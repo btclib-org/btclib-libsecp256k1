@@ -871,3 +871,39 @@ def test_scanning_wipes_the_tweaks_and_the_label_cache(
     assert all(zeroed(buffer) for buffer in wiped)
     # the tweaks reached the caller before the buffers were zeroed
     assert all(tweak != bytes(32) for _, tweak, _ in found)
+
+
+def test_scanning_wipes_the_tweaks_it_had_when_a_later_label_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cache entry that cannot be made does not leave the ones before it.
+
+    The recipient's side of
+    `test_the_sender_wipes_the_keys_it_had_when_a_later_one_is_refused`,
+    and the reason is the same one: the cache is filled inside the `try`,
+    so a tweak copied before the refusal is wiped on the way out rather
+    than dropped where it was. Built before the `try` -- or by a
+    comprehension, which drops what it had along with the exception --
+    this counted one buffer, the output slot, and the tweak was released
+    in the clear.
+
+    Args:
+        monkeypatch: the fixture the spy is installed through.
+    """
+    label, label_tweak = silentpayments.label(SP_SCAN_PRVKEY, 1)
+    summary = sp_summary()
+    wiped = spy_on_wipe(monkeypatch)
+
+    with pytest.raises(ValueError, match="label tweak must be 32 bytes"):
+        silentpayments.scan_outputs(
+            [SP_INPUT_PUBKEY[1:]],
+            SP_SCAN_PRVKEY,
+            summary,
+            SP_SPEND_PUBKEY,
+            # insertion order is what the cache is filled in, so the
+            # refusal comes after the tweak that has to be taken back
+            labels={label: label_tweak, bytes(silentpayments.LABEL_SIZE): bytes(31)},
+        )
+
+    assert len(wiped) == 2, "the one output slot, and the tweak made before the refusal"
+    assert all(zeroed(buffer) for buffer in wiped)

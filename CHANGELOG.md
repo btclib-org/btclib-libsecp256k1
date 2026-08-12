@@ -68,6 +68,23 @@ release-notes length in the first place, and are still in
   already said a key that is not a valid scalar raises; what changed is
   which keys libsecp256k1 calls invalid.
 
+### What the boundary answers
+
+- **A memoryview of items wider than an octet is refused.** `octets` takes
+  the three types that state a value and a width, and a memoryview states
+  its width in *items*: `memoryview(array("I", [1, 2, 3, 4, 5, 6, 7, 8]))`
+  is eight of them, and the 32 octets `bytes` reads underneath them passed
+  the size check as a private key nobody wrote — one that a big endian
+  build of the same program would have read differently. It is the one
+  shape in which the argument for converting rather than refusing does not
+  hold, so it raises `TypeError` naming what it is, and `.cast("B")` is how
+  a caller says the octets are what they meant. Nothing else about the
+  shape is asked: where the items are octets, `bytes` answers the ones the
+  view logically holds, through a stride and over every dimension, so the
+  length checked is the length libsecp256k1 will read. mypy cannot see any
+  of this — `memoryview` is the annotated type whatever its items are —
+  which is why the check is at run time, like the `bool` one beside it
+
 ### Silent Payments
 
 - **`silentpayments` wraps BIP352**, the module libsecp256k1 0.8.0 adds,
@@ -100,10 +117,14 @@ release-notes length in the first place, and are still in
   public key and its label by value, and each has to reach its own
   serializer as a pointer.
 - **The secrets are taken back.** A found output holds the tweak that
-  spends it, and the sender's keypairs and secret keys hold private keys:
-  all are wiped, and the two key lists are built *inside* the `try` whose
-  `finally` wipes them, an invalid key later in the list being able to
-  raise between them.
+  spends it, the sender's keypairs and secret keys hold private keys, and
+  the recipient's label cache holds the tweak of every label: all are
+  wiped, and each collection is filled *inside* the `try` whose `finally`
+  wipes it, an entry later in it being able to raise between them. The
+  cache is filled entry by entry for that reason and not built by a
+  comprehension, which drops the buffers it already made along with the
+  exception — a malformed second label left the first one's tweak in
+  memory this package had stopped pointing at.
 
 ### Mutation testing
 

@@ -11,6 +11,7 @@ replaced by do-nothing stubs, instead of the abort()ing upstream ones
 that would take the hosting Python process down with them.
 """
 
+import array
 import secrets
 
 import pytest
@@ -274,6 +275,39 @@ def test_a_bool_is_not_a_scalar() -> None:
     sig_bytes, recid = recovery.sign(msg, 7)
     assert recid in (0, 1)
     assert recovery.recover(msg, sig_bytes, bool(recid)) == keys.pubkey_from_prvkey(7)
+
+
+def test_a_memoryview_of_wider_items_is_not_octets() -> None:
+    """A memoryview states its width in items, and only octets are octets.
+
+    The other type whose acceptance could not be seen in the answer, and
+    the argument for taking a `bytearray` and a `memoryview` at all does
+    not reach it: eight `uint32` state eight items, and the 32 octets
+    `bytes` reads underneath them are whatever this machine's byte order
+    made of the value -- a private key nobody wrote, of exactly the
+    length the size check asks for, and a different one on a big endian
+    build of the same program.
+
+    Nor could the type checker say so, so neither call below needs a
+    `type: ignore`: `memoryview` is the annotated type whatever its items
+    are. That is the whole argument for the check being made at run time.
+
+    What is refused is the reinterpretation and not the shape: a view of
+    octets is the argument it always was, a stride included, `bytes` of
+    one answering the octets it logically holds.
+    """
+    wider = memoryview(array.array("I", [1, 2, 3, 4, 5, 6, 7, 8]))
+    assert wider.itemsize == 4
+    assert len(bytes(wider)) == 32, "it would pass the size check"
+
+    with pytest.raises(TypeError, match="private key must be a memoryview of bytes"):
+        keys.prvkey_verify(wider)
+    with pytest.raises(TypeError, match="message hash must be a memoryview of bytes"):
+        dsa.sign(wider, 7)
+
+    # the same octets, said to be octets, and a strided view of octets
+    assert keys.prvkey_verify(wider.cast("B"))
+    assert keys.prvkey_verify(memoryview(b"\x07\x00" * 32)[::2])
 
 
 def test_size_checks_refuse_both_sides() -> None:

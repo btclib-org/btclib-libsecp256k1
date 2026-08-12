@@ -390,8 +390,27 @@ def scan_outputs(
     ]
     n_found = ffi.new("uint32_t *")
 
-    cache = _label_cache(labels)
+    # the cache is filled inside the try, not built before it: every
+    # entry carries a tweak and the next one can raise, so what wipes them
+    # has to already be in force while they are being made -- create_outputs
+    # builds its two key lists the same way and for the same reason. A
+    # `dict` filled entry by entry is what makes that reachable, where a
+    # comprehension would drop the ones already made along with the
+    # exception
+    cache: dict[bytes, CData] = {}
+    # a NULL lookup is how libsecp256k1 is told no label is in play, and
+    # it is not the same as one that never matches: with it the scan skips
+    # the label branch altogether. What decides it is `labels`, an empty
+    # mapping being a cache with nothing in it rather than the absence of
+    # one; the callback is held in a local because it has to outlive the
+    # call it is passed to
+    lookup = ffi.NULL
     try:
+        if labels is not None:
+            _fill_label_cache(labels, cache)
+            lookup = ffi.callback(
+                "secp256k1_silentpayments_label_lookup", _lookup(cache)
+            )
         scanned = lib.secp256k1_silentpayments_recipient_scan_outputs(
             ctx,
             ffi.new("secp256k1_silentpayments_found_output *[]", found_objs),
@@ -401,12 +420,7 @@ def scan_outputs(
             scan_prvkey_bytes,
             summary,
             spend_pubkey,
-            # a NULL lookup is how libsecp256k1 is told no label is in
-            # play, and it is not the same as one that never matches:
-            # with it the scan skips the label branch altogether
-            ffi.NULL
-            if cache is None
-            else ffi.callback("secp256k1_silentpayments_label_lookup", _lookup(cache)),
+            lookup,
             ffi.NULL,
         )
         if not scanned:
@@ -416,13 +430,13 @@ def scan_outputs(
         # every found output carries the tweak that spends it, and the
         # cache the tweaks of the labels: both are secrets in memory this
         # package owns, and so both are taken back
-        for buffer in (*found_objs, *(cache or {}).values()):
+        for buffer in (*found_objs, *cache.values()):
             wipe(buffer)
 
 
-def _label_cache(
-    labels: Mapping[bytes, BytesLike] | None,
-) -> dict[bytes, CData] | None:
+def _fill_label_cache(
+    labels: Mapping[bytes, BytesLike], cache: dict[bytes, CData]
+) -> None:
     """Copy a label cache into the buffers the lookup will hand back.
 
     Every tweak is copied into memory this package owns before the scan
@@ -430,34 +444,29 @@ def _label_cache(
     there has to stay valid until libsecp256k1 is done with it, and a
     buffer made on the way out would be owned by nothing.
 
-    Args:
-        labels: the caller's mapping of 33-byte labels to 32-byte
-            tweaks, or None.
+    The dictionary is filled rather than returned, so that a tweak copied
+    before a later entry is refused is one the caller can still wipe: see
+    `scan_outputs`, which owns it and does.
 
-    Returns:
-        The same mapping with each tweak in a cffi buffer, or None where
-        None was given -- which is not an empty cache but the absence of
-        one, and reaches libsecp256k1 as a NULL lookup function.
+    Args:
+        labels: the caller's mapping of 33-byte labels to 32-byte tweaks.
+        cache: the dictionary to fill, keyed on the same labels.
 
     Raises:
         TypeError: if a label or a tweak is not bytes.
         ValueError: if a label is not 33 bytes, or a tweak not 32.
     """
-    if labels is None:
-        return None
-    return {
-        octets(label_bytes, "label", LABEL_SIZE): ffi.new(
+    for label_bytes, tweak_bytes in labels.items():
+        cache[octets(label_bytes, "label", LABEL_SIZE)] = ffi.new(
             "unsigned char[32]", octets(tweak_bytes, "label tweak", 32)
         )
-        for label_bytes, tweak_bytes in labels.items()
-    }
 
 
 def _lookup(cache: dict[bytes, CData]) -> Callable[[CData, CData], CData]:
     """Build the label lookup libsecp256k1 calls back into.
 
     Args:
-        cache: the labels of `_label_cache`, keyed on their 33 bytes.
+        cache: the labels of `_fill_label_cache`, keyed on their 33 bytes.
 
     Returns:
         A function of the C signature libsecp256k1 declares. It cannot
