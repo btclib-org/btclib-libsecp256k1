@@ -514,9 +514,13 @@ def _array(cdecl: str, items: list[CData]) -> CData:
         items: the objects to point at, which the caller keeps alive.
 
     Returns:
-        The array, or NULL where there is nothing to point at: that is
-        what the header asks for, and cffi will not make an array of
-        length zero to pass instead.
+        The array, or NULL where there is nothing to point at, which is
+        what libsecp256k1 requires rather than merely accepts: it reads
+        the count against the pointer, and a non-NULL one with a count of
+        zero fails an ARG_CHECK -- `n_xonly_pubkeys > 0`, reported through
+        the illegal callback. cffi would hand over an array of length
+        zero quite happily, `keys.pubkey_sort` passing one for an empty
+        sequence, so it is this call that has to say NULL.
     """
     return ffi.new(cdecl, items) if items else ffi.NULL
 

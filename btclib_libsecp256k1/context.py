@@ -76,8 +76,16 @@ def _randomize(context: CData) -> None:
     """Re-blind the signing precomputation of that context.
 
     Protects against side-channel leakage, as libsecp256k1 recommends,
-    and is called below on the shared context at import time. A caller
-    of its own may repeat it whenever it wants fresh blinding.
+    and is called below on the shared context at import time.
+
+    Repeating it is a caller's to do and needs exclusive access to the
+    context: this is one of the few libsecp256k1 calls that mutates one,
+    and the header says to randomize at creation time -- which is what
+    happens below -- or to hold a read-write lock. Everything else in
+    these bindings is safe to call from several threads *because* the
+    shared context is randomized once, before any of them exists, so a
+    second call on `ctx` while another thread is signing takes that
+    guarantee away. See the Thread safety section of the README.
 
     The context is an argument rather than the module-level `ctx` for
     the same reason `_load_lib` takes the module: a line called once, at
