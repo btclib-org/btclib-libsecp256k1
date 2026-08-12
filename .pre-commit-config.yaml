@@ -124,6 +124,42 @@ repos:
         language: pygrep
         entry: '^ *rev: "?v?([0-9]+|[0-9][0-9.]*(a|b|rc|dev)[0-9]+)"?$'
         files: ^\.pre-commit-config\.yaml$
+  # the vendored library is the release the prose names it to be.
+  # release.yml asks upstream the same question before publishing, which
+  # is the last gate and stays; what it cannot be is the only one, a
+  # submodule bump otherwise reaching main and waiting for a release to be
+  # compared with the version README.md claims -- the window in which the
+  # changelog and the release notes about that version are written. This
+  # asks it of every commit instead, and offline: the tag is resolved in
+  # the vendored clone's own refs, so no hook here reaches the network.
+  # The half that needs one -- that the tag is upstream's, and signed by a
+  # maintainer -- is a job of vendored-vectors.yml, a sentinel because a
+  # keyserver that is down is nothing a pull request did.
+  # always_run, and no `files`, because a `files` pattern cannot reach
+  # this one. git reports the gitlink as a staged path like any other --
+  # `git diff --staged --name-only` prints `secp256k1` for the commit that
+  # moves it -- but pre-commit drops from its file list everything that is
+  # not a regular file, and a submodule is a directory on disk: measured
+  # by staging a bump and asking for the hook by name, which answered
+  # "(no files to check)" even at `--files secp256k1`. A pattern would
+  # therefore have been a hook that never ran on the one commit it is for,
+  # and the pattern would have looked right. GitHub's own `paths:` filter
+  # is not the same code and does see it, which is what lets the sentinel
+  # in vendored-vectors.yml key on it (#106 has `secp256k1` among its
+  # changed files).
+  # The price of always_run is two git invocations per commit.
+  # language: python rather than system for the interpreter: the entry is
+  # a stdlib-only script, and a venv pre-commit builds has a `python` on
+  # every machine, where a bare `python` on the PATH is not something a
+  # uv-managed checkout guarantees
+  - repo: local
+    hooks:
+      - id: submodule-pin
+        name: the submodule is the libsecp256k1 release README.md names
+        language: python
+        entry: python .github/scripts/check_submodule_pin.py
+        always_run: true
+        pass_filenames: false
   # .github/dependabot.yml is validated by nothing else, and a typo in it
   # updates nothing and says nothing: the whole point of that file is to
   # move the pins this repository depends on for its security updates.
