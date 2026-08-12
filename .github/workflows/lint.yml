@@ -83,9 +83,18 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # the submodule, and unshallow, for one hook: `submodule-pin`
+      # resolves the release README.md names in the vendored clone's own
+      # refs, so it needs that clone and it needs its tags. fetch-depth 0
+      # is what gets them -- actions/checkout passes its depth down to
+      # the submodule, and a --depth=1 clone carries no tag at all -- and
+      # it is the whole cost of moving that check off the release path.
+      # Every other hook here reads files this repository owns
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

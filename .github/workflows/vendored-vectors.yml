@@ -37,10 +37,16 @@ on:
       - .github/workflows/vendored-vectors.yml
       - .github/scripts/check_vendored_vectors.py
       - tests/README.md
+      # the pin job below, and the two things it is about: the gitlink is
+      # a path like any other on a pull request -- #106, which moved the
+      # submodule to 0.8.0, has `secp256k1` among its changed files -- so
+      # the run that answers whether a bump is a signed upstream release
+      # is the run on the bump itself
+      - secp256k1
+      - README.md
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: vendored-vectors-${{ github.ref }}
@@ -55,6 +61,12 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # the issue is this job's to open, close or edit, and only this
+    # job's: the pin job below reports by going red, so it keeps the
+    # workflow's own contents: read
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,3 +91,81 @@ jobs:
           ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # the network half of the submodule pin check, whose offline half is the
+  # `submodule-pin` hook. That one asks whether the tag README.md names
+  # resolves, in the vendored clone, to the commit this tree pins -- two
+  # things already on the machine, which is what lets it gate a commit.
+  # This asks the two that need somebody else to answer: whether that tag
+  # is the one upstream publishes, and whether it carries the signature of
+  # a libsecp256k1 maintainer. `version-check` in release.yml asks the
+  # first of those before publishing and neither of them earlier, which is
+  # what issue #126 is about.
+  #
+  # A sentinel and not a gate, for the reason every network check here is
+  # one: a keyserver that is down is nothing a pull request introduced. It
+  # runs on the pull request that moves the pin all the same -- the paths
+  # filter above is what does that -- because that is where the answer is
+  # wanted while acting on it is still free.
+  #
+  # It opens no issue where the job above does, and the asymmetry is in
+  # the subject rather than in the effort. A vendored vector file drifts
+  # because upstream edits it in place, with nothing here changing and
+  # nobody looking, which is exactly what a monthly issue is for. A pin
+  # cannot drift: it moves only in a commit of this repository. So the
+  # monthly run here is a backstop against upstream retagging, or a
+  # signature that stops verifying, and a red run says all of that.
+  pin:
+    name: Check the pinned libsecp256k1 release
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # shallow is enough: the one tag this needs is fetched below,
+          # from upstream, which is the point of fetching it at all
+          submodules: true
+
+      # the fingerprints are libsecp256k1's own, the table in its
+      # SECURITY.md, recorded here rather than read out of the vendored
+      # tree at check time: a key list taken from the same place as the
+      # tag is a list whoever controls that place also writes. Upstream
+      # asks a human for the same separation in step 2 of its README,
+      # cross-referencing each fingerprint against a source its owner
+      # controls. keys.openpgp.org because that is the keyserver its
+      # SECURITY.md names in the command it gives
+      - name: Import the libsecp256k1 maintainer keys
+        env:
+          # Pieter Wuille, Tim Ruffing, Sebastian Falbesoner
+          FINGERPRINTS: >-
+            133EAC179436F14A5CF1B794860FEB804E669320
+            09E03F871092E40E106E902B33BC86AB80FF5516
+            6A8F9C266528E25AEB1D7731C2371D91CB716EA7
+        run: |
+          read -ra fingerprints <<< "$FINGERPRINTS"
+          for fingerprint in "${fingerprints[@]}"; do
+            gpg --keyserver hkps://keys.openpgp.org --recv-keys "$fingerprint"
+          done
+
+      # `git tag -v` and not `git ls-remote`: the second answers which
+      # commit a tag names today, which is what release.yml compares and
+      # is a claim by whoever served the answer. The signature is on the
+      # tag object, so the object has to be fetched to be verified
+      - name: The pin is the signed upstream release README.md names
+        run: |
+          named=$(sed -n 's|.*secp256k1/releases/tag/\(v[0-9][0-9.]*\).*|\1|p' README.md | head -1)
+          pinned=$(git ls-tree HEAD secp256k1 | awk '{print $3}')
+          if [ -z "$named" ]; then
+            echo "::error::README.md names no libsecp256k1 release"
+            exit 1
+          fi
+          git -C secp256k1 fetch --force origin "refs/tags/$named:refs/tags/$named"
+          git -C secp256k1 tag -v "$named"
+          tagged=$(git -C secp256k1 rev-parse "$named^{commit}")
+          echo "upstream's $named is $tagged; the submodule is pinned to $pinned"
+          if [ "$tagged" != "$pinned" ]; then
+            echo "::error::the submodule is pinned to $pinned, which is not $named"
+            exit 1
+          fi

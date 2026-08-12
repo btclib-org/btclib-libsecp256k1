@@ -335,6 +335,34 @@ release-notes length in the first place, and are still in
 
 ### The gate
 
+- **The submodule pin is checked on every commit, and its signature
+  monthly** (#126). `version-check` in `release.yml` resolved the release
+  `README.md` names against upstream and refused to publish a tree pinned
+  to anything else — the last gate before publication, and until now the
+  only one, so a bump reaching `main` waited for a release to be compared
+  with the version the prose claimed. That is the window in which the
+  changelog and the release notes about that version get written. The
+  check now exists twice more, split by what each half needs:
+  `.github/scripts/check_submodule_pin.py` resolves the tag in the
+  vendored clone's own refs, which is offline and therefore a hook —
+  `submodule-pin`, on every commit, because a `files` pattern cannot
+  reach it: pre-commit drops from its file list everything that is not a
+  regular file, and a submodule is a directory, so a hook filtered on
+  `secp256k1` would never have run on the one commit it is for. Measured
+  rather than assumed, by staging a bump and asking for the hook by name.
+  GitHub's `paths:` filter is other code and does see the gitlink, which
+  is what the sentinel keys on; and a `pin` job in
+  `vendored-vectors.yml` fetches the tag object from upstream and runs
+  `git tag -v` against the three maintainer fingerprints recorded from
+  libsecp256k1's own `SECURITY.md`, which nothing here had ever verified.
+  That half is a sentinel because a keyserver that is down is nothing a
+  pull request did, and it runs on the pull request that moves the pin
+  regardless: a gitlink is a path like any other in a `paths` filter, as
+  #106 shows, having `secp256k1` among its changed files. It opens no
+  issue where its neighbour does, and the reason is the subject: a vector
+  file drifts because upstream edits it in place, while a pin moves only
+  in a commit of this repository. `lint.yml` checks out the submodule
+  unshallow for the hook, tags being what a `--depth=1` clone has none of
 - **Every required check names the app that produces it.** `test: every
   job passed` and `codeql: every job passed` carried `app_id: 15368` and
   the other two carried none, which REPOSITORY.md recorded as a rule that
