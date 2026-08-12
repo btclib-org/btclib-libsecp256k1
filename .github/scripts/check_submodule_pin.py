@@ -166,6 +166,44 @@ def commit_of(tag: str) -> str | None:
     )
 
 
+def why_no_tag(tag: str) -> str:
+    """Say which of the three states a clone without that tag is in.
+
+    One message for all three used to be enough for a developer, who has
+    one of them; it is not enough for a checkout somebody else makes,
+    where which state it is *is* the finding. pre-commit.ci is that
+    checkout: told to take the submodule it takes it, and the hook failed
+    all the same, with a message that could not say whether the clone was
+    missing or merely shallow.
+
+    Args:
+        tag: the release tag that could not be resolved.
+
+    Returns:
+        A sentence naming the state and what would change it.
+    """
+    if _git("rev-parse", "--git-dir", cwd=_ROOT / _SUBMODULE, disown=True) is None:
+        return (
+            f"the {_SUBMODULE} submodule is not checked out, so nothing here"
+            " can resolve a tag: git submodule update --init"
+        )
+    if (
+        _git(
+            "rev-parse", "--is-shallow-repository", cwd=_ROOT / _SUBMODULE, disown=True
+        )
+        == "true"
+    ):
+        return (
+            f"the vendored clone is shallow and carries no {tag} tag:"
+            " git -C secp256k1 fetch --unshallow --tags, or check the"
+            " submodule out with fetch-depth 0"
+        )
+    return (
+        f"the vendored clone has no {tag} tag, though it is neither absent"
+        " nor shallow: git -C secp256k1 fetch --tags"
+    )
+
+
 def main() -> int:
     """Compare the pin with the release the prose names.
 
@@ -191,12 +229,7 @@ def main() -> int:
 
     tagged = commit_of(named)
     if tagged is None:
-        print(
-            f"the vendored clone has no {named} tag. Initialize the"
-            " submodule (git submodule update --init), and fetch its tags"
-            " if the clone is shallow",
-            file=sys.stderr,
-        )
+        print(why_no_tag(named), file=sys.stderr)
         return 1
 
     if tagged != pinned:
