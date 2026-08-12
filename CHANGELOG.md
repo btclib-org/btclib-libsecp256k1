@@ -415,13 +415,27 @@ release-notes length in the first place, and are still in
 - **`submodule-pin` is skipped on pre-commit.ci**, which is the second
   entry that list has ever had and was found the way the first one's
   reason would have been: the pull request adding the hook went red
-  there, with the hook's own "the vendored clone has no v0.8.0 tag",
-  while every other hook passed. pre-commit.ci's checkout carries no
-  vendored clone with tags in it, the same way it carries no network for
-  `pyroma`, so what is skipped is one of the hook's two runners and not
-  the hook — `lint.yml` asks for `submodules: true` and `fetch-depth: 0`
-  precisely so that the runner which is a required check has what the
-  hook needs, and a commit on a developer's machine has it too
+  there, with the hook's own message, while every other hook passed
+  (#130). Skipping was the cheap answer, and #131 asked for the other
+  one — `submodules: true`, a documented key of the `ci:` block — so it
+  was tried rather than argued about (#132). With it the clone arrives
+  and the hook fails all the same: **the vendored clone is shallow and
+  carries no `v0.8.0` tag**, and there is no `fetch-depth` key to ask
+  that service for. So the key bought a clone nothing can use and is not
+  kept, the skip stays, and REPOSITORY.md now records the gap beside the
+  checks the branch rule deliberately leaves out — one third-party check
+  this repository cannot make agree with `lint.yml`. What it costs is one
+  of the hook's two runners: the required one, `Lint and type-check`,
+  checks the submodule out with `fetch-depth: 0` precisely so it has what
+  the hook needs, and a developer's own commit has it too
+- **The hook says which of the three states a clone without the tag is
+  in**: not checked out, checked out but shallow, or a full clone that
+  simply lacks the tag — one sentence each, each naming what would change
+  it. One message covered all three and told them apart for nobody, which
+  is fine for a developer, who has one of them and knows which, and not
+  fine for a checkout somebody else makes, where which one it is *is* the
+  finding. That is exactly how the pre-commit.ci answer above stopped
+  being an inference: the second run of #132 came back naming `shallow`
 - **Every required check names the app that produces it.** `test: every
   job passed` and `codeql: every job passed` carried `app_id: 15368` and
   the other two carried none, which REPOSITORY.md recorded as a rule that

@@ -29,14 +29,20 @@ ci:
   # building that metadata, and pre-commit.ci runs hooks with no network
   # at all -- so the isolated build cannot fetch hatchling to prepare it,
   # and the fallback to a non-isolated one has no backend in the hook
-  # environment either. submodule-pin resolves the release README.md
-  # names in the vendored clone's refs, and pre-commit.ci's checkout has
-  # no such clone with tags in it: measured on the pull request that
-  # added the hook, which went red there with the hook's own "the
-  # vendored clone has no v0.8.0 tag" while every other hook passed.
+  # environment either.
   #
-  # In both cases the lint workflow runs this same file with what the
-  # hook needs -- a network for the first, `submodules: true` and
+  # submodule-pin resolves the release README.md names in the vendored
+  # clone's refs, and there are no refs to resolve it against there.
+  # `submodules: true` is the documented `ci:` key for that -- "whether to
+  # recursively check out submodules" -- and it was tried, on #132, rather
+  # than argued about: with it the clone arrives, and the hook still
+  # fails, now saying which of the three states it is in. "the vendored
+  # clone is shallow and carries no v0.8.0 tag". There is no `fetch-depth`
+  # key to ask that service for, so the key bought a clone nothing can use
+  # and is not kept. REPOSITORY.md records the residual gap.
+  #
+  # In both cases the lint workflow runs this same file with what the hook
+  # needs -- a network for the first, `submodules: true` and
   # `fetch-depth: 0` for the second -- so what is skipped here is one of
   # two runners rather than the hook: each still gates a commit on this
   # machine and a pull request in that workflow, which is the required

@@ -44,6 +44,22 @@ without the rule changing, which is worth knowing before renaming
 anything — a context is matched by name, not by the workflow that reported
 it, so moving a job is free and renaming one is not.
 
+`pre-commit.ci` is not in the rule either, and it is the one check here
+this repository cannot make agree with `lint.yml`. It runs the hooks of
+`.pre-commit-config.yaml` from a checkout of its own, and one hook needs
+more than that checkout gives: `submodule-pin` resolves the release
+`README.md` names in the vendored clone's refs. `submodules: true` under
+`ci:` is the documented key for the clone, and it was tried on #132 rather
+than reasoned about — with it the submodule arrives and the hook still
+fails, `the vendored clone is shallow and carries no v0.8.0 tag`. There is
+no `fetch-depth` key to ask that service for, so the hook is in the `ci:`
+`skip` list beside `pyroma`, which needs a network that service also does
+not give. What that costs is one of the hook's two runners: the one the
+rule names, `Lint and type-check`, checks the submodule out with
+`fetch-depth: 0` precisely so it has what the hook needs, and so does a
+developer's own commit. Re-read that skip list before adding to it: an
+entry may join for a reason of that kind and no other.
+
 Neither `macos.yml`, `latest.yml`, `links.yml`, `mutation.yml`,
 `published.yml` nor `vendored-vectors.yml` appears in the rule, and none of
 them must: each is expected to go red for a reason no pull request

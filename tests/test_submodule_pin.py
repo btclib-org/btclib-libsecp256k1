@@ -137,14 +137,45 @@ def test_a_readme_naming_no_release_fails(
     assert "links to no libsecp256k1 release" in capsys.readouterr().err
 
 
-def test_a_submodule_nobody_initialized_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "answers, expected",
+    [
+        ({}, "is not checked out"),
+        ({"--git-dir": ".git", "--is-shallow-repository": "true"}, "is shallow"),
+        (
+            {"--git-dir": ".git", "--is-shallow-repository": "false"},
+            "neither absent nor shallow",
+        ),
+    ],
+)
+def test_a_clone_without_the_tag_says_which_of_the_three_it_is(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    answers: dict[str, str],
+    expected: str,
 ) -> None:
-    """A clone without the tag says how to get one, rather than passing."""
+    """No tag has three causes, and one message for all three said none.
+
+    A developer has one of the three and knows which; a checkout somebody
+    else makes does not, and there which one it is *is* the finding. It
+    was pre-commit.ci that made that concrete: told to take the submodule
+    it takes it, and the hook failed anyway with a message that could not
+    say whether the clone was missing or merely shallow.
+
+    Args:
+        monkeypatch: the fixture the substitutions are made through.
+        tmp_path: where the README the check reads is written.
+        capsys: the captured streams.
+        answers: what git answers each question, by its last argument; a
+            question missing from it is a git that exited non-zero.
+        expected: the clause the message has to carry.
+    """
     _tree(monkeypatch, tmp_path, tagged=None)
+    monkeypatch.setattr(check, "_git", lambda *args, **_kwargs: answers.get(args[-1]))
 
     assert check.main() == 1
-    assert "git submodule update --init" in capsys.readouterr().err
+    assert expected in capsys.readouterr().err
 
 
 def test_a_tree_with_no_submodule_fails(
