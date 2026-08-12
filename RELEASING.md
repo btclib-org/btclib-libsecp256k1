@@ -254,21 +254,63 @@ Then:
    attestations are under `/integrity/<project>/<version>/<filename>/provenance`
    rather than in the JSON API, which answers `null` for `provenance`
    even where they are
-1. run the `published` workflow from the Actions tab, and expect it green:
-   it installs from PyPI what was just uploaded, on every platform and at
-   both ends of the supported interpreter range, and verifies BIP340
-   vector 0 with it. From then on it runs monthly on its own, on the
-   first, and a failure
-   means the outside world moved, not this repository — which is why it is
-   a workflow of its own rather than a job of this one, besides its
-   racing the index if it ran straight after the upload. On 0.7.1 it went
-   from nineteen cells red to nineteen green, having had nothing
-   installable to find the day before
+1. `published` no longer needs a manual dispatch to answer this for the
+   release itself: `release.yml`'s own `published` job (`needs:
+   publish-pypi`) calls the same workflow directly, so by the time the run
+   finishes it has already installed from PyPI what was just uploaded, on
+   every platform and at both ends of the supported interpreter range, and
+   verified BIP340 vector 0 with it. Read its result in the run rather
+   than dispatching a second one. It still runs monthly on its own too, on
+   the first, and a failure there means the outside world moved, not this
+   repository — which is why it stayed a workflow of its own rather than
+   folding into `release.yml` outright.
+
+   A cell of that matrix can still lose the race with the index even
+   though `version-check` already confirmed PyPI serves the version: 0.8.0
+   failed `Install 3.14 from PyPI on ubuntu-24.04-arm` this way, one cell
+   out of the whole matrix, `pip` answering "no matching distribution"
+   seconds after the JSON API had confirmed the release — the file was on
+   the index by then (`pypi.org/pypi/<project>/<version>/json` lists it
+   in `urls`), so this is `files.pythonhosted.org`'s CDN a step behind
+   Warehouse's own database, not a missing wheel. `gh run rerun <run id>
+   --failed` reruns the cell alone and it passes the second time
 1. check the GitHub release the workflow created once PyPI had accepted
-   the upload: its notes are the tag's section of `HISTORY.md`, and the
-   sdist is attached, with `<tag>.attestation.jsonl` beside it. A run
-   that warns `HISTORY.md has no v0.7.1 section` generated the notes from
-   the merged pull requests instead, and they are worth replacing by hand
+   the upload — and check that it exists at all before reading anything
+   in it: `github-release` (`needs: [publish-pypi, attest]`, both of which
+   can be green) was left `skipped` rather than run on 0.8.0, at the same
+   time `published`'s cell above was failing and the Actions API was
+   answering this run's own `.../jobs` endpoint with intermittent `502`s
+   for a while after — evidence of a platform-side hiccup on this
+   particular run rather than a condition in the workflow, but not a
+   citation for one, and worth treating as an open question rather than a
+   settled one. `gh run rerun --failed` does not reach it either way: that
+   flag reruns jobs whose conclusion is `failure` and their dependents,
+   and `skipped` is neither, so a rerun scoped to `published`'s failing
+   cell leaves `github-release` exactly where it was. Recreate it by hand
+   from the run's own artifacts, which is the same thing that step would
+   have done:
+
+   ```shell
+   run=<run id>; tag=v0.8.0; repo=btclib-org/btclib-secp256k1
+   gh run download "$run" --repo "$repo" --name sdist --dir dist
+   gh run download "$run" --repo "$repo" --name attestation --dir attestation
+   cp attestation/attestation.jsonl "$tag.attestation.jsonl"
+   awk -v tag="$tag" '
+     $0 ~ "^## " tag "( |$)" {found=1; next}
+     /^## / && found {exit}
+     found {print}
+   ' HISTORY.md > notes.md
+   gh release create "$tag" dist/* "$tag.attestation.jsonl" \
+     --repo "$repo" --title "$tag" --notes-file notes.md
+   ```
+
+   Verify the sdist this produces the same way the step below does: the
+   hash has to match the file `pypi.org/pypi/<project>/<version>/json`
+   already lists, since nothing rebuilt it. Its notes are the tag's
+   section of `HISTORY.md`, and the sdist is attached, with
+   `<tag>.attestation.jsonl` beside it. A run that warns `HISTORY.md has
+   no v0.7.1 section` generated the notes from the merged pull requests
+   instead, and they are worth replacing by hand either way
 1. verify the sdist on the releases page, which is the copy PyPI's
    attestation says nothing about — the step above says the file is
    there, this one says where it came from:
@@ -433,16 +475,19 @@ worth keeping, as what a yanked file was built from.
 ## One-time setup, per index
 
 The PyPI side was done for `btclib-libsecp256k1`, and a registration is
-per project name, so **the rename needs it done again** — on PyPI and on
-TestPyPI both — before 0.8.0 can be published at all. For a name no
+per project name, so **the rename needed it done again** — on PyPI and on
+TestPyPI both — before 0.8.0 could be published at all. For a name no
 project holds yet the form to use is a *pending* publisher, which is the
 same registration made against a name rather than a project and which
 creates the project on the first upload it accepts. Without it the run
 gets as far as the token exchange and stops there with
 `invalid-publisher`, having built the whole matrix first: the failure
-this file already describes twice, and this time it is expected rather
-than mysterious. A rehearsal against TestPyPI is what proves the
-registration before the release needs it.
+this file already describes twice, and a third time would have been
+expected rather than mysterious. It was not needed a third time: the
+0.8.0 TestPyPI rehearsal published `0.8.0.dev701` cleanly, proving both
+pending publishers were already registered against `btclib-secp256k1`
+before the tag needed them, and the tag itself published just as cleanly
+after. The next rename, if there is one, still needs this done again.
 
 The rest of this section is here for the next index, or the next fork.
 
