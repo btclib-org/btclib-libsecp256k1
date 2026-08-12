@@ -23,25 +23,24 @@ ci:
   # request with nowhere to land
   autoupdate_commit_msg: "Update the pinned pre-commit hook revisions"
   autoupdate_schedule: weekly
-  # the two hooks pre-commit.ci cannot run, each for something that
-  # service does not give a hook rather than for anything either hook
-  # does. pyroma rates the metadata of the source tree, which means
-  # building that metadata, and pre-commit.ci runs hooks with no network
-  # at all -- so the isolated build cannot fetch hatchling to prepare it,
-  # and the fallback to a non-isolated one has no backend in the hook
-  # environment either. submodule-pin resolves the release README.md
-  # names in the vendored clone's refs, and pre-commit.ci's checkout has
-  # no such clone with tags in it: measured on the pull request that
-  # added the hook, which went red there with the hook's own "the
-  # vendored clone has no v0.8.0 tag" while every other hook passed.
-  #
-  # In both cases the lint workflow runs this same file with what the
-  # hook needs -- a network for the first, `submodules: true` and
-  # `fetch-depth: 0` for the second -- so what is skipped here is one of
-  # two runners rather than the hook: each still gates a commit on this
-  # machine and a pull request in that workflow, which is the required
-  # check. An entry may join them for a reason of that kind and no other
-  skip: [pyroma, submodule-pin]
+  # `submodule-pin` reads the vendored clone, and pre-commit.ci checks out
+  # no submodule unless asked: the run against #127 went red there with
+  # that hook's own "the vendored clone has no v0.8.0 tag" while every
+  # other hook passed. #130 answered it by skipping the hook, which is the
+  # cheaper answer and the worse one -- it leaves the check to `lint.yml`
+  # alone. This is the answer #131 asks for instead: give the service the
+  # clone, so the hook runs everywhere the others do
+  submodules: true
+  # the one hook pre-commit.ci cannot run, and the only entry this list
+  # may ever have without a reason of the same kind: pyroma rates the
+  # metadata of the source tree, which means building that metadata, and
+  # pre-commit.ci runs hooks with no network at all -- so the isolated
+  # build cannot fetch hatchling to prepare it, and the fallback to a
+  # non-isolated one has no backend in the hook environment either. The
+  # lint workflow runs this same file with a network, so what is skipped
+  # here is one of the hook's two runners rather than the hook: it still
+  # gates a commit on this machine and a pull request in that workflow
+  skip: [pyroma]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
