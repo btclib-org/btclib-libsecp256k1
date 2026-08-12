@@ -42,10 +42,23 @@
 # The session that measured that is in the pull request which made it true:
 # 385 mutants executed, none surviving, 352 skipped. So read a survivor
 # list expecting nothing, and read whatever is in it as a test nobody has
-# written -- there is no longer a shape to skip past first. That is a
-# statement about the shapes, not a promise about the rate: what the next
-# scheduled run reports is what it reports, and it is not restated here, a
-# number in a comment being a line every change to the suite would edit.
+# written -- unless it is the shape below, which is not a test nobody has
+# written but a comparison with only one reachable side.
+#
+# A session dated 2026-08-12, on code neither session above had measured,
+# found one: `_scalar.py`'s `value.itemsize != 1`, from #124, mutates to
+# `> 1` and no input tells the two apart -- a memoryview's itemsize is
+# never zero, so every value satisfying one comparison satisfies the
+# other. The two shapes above were rewritten until the equivalence went
+# away; this one cannot be, because the check already is the boundary
+# rather than a stand-in for one. Read it once and skip it every session
+# after, the same way the filter below skips the annotations by operator
+# rather than asking every mutant of a `|` to be read again.
+#
+# That is a statement about the shapes, not a promise about the rate:
+# what the next scheduled run reports is what it reports, and it is not
+# restated here, a number in a comment being a line every change to the
+# suite would edit.
 #
 # Here rather than at the repository root: cosmic-ray takes the path of its
 # configuration as an argument, so nothing forces a name or a place, and
