@@ -149,10 +149,10 @@ Then:
 
    Then merge it into `main` with a green CI. It is an ordinary pull
    request against the only branch there is, and it merges the way every
-   other one here does; the button is still worth reading before it is
-   pressed, all three methods being enabled and GitHub preselecting the
-   one used last. A merge commit is not among the choices whichever is
-   selected: `main` requires linear history.
+   other one here does: with the squash button, which is the only one the
+   repository enables — a merge commit was refused by `main`'s required
+   linear history anyway, and REPOSITORY.md has what the rebase merge
+   would have cost.
 
    What that button cannot cost any more is the history of a cycle. It
    could once: 0.7.1 was *Squash and merge* on a release pull request

@@ -45,6 +45,18 @@ release-notes length in the first place, and are still in
   anything but `github.ref_name`, which is the same for a lightweight and
   an annotated tag. The one `refs/tags/...^{}` in that file dereferences
   *bitcoin-core*'s tags, not this repository's.
+- **Squash is the only merge method the repository enables**, for a release
+  pull request and every other one. The merge commit was refused by
+  `main`'s required linear history already, so turning it off takes away a
+  button that could not have worked; the rebase merge could have, and what
+  it would have done is replay a branch's commits onto a trunk where one
+  change is one commit. What a single method takes away is the dropdown:
+  GitHub preselects whichever was used last and the dialog that switches
+  auto-merge on carries the same one, so the answer could be given hours
+  before anything merged, by whoever switched it on, with nothing asking
+  again -- which is what REPOSITORY.md's auto-merge section warned about
+  and now records as gone. `btclib` and `bitcoin-core-rpc` carry the same
+  setting and the same prose.
 
 ### The wrapped library
 

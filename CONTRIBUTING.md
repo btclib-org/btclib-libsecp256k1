@@ -550,15 +550,15 @@ note in the pull request saying the head moved.
 Nothing is lost in `main`'s history by working that way, because a pull
 request is squashed on merge: the branch lands as one commit whose subject
 is the pull request title with its number, so the review's commits are the
-record of the review and `main` keeps one commit per landed change. All
-three merge buttons are enabled on this repository, so which one is used
-is a choice made at the merge rather than one GitHub enforces — check it
-before clicking, GitHub preselecting whichever was used last.
+record of the review and `main` keeps one commit per landed change. It is
+the only merge button this repository enables, so which one is used is a
+setting rather than a choice made at the merge; REPOSITORY.md has that
+setting and what the other two would have cost.
 
-Auto-merge moves that check earlier rather than removing it: the method is
-picked in the dialog that switches it on, so a pull request set to merge
-itself once the checks go green has already answered this, and the answer
-is `gh pr view <n> --json autoMergeRequest`. Enabling it is the way to not
+Auto-merge had that choice to make earlier and no longer does, the dialog
+that switches it on carrying one method: what a pull request set to merge
+itself once the checks go green is holding is still
+`gh pr view <n> --json autoMergeRequest`. Enabling it is the way to not
 wait for a matrix that compiles C on every platform; GitHub only offers it
 while something is still pending, and it merges nothing the branch rule
 would not have let through by hand.
