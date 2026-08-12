@@ -10,7 +10,8 @@ a tag is generated from.
 [libsecp256k1 0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)
 (6e2c8bc), up from 0.7.1: a minor version of the wrapped library, so a
 minor version here, the numbers tracking each other. **One breaking
-change, and only for a caller reaching through `lib`.**
+change, and only for a caller reaching through `lib`; two arguments that
+used to be answered wrongly now raise instead.**
 
 - **Silent Payments are wrapped**, as `silentpayments`, BIP352's new
   libsecp256k1 module: `create_outputs` pays a list of addresses from the
@@ -35,6 +36,13 @@ change, and only for a caller reaching through `lib`.**
   key now raises `ValueError` naming an invalid private key, which is
   what the docstring already said it did. No securely generated key is
   affected: the probability of one landing there is about 2**-128.
+- **A `memoryview` of items wider than an octet is refused**, everywhere
+  bytes cross, where it used to be read as the octets underneath those
+  items — 32 of them for eight `uint32`, which is a value the caller never
+  wrote and not the same one on a big endian machine. It now raises
+  `TypeError`; `.cast("B")` is how a caller who does mean those octets
+  says so. `bytes`, a `bytearray` and a `memoryview` of bytes are
+  unaffected, a stride and extra dimensions included.
 - **ECDSA and BIP340 verification are faster on GCC and MSVC**, by up to
   about 11% upstream's measure, the 64-bit field multiplication and
   squaring now being force-inlined. Clang, which is what the macOS wheels

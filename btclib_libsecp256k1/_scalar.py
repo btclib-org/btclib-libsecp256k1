@@ -43,11 +43,30 @@ def octets(value: BytesLike, name: str, size: int | None = None) -> bytes:
         The value as bytes: itself, if that is what it already was.
 
     Raises:
-        TypeError: if the value is not one of those three types.
+        TypeError: if the value is not one of those three types, or is a
+            memoryview whose items are wider than an octet.
         ValueError: if a size is given and the value is not that long.
     """
     if not isinstance(value, (bytes, bytearray, memoryview)):
         raise TypeError(f"the {name} must be bytes, not {type(value).__name__}")
+    # a memoryview states its width in items, and `bytes` of one reads the
+    # octets underneath them: eight uint32 are 32 octets of whatever this
+    # machine's byte order made of them, which passes the size check below
+    # as a scalar nobody wrote -- the one way in which a memoryview does
+    # not state the width this reads it for. Refused rather than
+    # reinterpreted, for the reason a 20-octet value is: `value.cast("B")`
+    # is how a caller says that the octets are what they meant.
+    #
+    # Nothing else about the shape needs asking. Where the items are
+    # octets, `bytes` answers the ones the view logically holds -- through
+    # a stride, and over every dimension of a multidimensional view -- so
+    # the length checked below is the length libsecp256k1 will read
+    if isinstance(value, memoryview) and value.itemsize != 1:
+        msg = (
+            f"the {name} must be a memoryview of bytes, "
+            f"not of {value.itemsize}-byte items"
+        )
+        raise TypeError(msg)
     # bytes of bytes is bytes, so nothing is copied in the ordinary case
     value_bytes = bytes(value)
     if size is not None and len(value_bytes) != size:
