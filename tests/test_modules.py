@@ -23,7 +23,7 @@ import hashlib
 
 import pytest
 
-from btclib_libsecp256k1 import (
+from btclib_secp256k1 import (
     _secret,
     context,
     dsa,
@@ -38,9 +38,9 @@ from btclib_libsecp256k1 import (
     ssa,
     xonly,
 )
-from btclib_libsecp256k1.context import ctx
+from btclib_secp256k1.context import ctx
 
-msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
+msg = hashlib.sha256(b"btclib_secp256k1").digest()
 
 
 def compress(pubkey_bytes: bytes) -> bytes:

@@ -50,7 +50,7 @@ from typing import Any
 
 import pytest
 
-from btclib_libsecp256k1 import (
+from btclib_secp256k1 import (
     CData,
     dsa,
     ellswift,
@@ -62,7 +62,7 @@ from btclib_libsecp256k1 import (
     silentpayments,
     ssa,
 )
-from btclib_libsecp256k1.context import ctx
+from btclib_secp256k1.context import ctx
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -841,7 +841,7 @@ def test_the_bip352_vectors_were_read_at_all() -> None:
 # signature is one dsa.verify accepts
 HIGH_X_NONCE = N + 2
 HIGH_X_S = 0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
-HIGH_X_MSG = hashlib.sha256(b"btclib_libsecp256k1 recid 2 and 3").digest()
+HIGH_X_MSG = hashlib.sha256(b"btclib_secp256k1 recid 2 and 3").digest()
 
 
 @pytest.mark.parametrize("recid", [2, 3])
@@ -897,7 +897,7 @@ def test_high_s_is_carried_through_recovery_unchanged() -> None:
     same key, and it flips the parity of the nonce point, so it is the
     other recovery id that recovers the key from it.
     """
-    msg = hashlib.sha256(b"btclib_libsecp256k1 high s").digest()
+    msg = hashlib.sha256(b"btclib_secp256k1 high s").digest()
     prvkey = 7
     signature, recid = recovery.sign(msg, prvkey)
     pubkey = recovery.recover(msg, signature, recid)

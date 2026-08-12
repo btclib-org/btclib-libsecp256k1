@@ -1,7 +1,7 @@
 # scripts
 
 The build backend of this package, plus the benchmark. Nothing here is
-part of the installed package: `btclib_libsecp256k1` never imports these
+part of the installed package: `btclib_secp256k1` never imports these
 modules, and they carry no public API. They are, however, shipped in the
 sdist, because building it from source runs two of them.
 
@@ -27,7 +27,7 @@ path setup for a package that is not installed yet.
 What it does with the result:
 
 - every artifact is `force_include`d at the wheel root, next to the
-  package, which is where `btclib_libsecp256k1/__init__.py` looks for it
+  package, which is where `btclib_secp256k1/__init__.py` looks for it
 - the wheel tag is set from the extension mode: `infer_tag` for a static
   extension, which is ABI-specific, and an explicit
   `py3-none-<platform>` for a dynamic one, which is not

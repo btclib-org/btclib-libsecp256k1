@@ -38,7 +38,7 @@ body:
     attributes:
       label: Version
       description: >
-        `python -c "import btclib_libsecp256k1 as m; print(m.__version__)"`
+        `python -c "import btclib_secp256k1 as m; print(m.__version__)"`
       placeholder: "0.7.1"
     validations:
       required: true
@@ -50,7 +50,7 @@ body:
       description: >
         The three artifacts differ in how libsecp256k1 is linked, and a
         bug is rarely in all of them. If unsure, run
-        `python -c "import _btclib_libsecp256k1 as m; print(m.__file__, hasattr(m, 'lib'))"`:
+        `python -c "import _btclib_secp256k1 as m; print(m.__file__, hasattr(m, 'lib'))"`:
         `True` means the library is linked into the extension, i.e. a
         static build, `False` that it is a shared object loaded at run
         time.
@@ -78,5 +78,5 @@ body:
       label: Anything else
       description: >
         For a build failure, the output of
-        `python -m pip install --verbose btclib_libsecp256k1` is the
+        `python -m pip install --verbose btclib_secp256k1` is the
         thing that matters most.

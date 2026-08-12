@@ -281,7 +281,7 @@ repos:
       - id: pydoclint
         name: pydoclint (arguments and return values)
         args: [--config=pyproject.toml]
-        files: ^btclib_libsecp256k1/.*\.py$
+        files: ^btclib_secp256k1/.*\.py$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.3.0

@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from btclib_libsecp256k1 import (
+from btclib_secp256k1 import (
     dsa,
     ecdh,
     ellswift,
@@ -232,7 +232,7 @@ def test_the_sweep_is_whole() -> None:
         if not name.startswith("_")
         and callable(getattr(module, name))
         and getattr(getattr(module, name), "__module__", "")
-        == f"btclib_libsecp256k1.{module_name}"
+        == f"btclib_secp256k1.{module_name}"
     }
 
     assert exported - swept == set()

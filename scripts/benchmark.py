@@ -38,16 +38,16 @@ from btclib.ecc import dsa, ssa
 from btclib.hashes import reduce_to_hlen
 from btclib.to_pub_key import pub_keyinfo_from_prv_key
 
-import btclib_libsecp256k1.dsa
-import btclib_libsecp256k1.ssa
+import btclib_secp256k1.dsa
+import btclib_secp256k1.ssa
 import secp256k1
 
 prvkey = 1
 pubkey = pub_keyinfo_from_prv_key(prvkey)[0]
 xonly_pubkey = pubkey[1:]
 msg = reduce_to_hlen(b"Satoshi Nakamoto")
-dsa_sig = btclib_libsecp256k1.dsa.sign(msg, prvkey)
-ssa_sig = btclib_libsecp256k1.ssa.sign(msg, prvkey)
+dsa_sig = btclib_secp256k1.dsa.sign(msg, prvkey)
+ssa_sig = btclib_secp256k1.ssa.sign(msg, prvkey)
 
 
 def python_arithmetic_only() -> None:
@@ -118,12 +118,12 @@ def ssa_secp256k1() -> None:
 
 def dsa_libsecp256k1() -> None:
     """Time this package's ECDSA verification."""
-    assert btclib_libsecp256k1.dsa.verify(msg, pubkey, dsa_sig)
+    assert btclib_secp256k1.dsa.verify(msg, pubkey, dsa_sig)
 
 
 def ssa_libsecp256k1() -> None:
     """Time this package's BIP340 verification."""
-    assert btclib_libsecp256k1.ssa.verify(msg, xonly_pubkey, ssa_sig)
+    assert btclib_secp256k1.ssa.verify(msg, xonly_pubkey, ssa_sig)
 
 
 def benchmark(func: Callable[[], None], mult: int = 1) -> None:

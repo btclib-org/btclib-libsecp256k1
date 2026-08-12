@@ -535,7 +535,7 @@ jobs:
           echo "installing $wheel"
           cd "$RUNNER_TEMP"
           uv run --isolated --no-project --python 3.14 --with "$wheel" \
-            python -c "import btclib_libsecp256k1 as m; print(m.__version__, m.lib)"
+            python -c "import btclib_secp256k1 as m; print(m.__version__, m.lib)"
 
       # what twine cannot see: metadata that is valid but poor, a missing
       # classifier or url, a version PyPI would sort in a way nobody
@@ -615,7 +615,7 @@ jobs:
       - name: Install lib
         run: |
           python -m pip install cffi
-          python -m pip install --verbose --no-index --find-links dist/ btclib_libsecp256k1
+          python -m pip install --verbose --no-index --find-links dist/ btclib_secp256k1
 
       - name: Test
         run: pytest
@@ -689,7 +689,7 @@ jobs:
       - name: Install lib
         run: |
           python -m pip install cffi
-          python -m pip install --verbose --no-index --find-links dist/ btclib_libsecp256k1
+          python -m pip install --verbose --no-index --find-links dist/ btclib_secp256k1
 
       - name: Test
         run: pytest

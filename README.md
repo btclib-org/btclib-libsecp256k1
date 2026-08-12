@@ -1,4 +1,4 @@
-# btclib_libsecp256k1
+# btclib_secp256k1
 
 <!-- The badges are what the reader decides with: the first line says what
 this is and whether it can be used, the second whether it works, the third
@@ -8,17 +8,17 @@ CONTRIBUTING.md, beside the prose that says how the choice is enforced. One
 badge per line keeps a change to one line and every line inside MD013,
 whose 80 columns bind only where a space follows them. btclib and
 bitcoin-core-rpc carry the same three lines. -->
-[![PyPI version](https://img.shields.io/pypi/v/btclib_libsecp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
-[![downloads](https://static.pepy.tech/badge/btclib_libsecp256k1)](https://pepy.tech/project/btclib_libsecp256k1)
-[![development status](https://img.shields.io/pypi/status/btclib_libsecp256k1.svg)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
+[![PyPI version](https://img.shields.io/pypi/v/btclib_secp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_secp256k1/)
+[![downloads](https://static.pepy.tech/badge/btclib_secp256k1)](https://pepy.tech/project/btclib_secp256k1)
+[![development status](https://img.shields.io/pypi/status/btclib_secp256k1.svg)](https://pypi.python.org/pypi/btclib_secp256k1/)
 [![license](https://img.shields.io/github/license/btclib-org/btclib-libsecp256k1.svg)](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/LICENSE)
-[![supported Python versions](https://img.shields.io/pypi/pyversions/btclib_libsecp256k1.svg?logo=python)](https://pypi.python.org/pypi/btclib_libsecp256k1/)
+[![supported Python versions](https://img.shields.io/pypi/pyversions/btclib_secp256k1.svg?logo=python)](https://pypi.python.org/pypi/btclib_secp256k1/)
 
 [![test workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml)
 [![lint workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml)
 [![docs workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib-libsecp256k1/main.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib-libsecp256k1/main)
-[![documentation build](https://readthedocs.org/projects/btclib-libsecp256k1/badge/?version=latest)](https://btclib-libsecp256k1.readthedocs.io)
+[![documentation build](https://readthedocs.org/projects/btclib-secp256k1/badge/?version=latest)](https://btclib-secp256k1.readthedocs.io)
 
 [![GitHub repository: btclib-org/btclib-libsecp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-libsecp256k1/)
 [![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
@@ -34,7 +34,7 @@ As used by the
 To install (and/or upgrade):
 
 ```shell
-python -m pip install --upgrade btclib_libsecp256k1
+python -m pip install --upgrade btclib_secp256k1
 ```
 
 ## Quickstart
@@ -45,7 +45,7 @@ that stops working fails a build rather than sitting here:
 
 ```python
 >>> import hashlib
->>> from btclib_libsecp256k1 import dsa, keys, ssa, xonly
+>>> from btclib_secp256k1 import dsa, keys, ssa, xonly
 
 >>> # BIP340 test vector 1; yours comes from os.urandom or a wallet
 >>> prvkey = 0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF
@@ -80,12 +80,40 @@ own contract in its docstring.
 
 ## Versioning
 
-btclib_libsecp256k1 version numbers track the wrapped libsecp256k1
+btclib_secp256k1 version numbers track the wrapped libsecp256k1
 version: release M.N.P wraps libsecp256k1 vM.N.P
-(e.g. btclib_libsecp256k1 0.7.1 wraps libsecp256k1 v0.7.1).
+(e.g. btclib_secp256k1 0.8.0 wraps libsecp256k1 v0.8.0).
 When a new release of the bindings is needed while still wrapping the
 same libsecp256k1 version, a fourth number is appended:
 0.7.1.1, 0.7.1.2, etc.
+
+## The name
+
+This package was `btclib_libsecp256k1` up to and including 0.7.1.3, and
+0.8.0 is the first release under this name. `lib` named the C library
+being wrapped, and a python distribution is not that library: it is
+btclib's bindings to secp256k1, which is what the name now says.
+
+Nothing on PyPI bridges the two, deliberately: `btclib_libsecp256k1`
+stops at 0.7.1.3 and stays installable, wrapping libsecp256k1 0.7.1, and
+`pip install btclib_libsecp256k1` keeps resolving to it rather than
+following the rename. Moving means changing the requirement and the
+import, which are the same edit twice:
+
+```diff
+-btclib_libsecp256k1>=0.7.1.3
++btclib_secp256k1>=0.8.0
+```
+
+```diff
+-from btclib_libsecp256k1 import dsa, keys, ssa, xonly
++from btclib_secp256k1 import dsa, keys, ssa, xonly
+```
+
+The two can be installed side by side while that happens: the import
+package was renamed with the distribution, so neither shadows the other.
+Everything inside the API — the module names, every function, and the
+`ffi` and `lib` a caller reaches MuSig2 through — is unchanged.
 
 ## Design
 

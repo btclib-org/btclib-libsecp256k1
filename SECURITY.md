@@ -48,7 +48,7 @@ build provenance attestation of its own, signed in the run that built it:
 
 ```shell
 repo=btclib-org/btclib-libsecp256k1
-gh attestation verify btclib_libsecp256k1-<version>.tar.gz \
+gh attestation verify btclib_secp256k1-<version>.tar.gz \
   --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml"
 ```
 

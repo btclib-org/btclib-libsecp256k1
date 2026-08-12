@@ -1,4 +1,4 @@
-# Working on btclib_libsecp256k1
+# Working on btclib_secp256k1
 
 Python bindings to a vendored [libsecp256k1](secp256k1/), built from
 source. The package is thin: the cryptography is upstream, and what lives
@@ -30,7 +30,7 @@ and stays, in:
 ## Architecture
 
 One thing decides how this package behaves, and it is decided at import
-time by `btclib_libsecp256k1/__init__.py`: `_load_lib` returns
+time by `btclib_secp256k1/__init__.py`: `_load_lib` returns
 `module.lib` when the extension has libsecp256k1 linked into it (a static
 build) and otherwise `ffi.dlopen`s the shared object shipped beside it (a
 dynamic, cffi ABI mode build). Only one of those two branches exists in a
@@ -54,7 +54,7 @@ and then compiles the extension by one of three paths — static with
 MSVC, static with the interpreter's own toolchain, or dynamic with no C
 compiled at all — chosen by `BTCLIB_LIBSECP256K1_DYNAMIC`,
 `BTCLIB_LIBSECP256K1_CROSS_COMPILE` and `CFFI_PLATFORM`.
-`stubs/_btclib_libsecp256k1.pyi` is what lets strict mypy typecheck a
+`stubs/_btclib_secp256k1.pyi` is what lets strict mypy typecheck a
 module that only exists after a build.
 
 ## The gate is one file
@@ -258,7 +258,7 @@ findings.
 
 - **`uv run --python 3.10 …` replaces `.venv`** with an environment built
   on that interpreter, and leaves it there. Going back is another
-  `uv sync`, plus `--reinstall-package btclib_libsecp256k1 --no-cache` if
+  `uv sync`, plus `--reinstall-package btclib_secp256k1 --no-cache` if
   the extension in the cache belongs to the ABI just left. The README
   says so, at the end of a long section
 - **`uv run` syncs the environment itself.** Without

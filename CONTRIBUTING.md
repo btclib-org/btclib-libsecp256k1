@@ -62,7 +62,7 @@ to open a pull request for it.
 
 ## Building and testing
 
-The btclib_libsecp256k1 project includes
+The btclib_secp256k1 project includes
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
 as submodule in the secp256k1 folder.
 By default, when cloning a project you get the directories that contain
@@ -152,7 +152,7 @@ wheels are.
 
 Beware that this replaces `.venv` with an environment built on that
 interpreter, and leaves it there. Going back is another `uv sync`, and
-`--reinstall-package btclib_libsecp256k1 --no-cache` if the extension it
+`--reinstall-package btclib_secp256k1 --no-cache` if the extension it
 finds in the cache is the one of the ABI just left behind. Requesting a
 free-threaded interpreter (`--python 3.14t`) has a second effect: it
 installs it as a managed one, and `uv sync` then prefers it to a system
@@ -237,7 +237,7 @@ not the runner, and that is worth knowing before trying; the fourth gate,
   ```shell
   uv run --python 3.10 --no-cache pytest
   BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --python 3.10 --no-cache \
-      --reinstall-package btclib_libsecp256k1 pytest
+      --reinstall-package btclib_secp256k1 pytest
   ```
 
   the two steps of `macos.yml`'s own cells are these two, in this order and

@@ -19,12 +19,12 @@ import hashlib
 
 import pytest
 
-from btclib_libsecp256k1 import dsa, keys, mult, ssa, xonly
+from btclib_secp256k1 import dsa, keys, mult, ssa, xonly
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
-msg = hashlib.sha256(b"btclib_libsecp256k1").digest()
+msg = hashlib.sha256(b"btclib_secp256k1").digest()
 
 
 def compress(pubkey_bytes: bytes) -> bytes:

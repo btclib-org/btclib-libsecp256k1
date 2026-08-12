@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).parents[1]
-_PACKAGE_DIR = _ROOT / "btclib_libsecp256k1"
+_PACKAGE_DIR = _ROOT / "btclib_secp256k1"
 _DOCS_DIR = _ROOT / "docs" / "source"
 
 # what a documented module looks like to sphinx: ".. automodule:: name",
@@ -46,7 +46,7 @@ def _is_public(parts: tuple[str, ...]) -> bool:
 
     `__init__` is the package itself and not a private name, which is
     the only reason this is not a one-line `startswith("_")`. One module
-    under `btclib_libsecp256k1/` is private, `_scalar`: the shared
+    under `btclib_secp256k1/` is private, `_scalar`: the shared
     private-key normalization every signing module calls, not API of its
     own, and the underscore is what says so.
     """
@@ -61,7 +61,7 @@ def _shipped() -> set[str]:
     module just added, and this way noticing it does not depend on it
     being importable -- which, for a cffi extension, means built.
     """
-    names = {"btclib_libsecp256k1"}
+    names = {"btclib_secp256k1"}
     for path in sorted(_PACKAGE_DIR.rglob("*.py")):
         parts = path.relative_to(_PACKAGE_DIR).with_suffix("").parts
         if not _is_public(parts):
@@ -70,7 +70,7 @@ def _shipped() -> set[str]:
             parts = parts[:-1]
         if not parts:
             continue
-        names.add(".".join(("btclib_libsecp256k1", *parts)))
+        names.add(".".join(("btclib_secp256k1", *parts)))
     return names
 
 
@@ -105,14 +105,14 @@ def test_the_docs_sources_were_found_at_all() -> None:
     _has_gone_away` reports as success.
     """
     assert _DOCS_DIR.is_dir()
-    assert (_DOCS_DIR / "btclib_libsecp256k1.rst").is_file()
+    assert (_DOCS_DIR / "btclib_secp256k1.rst").is_file()
     assert len(_documented()) > 5
 
 
 @pytest.mark.parametrize("name", sorted(_shipped()))
 def test_shipped_module_is_a_dotted_package_name(name: str) -> None:
     """The set the assertions above are built on holds what it claims."""
-    assert name == "btclib_libsecp256k1" or name.startswith("btclib_libsecp256k1.")
+    assert name == "btclib_secp256k1" or name.startswith("btclib_secp256k1.")
     assert not any(part.startswith("_") for part in name.split("."))
 
 

@@ -31,7 +31,7 @@ PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "btclib_libsecp256k1"
+project = "btclib_secp256k1"
 # no __copyright__ in this package to read back, unlike btclib's own
 # conf.py: LICENSE is the only place the holder and years are declared,
 # so this reads that file instead, minus the "Copyright (c) " sphinx

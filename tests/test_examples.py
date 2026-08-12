@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-import btclib_libsecp256k1
+import btclib_secp256k1
 
 _ROOT = Path(__file__).parents[1]
 
@@ -45,9 +45,9 @@ def _modules() -> list[str]:
         than off the source tree: what is documented has to be what a
         user imports.
     """
-    prefix = f"{btclib_libsecp256k1.__name__}."
-    found = pkgutil.iter_modules(btclib_libsecp256k1.__path__, prefix)
-    return sorted([btclib_libsecp256k1.__name__, *(info.name for info in found)])
+    prefix = f"{btclib_secp256k1.__name__}."
+    found = pkgutil.iter_modules(btclib_secp256k1.__path__, prefix)
+    return sorted([btclib_secp256k1.__name__, *(info.name for info in found)])
 
 
 @pytest.mark.parametrize("name", _modules())

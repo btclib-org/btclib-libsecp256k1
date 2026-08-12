@@ -16,7 +16,7 @@ import secrets
 
 import pytest
 
-from btclib_libsecp256k1 import (
+from btclib_secp256k1 import (
     _scalar,
     context,
     dsa,

@@ -41,7 +41,7 @@ def sign(
 
     Example:
         >>> import hashlib
-        >>> from btclib_libsecp256k1 import dsa
+        >>> from btclib_secp256k1 import dsa
         >>> msg = hashlib.sha256(b"hello").digest()
         >>> dsa.is_low_s(dsa.sign(msg, 1))
         True
@@ -94,7 +94,7 @@ def verify(
 
     Example:
         >>> import hashlib
-        >>> from btclib_libsecp256k1 import dsa, mult
+        >>> from btclib_secp256k1 import dsa, mult
         >>> msg = hashlib.sha256(b"hello").digest()
         >>> dsa.verify(msg, mult.mult_(1), dsa.sign(msg, 1))
         True

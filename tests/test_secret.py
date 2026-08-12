@@ -14,8 +14,8 @@ given: the `char[32]` a tweaked private key comes back in, and the
 
 from __future__ import annotations
 
-from btclib_libsecp256k1 import _secret, ffi, lib
-from btclib_libsecp256k1.context import ctx
+from btclib_secp256k1 import _secret, ffi, lib
+from btclib_secp256k1.context import ctx
 
 SECRET = b"\x07" * 32
 

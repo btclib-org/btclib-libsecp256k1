@@ -185,7 +185,7 @@ Then:
 1. tag the tip `main` now points at, signed, and push that tag alone:
 
    ```shell
-   git tag -s v0.7.1 -m "btclib_libsecp256k1 v0.7.1"
+   git tag -s v0.7.1 -m "btclib_secp256k1 v0.7.1"
    git tag -v v0.7.1        # Good signature, before anything is pushed
    git push origin v0.7.1
    ```
@@ -238,9 +238,9 @@ Then:
    what was installed:
 
    ```shell
-   uv run --isolated --no-project --with btclib_libsecp256k1==0.7.1 \
+   uv run --isolated --no-project --with btclib_secp256k1==0.7.1 \
      python -c "
-   from btclib_libsecp256k1 import ssa
+   from btclib_secp256k1 import ssa
    msg = bytes(32)
    pub = bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9')
    sig = bytes.fromhex('E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0')
@@ -277,7 +277,7 @@ Then:
    repo=btclib-org/btclib-libsecp256k1
    dir=$(mktemp -d)
    gh release download v0.7.1 --repo "$repo" --dir "$dir"
-   gh attestation verify "$dir/btclib_libsecp256k1-0.7.1.tar.gz" \
+   gh attestation verify "$dir/btclib_secp256k1-0.7.1.tar.gz" \
      --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml"
    ```
 
@@ -368,8 +368,8 @@ without rebuilding anything.
      --index-url https://test.pypi.org/simple/ \
      --extra-index-url https://pypi.org/simple/ \
      --index-strategy unsafe-best-match --prerelease allow \
-     --with btclib_libsecp256k1==0.7.1.dev1 \
-     python -c "import btclib_libsecp256k1 as m; print(m.__version__)"
+     --with btclib_secp256k1==0.7.1.dev1 \
+     python -c "import btclib_secp256k1 as m; print(m.__version__)"
    ```
 
    the extra index being needed for `cffi`, which TestPyPI does not have,
@@ -432,8 +432,19 @@ worth keeping, as what a yanked file was built from.
 
 ## One-time setup, per index
 
-The PyPI side is already done; this is here for the next index, or the
-next fork.
+The PyPI side was done for `btclib-libsecp256k1`, and a registration is
+per project name, so **the rename needs it done again** — on PyPI and on
+TestPyPI both — before 0.8.0 can be published at all. For a name no
+project holds yet the form to use is a *pending* publisher, which is the
+same registration made against a name rather than a project and which
+creates the project on the first upload it accepts. Without it the run
+gets as far as the token exchange and stops there with
+`invalid-publisher`, having built the whole matrix first: the failure
+this file already describes twice, and this time it is expected rather
+than mysterious. A rehearsal against TestPyPI is what proves the
+registration before the release needs it.
+
+The rest of this section is here for the next index, or the next fork.
 
 - on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
   trusted publisher for `btclib-org/btclib-libsecp256k1`, workflow

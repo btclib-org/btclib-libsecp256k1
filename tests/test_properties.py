@@ -33,7 +33,7 @@ import contextlib
 import hashlib
 from collections.abc import Iterator
 
-from btclib_libsecp256k1 import (
+from btclib_secp256k1 import (
     dsa,
     ecdh,
     ellswift,
@@ -62,7 +62,7 @@ def derived(tag: bytes, count: int = COUNT) -> Iterator[bytes]:
     astronomically unlikely here, and would be reported by the very
     bindings under test rather than silently skipped.
     """
-    value = hashlib.sha256(b"btclib_libsecp256k1 properties" + tag).digest()
+    value = hashlib.sha256(b"btclib_secp256k1 properties" + tag).digest()
     for _ in range(count):
         value = hashlib.sha256(value).digest()
         yield value

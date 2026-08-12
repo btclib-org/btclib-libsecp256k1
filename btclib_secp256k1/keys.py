@@ -137,7 +137,7 @@ def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> byte
             which no valid key can make it do.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys
+        >>> from btclib_secp256k1 import keys
         >>> keys.pubkey_from_prvkey(1).hex()[:10]
         '0279be667e'
     """
@@ -362,7 +362,7 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
             a key it produced cannot make it do.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys, mult
+        >>> from btclib_secp256k1 import keys, mult
         >>> keys.serialize(keys.parse(mult.mult_(1))).hex()[:10]
         '0279be667e'
     """

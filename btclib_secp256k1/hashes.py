@@ -35,7 +35,7 @@ def tagged_sha256(tag: BytesLike, msg: BytesLike) -> bytes:
             do.
 
     Example:
-        >>> from btclib_libsecp256k1 import hashes
+        >>> from btclib_secp256k1 import hashes
         >>> hashes.tagged_sha256(b"TapLeaf", b"").hex()
         '5212c288a377d1f8164962a5a13429f9ba6a7b84e59776a52c6637df2106facb'
     """
