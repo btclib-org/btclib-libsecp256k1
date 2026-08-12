@@ -254,6 +254,30 @@ branch is never deleted, protection winning over it — which used to reach
 the release pull request, whose head branch was protected. No head branch
 is protected now.
 
+## Merge methods
+
+**Squash is the only method enabled**, so it is a setting and not only the
+convention CONTRIBUTING.md states:
+
+```shell
+gh api repos/btclib-org/btclib-libsecp256k1 \
+  --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge}'
+```
+
+answers `true` for the first and `false` for the other two.
+
+The merge commit was refused by `main`'s required linear history already,
+so turning it off takes away a button that could not have worked. The
+rebase merge could have, and that is the one this removes: it replays a
+branch's commits onto `main`, where one change is one commit and the steps
+of a review belong to the pull request that carries them.
+
+What a single method takes away is the dropdown. GitHub preselects
+whichever method was used last, and the dialog below carries the same one,
+so the answer could be given hours before anything merged and by whoever
+switched auto-merge on. One method is one entry: there is no wrong one to
+preselect, and nothing to read before pressing.
+
 ## Auto-merge
 
 `allow_auto_merge` is on, since 11 August 2026:
@@ -282,14 +306,12 @@ gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha> \
   --jq '.commit.verification | {verified, reason}'
 ```
 
-**The merge method is chosen when auto-merge is switched on, not when the
-merge happens.** All three buttons are enabled, so which one runs is a
-choice rather than something GitHub enforces (CONTRIBUTING.md has the rest,
-including that GitHub preselects whichever was used last) — and the dialog
-that enables auto-merge carries that same dropdown. The answer is therefore
-given once, possibly hours before anything merges, by whoever switched it
-on, and nothing asks again. What a pull request is holding is readable, and
-reading it is the only way to catch a wrong method before it lands:
+**The merge method was chosen here, when auto-merge was switched on rather
+than when the merge happened.** That dropdown carries one entry now, squash
+being the only method enabled — "Merge methods" above is the setting and
+the reason — so switching auto-merge on answers nothing a reviewer has to
+catch before it lands. What a pull request is holding is still worth
+reading, the wait itself being what this bypasses:
 
 ```shell
 gh pr view <n> --json autoMergeRequest
