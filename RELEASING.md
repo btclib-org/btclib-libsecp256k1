@@ -274,7 +274,7 @@ Then:
    there, this one says where it came from:
 
    ```shell
-   repo=btclib-org/btclib-libsecp256k1
+   repo=btclib-org/btclib-secp256k1
    dir=$(mktemp -d)
    gh release download v0.7.1 --repo "$repo" --dir "$dir"
    gh attestation verify "$dir/btclib_secp256k1-0.7.1.tar.gz" \
@@ -394,7 +394,7 @@ without rebuilding anything.
    what asks for it.
 
    ```shell
-   repo=btclib-org/btclib-libsecp256k1
+   repo=btclib-org/btclib-secp256k1
    dir=$(mktemp -d)
    gh run download <run id> --repo "$repo" --name sdist --dir "$dir"
    gh attestation verify "$dir"/*.tar.gz \
@@ -447,7 +447,7 @@ registration before the release needs it.
 The rest of this section is here for the next index, or the next fork.
 
 - on PyPI, and on TestPyPI, project Publishing settings: add a GitHub
-  trusted publisher for `btclib-org/btclib-libsecp256k1`, workflow
+  trusted publisher for `btclib-org/btclib-secp256k1`, workflow
   `release.yml`, environment `pypi` and `testpypi` respectively. The two
   indexes are separate accounts and separate registrations, and separate
   credentials with them, TestPyPI being its own deployment of Warehouse

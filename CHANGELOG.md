@@ -32,16 +32,41 @@ release-notes length in the first place, and are still in
   to explain: the alternative is a distribution and a module that
   disagree forever, and 0.8.0 being unreleased is what makes this the
   cheapest it will ever be. Everything inside the API is untouched.
-- **What deliberately did not change.** The repository stays
-  `btclib-org/btclib-libsecp256k1`, so every url naming it — source,
-  issues, releases, advisories, and the branch-protection and
-  code-scanning API paths REPOSITORY.md is written in — is what it was;
-  `bitcoin-core-rpc` settled that one, having renamed the same way and
-  kept its repository. The vendored library keeps its own name wherever
-  it is the subject: the submodule, the headers the cdef is made of, the
-  `SECP256K1_*` build flags. And the entries of this file and of
-  HISTORY.md that describe releases made under the old name still name
-  it, being the record of what happened rather than of what is true now.
+- **The repository is renamed too**, to `btclib-org/btclib-secp256k1`.
+  That was left out of the first pass on the `bitcoin-core-rpc`
+  precedent, which renamed the same way and kept its repository, so that
+  no url naming it would move; it is in now because a repository called
+  after a distribution that no longer exists is the same confusion one
+  level up. GitHub redirects the old paths, the api included — a `GET` on
+  `repos/btclib-org/btclib-libsecp256k1` answers with the new
+  `full_name`, and `gh` resolves it to the numeric id — so nothing
+  outside this tree breaks on the day, and every url inside it is updated
+  regardless: an address that answers through a redirect is still the
+  wrong address to publish.
+- **Two lines of `release.yml` were the reason to do it carefully**, and
+  no redirect covers them: `github.repository == 'btclib-org/…'` guards
+  both publish jobs, and an exact comparison against a name the
+  repository no longer has does not fail — it evaluates false and the
+  jobs are *skipped*. A release would have built the whole matrix,
+  collected every artifact, and published nothing, in green.
+- **The trusted publisher is bound to the repository**, which is the
+  other half of the same care: the OIDC claim carries it, and this file
+  already records a stale registration surviving one rename and costing
+  0.7.1.2 an `invalid-publisher` at the token exchange. The pending
+  publishers for the new distribution have to name the new repository.
+- **No published artifact carries a GitHub attestation yet**, so
+  `SECURITY.md`'s verify command takes the new name with no caveat:
+  measured rather than assumed — `attest` landed in #113 on 11 August,
+  two days after v0.7.1.3, and `gh attestation verify` on that release's
+  sdist answers 404 under either name. The first attested release is
+  0.8.0.
+- **What deliberately did not change.** The vendored library keeps its
+  own name wherever it is the subject: the submodule, the headers the
+  cdef is made of, the `SECP256K1_*` build flags. And the entries of this
+  file and of HISTORY.md that describe releases made under the old
+  distribution name, or quote a command carrying the old repository,
+  still do: they are the record of what happened rather than of what is
+  true now.
 - **Nothing bridges the two names on PyPI**, by decision. A final
   `btclib-libsecp256k1` depending on the new distribution would make
   `pip install btclib-libsecp256k1` resolve forward; what it would also

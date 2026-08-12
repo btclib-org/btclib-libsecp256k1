@@ -290,7 +290,7 @@ jobs:
     # workflow, gets the build and stops there
     if: >-
       github.event_name == 'workflow_dispatch'
-      && github.repository == 'btclib-org/btclib-libsecp256k1'
+      && github.repository == 'btclib-org/btclib-secp256k1'
     needs: [test, lint, docs, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -324,7 +324,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     # see publish-testpypi for the repository condition
-    if: github.event_name == 'push' && github.repository == 'btclib-org/btclib-libsecp256k1'
+    if: github.event_name == 'push' && github.repository == 'btclib-org/btclib-secp256k1'
     needs: [test, lint, docs, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 15
