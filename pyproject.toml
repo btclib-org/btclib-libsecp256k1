@@ -99,15 +99,15 @@ homepage = "https://btclib.org"
 # of docs/source, the README included in its toctree rather than left as
 # the whole of the documentation
 documentation = "https://btclib-secp256k1.readthedocs.io"
-repository = "https://github.com/btclib-org/btclib-libsecp256k1"
-download = "https://github.com/btclib-org/btclib-libsecp256k1/releases"
+repository = "https://github.com/btclib-org/btclib-secp256k1"
+download = "https://github.com/btclib-org/btclib-secp256k1/releases"
 # HISTORY.md and not CHANGELOG.md: this url is what an index puts behind
 # "Changelog", and what a user following it wants is the release notes,
 # not the record behind them. CHANGELOG.md is linked from the first line
 # of that file
-changelog = "https://github.com/btclib-org/btclib-libsecp256k1/blob/main/HISTORY.md"
-issues = "https://github.com/btclib-org/btclib-libsecp256k1/issues"
-pull_requests = "https://github.com/btclib-org/btclib-libsecp256k1/pulls"
+changelog = "https://github.com/btclib-org/btclib-secp256k1/blob/main/HISTORY.md"
+issues = "https://github.com/btclib-org/btclib-secp256k1/issues"
+pull_requests = "https://github.com/btclib-org/btclib-secp256k1/pulls"
 
 [build-system]
 # cmake builds the vendored library: it is a build requirement, not a

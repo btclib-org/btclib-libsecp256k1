@@ -11,16 +11,16 @@ bitcoin-core-rpc carry the same three lines. -->
 [![PyPI version](https://img.shields.io/pypi/v/btclib_secp256k1.svg?logo=pypi)](https://pypi.python.org/pypi/btclib_secp256k1/)
 [![downloads](https://static.pepy.tech/badge/btclib_secp256k1)](https://pepy.tech/project/btclib_secp256k1)
 [![development status](https://img.shields.io/pypi/status/btclib_secp256k1.svg)](https://pypi.python.org/pypi/btclib_secp256k1/)
-[![license](https://img.shields.io/github/license/btclib-org/btclib-libsecp256k1.svg)](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/LICENSE)
+[![license](https://img.shields.io/github/license/btclib-org/btclib-secp256k1.svg)](https://github.com/btclib-org/btclib-secp256k1/blob/main/LICENSE)
 [![supported Python versions](https://img.shields.io/pypi/pyversions/btclib_secp256k1.svg?logo=python)](https://pypi.python.org/pypi/btclib_secp256k1/)
 
-[![test workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/test.yml)
-[![lint workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/lint.yml)
-[![docs workflow status](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml/badge.svg)](https://github.com/btclib-org/btclib-libsecp256k1/actions/workflows/docs.yml)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib-libsecp256k1/main.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib-libsecp256k1/main)
+[![test workflow status](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/test.yml/badge.svg)](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/test.yml)
+[![lint workflow status](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/lint.yml/badge.svg)](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/lint.yml)
+[![docs workflow status](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/docs.yml/badge.svg)](https://github.com/btclib-org/btclib-secp256k1/actions/workflows/docs.yml)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/btclib-org/btclib-secp256k1/main.svg)](https://results.pre-commit.ci/latest/github/btclib-org/btclib-secp256k1/main)
 [![documentation build](https://readthedocs.org/projects/btclib-secp256k1/badge/?version=latest)](https://btclib-secp256k1.readthedocs.io)
 
-[![GitHub repository: btclib-org/btclib-libsecp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-libsecp256k1/)
+[![GitHub repository: btclib-org/btclib-secp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-secp256k1/)
 [![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
 
 ---
@@ -246,7 +246,7 @@ type, a length, or a magnitude, all of which the caller knows already —
 so the constant-time guarantee is the C call's, and it is intact. What
 python cannot give back is what happens on either side of that call:
 `bytes` is not zeroized either, and
-[SECURITY.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/SECURITY.md)
+[SECURITY.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/SECURITY.md)
 records both limits as inherent.
 
 And there is a way past all of it: `lib` and `ffi` are exported, and a
@@ -389,7 +389,7 @@ attributes a message to the right caller.
 
 What is not protected is the secret material itself, which lives in
 Python objects for as long as the interpreter keeps them: see
-[SECURITY.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/SECURITY.md).
+[SECURITY.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/SECURITY.md).
 
 ## The vendored library is not optional
 
@@ -467,7 +467,7 @@ x86_64 only.
 How to get the submodule, set up the development environment, run the
 suite and the benchmarks, reproduce each CI job locally, and what a
 change is expected to satisfy are in
-[CONTRIBUTING.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/CONTRIBUTING.md).
 
 ## Release process
 
@@ -482,4 +482,4 @@ without the index.
 
 The steps to cut a release, to rehearse one on TestPyPI, and the
 one-time setup each index needs are in
-[RELEASING.md](https://github.com/btclib-org/btclib-libsecp256k1/blob/main/RELEASING.md).
+[RELEASING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/RELEASING.md).

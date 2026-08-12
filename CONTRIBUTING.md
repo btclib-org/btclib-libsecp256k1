@@ -13,7 +13,7 @@ libsecp256k1 release rather than the calendar. -->
 [![type check: mypy](https://img.shields.io/badge/type_check-mypy-yellowgreen.svg?logo=mypy)](https://mypy-lang.org/)
 [![lint: markdownlint-cli2](https://img.shields.io/badge/lint-markdownlint--cli2-yellowgreen.svg?logo=markdown)](https://github.com/DavidAnson/markdownlint-cli2)
 [![pre-commit enabled](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-[![GitHub repository: btclib-org/btclib-libsecp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-libsecp256k1/)
+[![GitHub repository: btclib-org/btclib-secp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-secp256k1/)
 [![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
 
 Thank you for investing your time in this project. What follows is how to
@@ -49,10 +49,10 @@ A vulnerability is never an issue: see the
 
 ## Opening an issue
 
-Search the [issues](https://github.com/btclib-org/btclib-libsecp256k1/issues)
-and [pull requests](https://github.com/btclib-org/btclib-libsecp256k1/pulls)
+Search the [issues](https://github.com/btclib-org/btclib-secp256k1/issues)
+and [pull requests](https://github.com/btclib-org/btclib-secp256k1/pulls)
 first, then use one of the
-[forms](https://github.com/btclib-org/btclib-libsecp256k1/issues/new/choose).
+[forms](https://github.com/btclib-org/btclib-secp256k1/issues/new/choose).
 The bug form asks which of the three artifacts is installed — a static
 wheel, a dynamic one, or a build from the sdist — because they differ in
 how libsecp256k1 is linked and a bug is rarely in all three.
@@ -579,4 +579,4 @@ Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.
 
 Once merged, your contribution is visible on the
-[contributors page](https://github.com/btclib-org/btclib-libsecp256k1/graphs/contributors).
+[contributors page](https://github.com/btclib-org/btclib-secp256k1/graphs/contributors).

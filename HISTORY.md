@@ -39,8 +39,13 @@ answered wrongly now raise instead.
   two can be installed at once while a codebase moves, the import package
   having been renamed with the distribution, so neither shadows the
   other. The documentation moves with it, to
-  [btclib-secp256k1.readthedocs.io](https://btclib-secp256k1.readthedocs.io);
-  the repository keeps its name, so every url naming it is unchanged.
+  [btclib-secp256k1.readthedocs.io](https://btclib-secp256k1.readthedocs.io),
+  and so does the repository, which is now
+  [btclib-org/btclib-secp256k1](https://github.com/btclib-org/btclib-secp256k1).
+  GitHub redirects every old path to it — a clone, a fetch, a bookmark
+  and the api alike — so nothing has to be changed to keep working; a
+  remote is worth repointing anyway, so that what it prints is where it
+  goes.
 - **Silent Payments are wrapped**, as `silentpayments`, BIP352's new
   libsecp256k1 module: `create_outputs` pays a list of addresses from the
   private keys of a transaction's inputs, `prevouts_summary` and

@@ -26,7 +26,7 @@ workflows with a job named the same thing produce one ambiguous check.
 What the rule holds is read from the endpoint, never assumed:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
+gh api repos/btclib-org/btclib-secp256k1/branches/main/protection \
   --jq '.required_status_checks'
 ```
 
@@ -79,19 +79,19 @@ having run. A `PATCH` dates that sentence, so read it back rather than
 trust it:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/branches/main/protection \
+gh api repos/btclib-org/btclib-secp256k1/branches/main/protection \
   --jq '[.required_status_checks.checks[] | {context, app_id}]'
 ```
 
 Which app reported what is read from the commit rather than assumed:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
+gh api repos/btclib-org/btclib-secp256k1/commits/<sha>/check-runs \
   --jq '.check_runs[] | {name, app: .app.slug, app_id: .app.id}'
 ```
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha>/check-runs \
+gh api repos/btclib-org/btclib-secp256k1/commits/<sha>/check-runs \
   --jq '[.check_runs[] | {name, app: .app.slug}] | unique_by(.app)'
 ```
 
@@ -112,7 +112,7 @@ diff. What the setting holds is read from the endpoint, `state` being the
 field that says whether it holds anything:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup
+gh api repos/btclib-org/btclib-secp256k1/code-scanning/default-setup
 ```
 
 Turning the setting off takes `state` and nothing else — the languages, the
@@ -121,7 +121,7 @@ going to run:
 
 ```shell
 gh api -X PATCH \
-  repos/btclib-org/btclib-libsecp256k1/code-scanning/default-setup \
+  repos/btclib-org/btclib-secp256k1/code-scanning/default-setup \
   -F state=not-configured
 ```
 
@@ -147,7 +147,7 @@ log, where the security analysis produced `python.sarif`. That is a
 separate setting, and the endpoint above does not report it:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/actions/workflows \
+gh api repos/btclib-org/btclib-secp256k1/actions/workflows \
   --jq '.workflows[] | select(.path | startswith("dynamic/"))
         | {name, path, state}'
 ```
@@ -156,7 +156,7 @@ What the file asks for is read off its own triggers; what was actually
 analyzed, and under which ref and category, is the API's answer:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/code-scanning/analyses \
+gh api repos/btclib-org/btclib-secp256k1/code-scanning/analyses \
   --jq '.[] | {ref, category, analysis_key, created_at}'
 ```
 
@@ -221,7 +221,7 @@ admin bypass is the only way past it without a second maintainer to add.
 
 ```shell
 gh api -X DELETE \
-  repos/btclib-org/btclib-libsecp256k1/branches/main/protection/enforce_admins
+  repos/btclib-org/btclib-secp256k1/branches/main/protection/enforce_admins
 ```
 
 Turned off after being on through the 0.7.1 release, whose squash merge
@@ -238,7 +238,7 @@ One protected branch is the whole of it, which is a consequence of there
 being one long-lived branch:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/branches \
+gh api repos/btclib-org/btclib-secp256k1/branches \
   --jq '.[] | "\(.name) protected=\(.protected)"'
 ```
 
@@ -253,7 +253,7 @@ reaches `main` through the rules above.
 `delete_branch_on_merge` is on, since 7 August 2026:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1 --jq '.delete_branch_on_merge'
+gh api repos/btclib-org/btclib-secp256k1 --jq '.delete_branch_on_merge'
 ```
 
 GitHub deletes the head branch of a pull request when it is merged, which
@@ -276,7 +276,7 @@ is protected now.
 convention CONTRIBUTING.md states:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1 \
+gh api repos/btclib-org/btclib-secp256k1 \
   --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge}'
 ```
 
@@ -299,7 +299,7 @@ preselect, and nothing to read before pressing.
 `allow_auto_merge` is on, since 11 August 2026:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1 --jq '.allow_auto_merge'
+gh api repos/btclib-org/btclib-secp256k1 --jq '.allow_auto_merge'
 ```
 
 It bypasses nothing, and it is not the admin escape hatch above: GitHub
@@ -318,7 +318,7 @@ being true — `--rebase --admin` replays the author's commits as they were,
 unsigned — so the check is worth making on whatever landed:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/commits/<sha> \
+gh api repos/btclib-org/btclib-secp256k1/commits/<sha> \
   --jq '.commit.verification | {verified, reason}'
 ```
 
@@ -339,7 +339,7 @@ gh pr view <n> --json autoMergeRequest
 needing more declares it:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/actions/permissions/workflow \
+gh api repos/btclib-org/btclib-secp256k1/actions/permissions/workflow \
   --jq '.default_workflow_permissions'   # "read"
 ```
 
@@ -356,7 +356,7 @@ braces; keep it, it is what makes the intent readable where the job is.
 Both environments require a review, so an upload waits for a person:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/environments \
+gh api repos/btclib-org/btclib-secp256k1/environments \
   --jq '.environments[] | {name, protection_rules}'
 ```
 
@@ -415,7 +415,7 @@ saying nothing. Dependabot security updates are on.
 Some settings cannot be enabled and fail silently:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1 --jq '.security_and_analysis'
+gh api repos/btclib-org/btclib-secp256k1 --jq '.security_and_analysis'
 ```
 
 Secret scanning and push protection are enabled;
@@ -457,7 +457,7 @@ Unlike btclib, this repository serves no GitHub Pages site, so no file in
 its root is a URL anywhere:
 
 ```shell
-gh api repos/btclib-org/btclib-libsecp256k1/pages   # 404
+gh api repos/btclib-org/btclib-secp256k1/pages   # 404
 ```
 
 btclib.org is built from the btclib repository's `main` root, which is
