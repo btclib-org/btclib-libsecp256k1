@@ -446,7 +446,7 @@ wheels = [
 
 [[package]]
 name = "btclib-secp256k1"
-version = "0.8.0"
+version = "0.8.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "cffi" },
