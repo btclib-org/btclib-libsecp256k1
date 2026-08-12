@@ -9,11 +9,11 @@ import pathlib
 from importlib.metadata import version
 from typing import Any
 
-import _btclib_libsecp256k1
+import _btclib_secp256k1
 
 # read from the installed distribution metadata, so that the version in
 # pyproject.toml stays the only place to bump at release time
-__version__ = version("btclib_libsecp256k1")
+__version__ = version("btclib_secp256k1")
 
 # an opaque handle to a libsecp256k1 object, as returned by ffi.new: the
 # cffi cdata type is not expressible in the type system, but a named
@@ -29,7 +29,7 @@ CData = Any
 # idea and arrives with python 3.12, which is not yet the floor here
 BytesLike = bytes | bytearray | memoryview
 
-ffi = _btclib_libsecp256k1.ffi
+ffi = _btclib_secp256k1.ffi
 
 
 def _load_lib(module: Any) -> Any:
@@ -80,4 +80,4 @@ def _load_lib(module: Any) -> Any:
     raise ImportError(msg)
 
 
-lib = _load_lib(_btclib_libsecp256k1)
+lib = _load_lib(_btclib_secp256k1)

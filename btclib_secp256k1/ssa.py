@@ -49,7 +49,7 @@ def sign(
             make it do.
 
     Example:
-        >>> from btclib_libsecp256k1 import ssa, xonly, mult
+        >>> from btclib_secp256k1 import ssa, xonly, mult
         >>> msg, prvkey = bytes(32), 1
         >>> pubkey, _ = xonly.from_pubkey(mult.mult_(prvkey))
         >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))

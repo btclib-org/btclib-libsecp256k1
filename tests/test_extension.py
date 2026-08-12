@@ -26,7 +26,7 @@ import types
 import _cffi_backend
 import pytest
 
-from btclib_libsecp256k1 import __version__, _load_lib
+from btclib_secp256k1 import __version__, _load_lib
 
 
 def test_version() -> None:

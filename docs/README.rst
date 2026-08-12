@@ -1,4 +1,4 @@
-Generate btclib_libsecp256k1 documentation with Sphinx
+Generate btclib_secp256k1 documentation with Sphinx
 =======================================================
 
 Sphinx is a powerful documentation generator that
@@ -45,15 +45,15 @@ is green here is green there.
 Adding or removing a module
 ----------------------------
 
-Edit ``btclib_libsecp256k1.rst`` by hand. Do **not** run ``sphinx-apidoc
--f -o docs/source btclib_libsecp256k1/``: ``-f`` regenerates the page
+Edit ``btclib_secp256k1.rst`` by hand. Do **not** run ``sphinx-apidoc
+-f -o docs/source btclib_secp256k1/``: ``-f`` regenerates the page
 from the template, discarding the ``myst`` links to README, HISTORY,
 CONTRIBUTING and SECURITY that ``index.rst`` carries. Point it at a
 scratch directory if you want the boilerplate for a new module, then
 copy the stanza across.
 
 Forgetting the edit is what ``tests/test_docs.py`` is for: it compares
-the modules under ``btclib_libsecp256k1/`` against the directives in
+the modules under ``btclib_secp256k1/`` against the directives in
 ``docs/source/`` and fails naming whichever is missing. This note is
 the convenience; the test is the guarantee.
 

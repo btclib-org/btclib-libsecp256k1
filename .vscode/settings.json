@@ -18,12 +18,12 @@
   // and Unknown-hunting is not a rule this project adopted. The default
   // reports nothing on this tree today, measured with
   //
-  //   uvx pyright --pythonpath .venv/bin/python btclib_libsecp256k1 tests
+  //   uvx pyright --pythonpath .venv/bin/python btclib_secp256k1 tests
   "python.analysis.typeCheckingMode": "standard",
 
   // the gate's mypy is the mirrors hook, pinned and isolated, and its
   // additional_dependencies are what an isolated environment needs. The
-  // editor cannot use that environment: `import btclib_libsecp256k1` there
+  // editor cannot use that environment: `import btclib_secp256k1` there
   // is a compiled extension, and only the .venv uv sync builds it into has
   // one. So the extension reads the project environment -- the same mypy
   // version the lock pins, on a tree where the import resolves

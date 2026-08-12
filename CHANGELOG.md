@@ -22,6 +22,55 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0 (work in progress, not released yet)
 
+### The name
+
+- **`btclib_libsecp256k1` becomes `btclib_secp256k1`** (#122), the
+  distribution and the import package together, with the extension
+  (`_btclib_secp256k1`), its stub and the autodoc page following. `lib`
+  named the C library, and a python distribution is not that library.
+  Renaming both rather than the distribution alone is what keeps one name
+  to explain: the alternative is a distribution and a module that
+  disagree forever, and 0.8.0 being unreleased is what makes this the
+  cheapest it will ever be. Everything inside the API is untouched.
+- **What deliberately did not change.** The repository stays
+  `btclib-org/btclib-libsecp256k1`, so every url naming it — source,
+  issues, releases, advisories, and the branch-protection and
+  code-scanning API paths REPOSITORY.md is written in — is what it was;
+  `bitcoin-core-rpc` settled that one, having renamed the same way and
+  kept its repository. The vendored library keeps its own name wherever
+  it is the subject: the submodule, the headers the cdef is made of, the
+  `SECP256K1_*` build flags. And the entries of this file and of
+  HISTORY.md that describe releases made under the old name still name
+  it, being the record of what happened rather than of what is true now.
+- **Nothing bridges the two names on PyPI**, by decision. A final
+  `btclib-libsecp256k1` depending on the new distribution would make
+  `pip install btclib-libsecp256k1` resolve forward; what it would also
+  do is put a package on PyPI whose only content is a redirection, and
+  one that has to be deprecated and removed later. The old name stops at
+  0.7.1.3 and stays installable, wrapping libsecp256k1 0.7.1, and moving
+  is a requirement and an import to edit — the README's own "The name"
+  section, which is where a user arriving from the old name lands.
+- **The `bench` group now resolves a second copy of the old
+  distribution.** btclib requires `btclib_libsecp256k1`, which used to be
+  this project's own name, so the lock answered it with the editable
+  build of this tree; until the rename reaches a btclib release it
+  answers with 0.7.1.3 from PyPI instead, installed beside it. It
+  collides with nothing — the import package was renamed too — and costs
+  the benchmark nothing, whose btclib rows run with dispatch off. The
+  comment in `pyproject.toml` says so where the group is declared.
+- **Two things a maintainer has to do outside this tree**, and the first
+  one blocks the release: the trusted publisher is registered per project
+  name, so PyPI and TestPyPI each need a *pending* publisher for the new
+  name, or the release run reaches the token exchange and stops at
+  `invalid-publisher` having built the whole matrix. RELEASING.md's
+  one-time setup section now opens with that. The second is the Read the
+  Docs project behind the new slug, which the badge and the
+  `documentation` url already point at.
+- **`published` will be red until 0.8.0 is out.** It installs what PyPI
+  serves under the name this tree declares, and PyPI serves nothing under
+  the new one yet. It is a sentinel, named by no branch rule, and the
+  release is what turns it green.
+
 ### The release path
 
 - **The release tag is signed.** `git tag v0.7.1` made a lightweight tag:

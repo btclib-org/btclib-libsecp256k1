@@ -20,7 +20,7 @@ is a shared buffer, not a legitimate difference.
 
 from concurrent.futures import ThreadPoolExecutor
 
-from btclib_libsecp256k1 import dsa, ecdh, keys, mult, ssa, xonly
+from btclib_secp256k1 import dsa, ecdh, keys, mult, ssa, xonly
 
 prvkey = 0xB7331FE4A9F79F4A2B79A5BEE4CCA2C6A0A9DCE05C4EB77C1C8AA1CC1EE47ADD
 tweak = 0x3F2B1C7D8E9F0A1B2C3D4E5F60718293A4B5C6D7E8F901A2B3C4D5E6F708192A

@@ -39,7 +39,7 @@ def mult_(num: BytesLike | int) -> bytes:
             which no input can make it do.
 
     Example:
-        >>> from btclib_libsecp256k1 import mult
+        >>> from btclib_secp256k1 import mult
         >>> mult.mult_(1).hex()[:10]
         '0479be667e'
     """

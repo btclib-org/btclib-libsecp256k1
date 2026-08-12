@@ -1,7 +1,7 @@
-.. btclib_libsecp256k1 documentation master file: the root `toctree`.
+.. btclib_secp256k1 documentation master file: the root `toctree`.
 
-btclib_libsecp256k1 documentation
-==================================
+btclib_secp256k1 documentation
+==============================
 
 .. toctree::
    :maxdepth: 1

@@ -86,7 +86,7 @@ def create_outputs(
             scan key than BIP352 allows it.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys, silentpayments
+        >>> from btclib_secp256k1 import keys, silentpayments
         >>> scan_pubkey = keys.pubkey_from_prvkey(1)
         >>> spend_pubkey = keys.pubkey_from_prvkey(2)
         >>> outputs = silentpayments.create_outputs(
@@ -169,7 +169,7 @@ def label(scan_prvkey: BytesLike | int, m: int) -> tuple[bytes, bytes]:
             bytes, does not fit in them, or is not in [1, n-1].
 
     Example:
-        >>> from btclib_libsecp256k1 import silentpayments
+        >>> from btclib_secp256k1 import silentpayments
         >>> label, tweak = silentpayments.label(1, 0)
         >>> len(label), len(tweak)
         (33, 32)
@@ -219,7 +219,7 @@ def labeled_spend_pubkey(
             which no valid input can make it do.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys, silentpayments
+        >>> from btclib_secp256k1 import keys, silentpayments
         >>> spend_pubkey = keys.pubkey_from_prvkey(2)
         >>> label, _ = silentpayments.label(1, 0)
         >>> len(silentpayments.labeled_spend_pubkey(spend_pubkey, label))
@@ -275,7 +275,7 @@ def prevouts_summary(
             Payments transaction" and which the recipient skips.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys, silentpayments
+        >>> from btclib_secp256k1 import keys, silentpayments
         >>> summary = silentpayments.prevouts_summary(
         ...     bytes(36), pubkeys=[keys.pubkey_from_prvkey(3)]
         ... )
@@ -353,7 +353,7 @@ def scan_outputs(
             if libsecp256k1 refuses the scan.
 
     Example:
-        >>> from btclib_libsecp256k1 import keys, silentpayments
+        >>> from btclib_secp256k1 import keys, silentpayments
         >>> scan_pubkey = keys.pubkey_from_prvkey(1)
         >>> spend_pubkey = keys.pubkey_from_prvkey(2)
         >>> outputs = silentpayments.create_outputs(

@@ -9,10 +9,38 @@ a tag is generated from.
 
 [libsecp256k1 0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)
 (6e2c8bc), up from 0.7.1: a minor version of the wrapped library, so a
-minor version here, the numbers tracking each other. **One breaking
-change, and only for a caller reaching through `lib`; two arguments that
-used to be answered wrongly now raise instead.**
+minor version here, the numbers tracking each other. **The package is
+renamed, which every user acts on**; besides that, one breaking change
+for a caller reaching through `lib`, and two arguments that used to be
+answered wrongly now raise instead.
 
+- **`btclib_libsecp256k1` is now `btclib_secp256k1`**, the distribution
+  and the import package both, and this is the first release under the
+  name. `lib` named the C library being wrapped, and a python
+  distribution is not that library: it is btclib's bindings to secp256k1.
+  Nothing bridges the two on PyPI, and that is a decision rather than an
+  omission: `btclib_libsecp256k1` stops at 0.7.1.3, stays installable,
+  and `pip install btclib_libsecp256k1` keeps resolving to it instead of
+  quietly following the rename. Moving is one edit in the requirement and
+  one in the imports:
+
+  ```diff
+  -btclib_libsecp256k1>=0.7.1.3
+  +btclib_secp256k1>=0.8.0
+  ```
+
+  ```diff
+  -from btclib_libsecp256k1 import dsa, keys, ssa, xonly
+  +from btclib_secp256k1 import dsa, keys, ssa, xonly
+  ```
+
+  Nothing inside the API moved: the modules, every function, and the
+  `ffi` and `lib` a MuSig2 caller reaches through are what they were. The
+  two can be installed at once while a codebase moves, the import package
+  having been renamed with the distribution, so neither shadows the
+  other. The documentation moves with it, to
+  [btclib-secp256k1.readthedocs.io](https://btclib-secp256k1.readthedocs.io);
+  the repository keeps its name, so every url naming it is unchanged.
 - **Silent Payments are wrapped**, as `silentpayments`, BIP352's new
   libsecp256k1 module: `create_outputs` pays a list of addresses from the
   private keys of a transaction's inputs, `prevouts_summary` and
@@ -148,7 +176,7 @@ and the gate around both.
   pinned for 3.9 alone. It also cost the build matrix its widest cell,
   CPython having no Windows arm64 build before 3.11
 - Published documentation: a Sphinx build under `docs/`, served at
-  [Read the Docs](https://btclib-libsecp256k1.readthedocs.io), which the
+  [Read the Docs](https://btclib-secp256k1.readthedocs.io), which the
   `documentation` metadata url now names instead of the README
 - The distribution names The btclib developers as its author and ships
   `AUTHORS.md` beside `LICENSE` and `COPYRIGHT`. The licence header of

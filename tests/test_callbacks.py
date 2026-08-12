@@ -19,8 +19,8 @@ import threading
 
 import pytest
 
-from btclib_libsecp256k1 import context, ffi, keys, lib
-from btclib_libsecp256k1.context import ctx
+from btclib_secp256k1 import context, ffi, keys, lib
+from btclib_secp256k1.context import ctx
 
 # a public key libsecp256k1 is asked to parse into nowhere: the bindings
 # always give it a buffer, a call through lib does not have to

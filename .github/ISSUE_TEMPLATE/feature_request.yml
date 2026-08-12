@@ -29,7 +29,7 @@ body:
       label: Why it belongs in the bindings
       description: >
         What cannot be done today through the raw cffi surface
-        (`btclib_libsecp256k1.ffi` and `.lib`), which is always available.
+        (`btclib_secp256k1.ffi` and `.lib`), which is always available.
     validations:
       required: true
 

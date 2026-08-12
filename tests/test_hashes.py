@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 
-from btclib_libsecp256k1 import hashes
+from btclib_secp256k1 import hashes
 
 
 def tagged_sha256(tag: bytes, msg: bytes) -> bytes:
@@ -35,7 +35,7 @@ def test_tagged_sha256() -> None:
     """
     # the taproot tags of BIP341 and the challenge tag of BIP340
     for tag in (b"TapLeaf", b"TapBranch", b"TapTweak", b"BIP0340/challenge"):
-        for msg in (b"", b"\x00", b"btclib_libsecp256k1", b"\xff" * 1000):
+        for msg in (b"", b"\x00", b"btclib_secp256k1", b"\xff" * 1000):
             assert hashes.tagged_sha256(tag, msg) == tagged_sha256(tag, msg)
 
     # the tag is what separates the domains: the same message under two

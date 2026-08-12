@@ -67,7 +67,7 @@
 # below each name their own, being records of what one run measured.
 # The vendored C is not in it and cannot be -- libsecp256k1 is upstream's,
 # and what this repository is answerable for is how the bindings drive it
-module-path = "btclib_libsecp256k1"
+module-path = "btclib_secp256k1"
 
 # the whole suite, which runs in well under a second, so the session cost
 # is the process startup rather than the tests.
@@ -126,7 +126,7 @@ excluded-modules = []
 # the claim behind this line is a grep, and it is the claim to re-check
 # rather than this comment:
 #
-#   grep -n ' | ' btclib_libsecp256k1/*.py
+#   grep -n ' | ' btclib_secp256k1/*.py
 #
 # Every hit today is an annotation, and there is no bitwise operator of any
 # kind in the package -- no `^`, no `&`, no shift outside a doctest prompt --

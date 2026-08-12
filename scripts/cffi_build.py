@@ -295,11 +295,11 @@ class Secp256k1CFFIExtension(FFIExtension):
         asked for by environment variable, and cross-compilation forces
         it, the target's interpreter not being runnable here.
         """
-        self.name = "_btclib_libsecp256k1"
+        self.name = "_btclib_secp256k1"
         self.static = static and not cross_compile
         self.clean_patterns = [
-            "_btclib_libsecp256k1.*",
-            "btclib_libsecp256k1/libsecp256k1.*",
+            "_btclib_secp256k1.*",
+            "btclib_secp256k1/libsecp256k1.*",
         ]
         # working directory
         self.wd = pathlib.Path(__file__).parent.parent.resolve() / "secp256k1"

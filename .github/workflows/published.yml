@@ -163,7 +163,7 @@ jobs:
           version="${TAG#v}"
           for attempt in $(seq 20); do
             if curl -sf --max-time 10 -o /dev/null \
-                "https://pypi.org/pypi/btclib_libsecp256k1/${version}/json"; then
+                "https://pypi.org/pypi/btclib_secp256k1/${version}/json"; then
               echo "the index serves ${version}"
               exit 0
             fi
@@ -194,9 +194,9 @@ jobs:
         run: |
           python -m pip install -U pip
           if [ "$NO_BINARY" = "true" ]; then
-            python -m pip install --verbose --no-binary btclib_libsecp256k1 btclib_libsecp256k1
+            python -m pip install --verbose --no-binary btclib_secp256k1 btclib_secp256k1
           else
-            python -m pip install --verbose --only-binary btclib_libsecp256k1 btclib_libsecp256k1
+            python -m pip install --verbose --only-binary btclib_secp256k1 btclib_secp256k1
           fi
 
       # asserted rather than printed: which kind of artifact pip selected
@@ -208,12 +208,12 @@ jobs:
         env:
           KIND: ${{ matrix.kind || 'static' }}
         run: |
-          python -m pip show btclib_libsecp256k1
+          python -m pip show btclib_secp256k1
           python - <<'PY'
           import os
           import sys
 
-          import _btclib_libsecp256k1 as m
+          import _btclib_secp256k1 as m
 
           actual = "static" if hasattr(m, "lib") else "dynamic"
           print(m.__file__, actual)
@@ -225,7 +225,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          from btclib_libsecp256k1 import __version__, dsa, ssa
+          from btclib_secp256k1 import __version__, dsa, ssa
 
           SECKEY = bytes.fromhex("00" * 31 + "03")
           XONLY = bytes.fromhex(
