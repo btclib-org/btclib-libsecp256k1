@@ -363,6 +363,16 @@ release-notes length in the first place, and are still in
   file drifts because upstream edits it in place, while a pin moves only
   in a commit of this repository. `lint.yml` checks out the submodule
   unshallow for the hook, tags being what a `--depth=1` clone has none of
+- **`submodule-pin` is skipped on pre-commit.ci**, which is the second
+  entry that list has ever had and was found the way the first one's
+  reason would have been: the pull request adding the hook went red
+  there, with the hook's own "the vendored clone has no v0.8.0 tag",
+  while every other hook passed. pre-commit.ci's checkout carries no
+  vendored clone with tags in it, the same way it carries no network for
+  `pyroma`, so what is skipped is one of the hook's two runners and not
+  the hook — `lint.yml` asks for `submodules: true` and `fetch-depth: 0`
+  precisely so that the runner which is a required check has what the
+  hook needs, and a commit on a developer's machine has it too
 - **Every required check names the app that produces it.** `test: every
   job passed` and `codeql: every job passed` carried `app_id: 15368` and
   the other two carried none, which REPOSITORY.md recorded as a rule that
