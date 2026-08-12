@@ -5,7 +5,7 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
-## v0.8.0 (work in progress, not released yet)
+## v0.8.0
 
 [libsecp256k1 0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)
 (6e2c8bc), up from 0.7.1: a minor version of the wrapped library, so a
