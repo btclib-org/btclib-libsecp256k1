@@ -532,9 +532,21 @@ to it, which is deliberate: this package exists to be identical
 everywhere. It does mean a draft pull request is the polite place for
 work in progress.
 
-Link the issue the pull request solves, allow maintainer edits so the
-branch can be updated for a merge, and mark review conversations
-resolved as you address them.
+Every change starts with an open issue; `Closes #N` in the pull
+request's description is what closes it, once a reviewed pull request
+merges. A pull request needs an approving review from somebody other
+than its author before it can merge — GitHub refuses a self-approval.
+Allow maintainer edits so the branch can be updated for a merge, and
+mark review conversations resolved as you address them.
+
+`main` enforces four things on every commit that reaches it, not only
+at review time: a verified signature, linear history, no force push, no
+branch deletion. These run as a GitHub ruleset with no bypass actor —
+not a rule trusted to hold on its own — so a commit that is unsigned, or
+a push that rewrites history, is rejected before it is something to
+review. A verified signature is GPG, SSH or S/MIME; GitHub's
+[documentation](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
+has what counts and how to set one up.
 
 **A correction is a commit of its own, never an amend.** Once a branch is
 pushed and under review, `git commit --amend` and a force-push replace the
