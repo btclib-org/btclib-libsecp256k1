@@ -2,10 +2,13 @@
 name: test
 
 # the merge gate: everything this package ships, built and then tested on
-# the platforms it claims, minus the one platform a reviewer would wait for.
+# the platforms it claims, minus the two platforms a reviewer would wait
+# for. Their suite cells are macos.yml's and windows.yml's, and each file
+# carries the measurement that moved it; the wheel builds for all six stay
+# here, because the release publishes the artifacts of this run.
 #
-# macOS is that platform, and the split is a measurement rather than a
-# preference. Over six pull request runs of this workflow, ninety-eight jobs
+# macOS was the first of the two, and the split is a measurement rather than
+# a preference. Over six pull request runs of this workflow, ninety-eight jobs
 # each, thirty-five of them on the two macOS images: a macOS job waited 20.8
 # and 19.0 minutes on average for a runner, against 2.1 to 2.6 elsewhere,
 # and the wait grows with the number of cells asking at once -- in the
@@ -17,6 +20,13 @@ name: test
 #     id=$(gh run list --workflow=test.yml --limit 1 \
 #         --json databaseId --jq '.[0].databaseId')
 #     gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100"
+#
+# The Windows cells were the second, and a different number moved them:
+# GitHub Free gives an organization twenty concurrent jobs, shared across
+# every repository in it, and this workflow set asked for seventy-three on
+# every commit. The twenty-one Windows suite cells were 27.3 of the 112.9
+# runner-minutes, the largest family of jobs in the run and ahead of every
+# wheel build. windows.yml has the rest of that measurement.
 #
 # So the macOS *suite* cells moved to macos.yml, which runs them weekly and
 # before a release. The macOS *wheel builds* stay here, and the same
@@ -561,11 +571,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # the two macOS images are macos.yml's; see the header
+        # the macOS images are macos.yml's and the Windows ones are
+        # windows.yml's; see the header
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-          - windows-latest
         # 3.14t, the free-threaded interpreter, matters here in particular:
         # the dynamic wheel is tagged py3-none, so it is what a
         # free-threaded interpreter installs, and unlike the static wheels
@@ -631,34 +641,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # the two macOS images are macos.yml's; see the header. What is
-        # given up here is narrower than elsewhere, and cibuildwheel is
-        # why: it runs the suite against every wheel it builds, on the
-        # runner that built it, so the macOS wheels this workflow ships are
-        # still tested by the job that produces them. What moves is pip's
-        # selection among them
+        # the macOS images are macos.yml's and the Windows ones are
+        # windows.yml's; see the header. What is given up there is narrower
+        # than elsewhere, and cibuildwheel is why: it runs the suite against
+        # every wheel it builds, on the runner that built it, so the macOS
+        # and Windows wheels this workflow ships are still tested by the job
+        # that produces them. What moves is pip's selection among them.
+        # With both Windows rows gone so are the three exclusions they
+        # carried, each of them a wheel that is not built rather than a
+        # platform not worth running: no PyPy wheel on Windows on either
+        # architecture, and no CPython before 3.11 on windows arm64
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-          - windows-latest
-          - windows-11-arm
         python-version:
           ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
         # cibuildwheel already runs the suite against every wheel it
         # builds, cp314t included: what this job adds is that pip, given a
         # directory holding all of them, selects the right one, which for
-        # the free-threaded interpreter nothing checked.
-        # PyPy wheels are not built on Windows, on either architecture.
-        # CPython has no Windows arm64 build before 3.11, so there is no
-        # interpreter to test a win_arm64 wheel against and cibuildwheel
-        # does not produce one
-        exclude:
-          - os: windows-latest
-            python-version: "pypy-3.11"
-          - os: windows-11-arm
-            python-version: "pypy-3.11"
-          - os: windows-11-arm
-            python-version: "3.10"
+        # the free-threaded interpreter nothing checked
     needs: build-cibuildwheel
 
     steps:

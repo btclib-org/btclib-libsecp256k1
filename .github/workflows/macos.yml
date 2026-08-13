@@ -1,10 +1,11 @@
 ---
 name: macos
 
-# the platform the merge gate does not wait for. test.yml runs the suite on
-# four operating systems on every pull request and this one runs the two
-# macOS images, weekly and before a release, because macOS is where the wait
-# came from: the numbers, and the command that re-derives them, are in
+# one of the two platforms the merge gate does not wait for -- windows.yml
+# is the other, and its header carries the number that moved it. test.yml
+# runs the suite on the two ubuntu images on every pull request and this one
+# runs the two macOS images, weekly and before a release, because macOS is
+# where the wait came from: the numbers, and the command that re-derives them, are in
 # test.yml's own header, next to the matrices these cells left.
 #
 # What runs here is not what left, and the difference is the point. The
