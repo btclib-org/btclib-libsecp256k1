@@ -5,7 +5,7 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
-## v0.8.0.1 (work in progress, not released yet)
+## v0.8.0.1
 
 Non-breaking. `keys.PubkeyTweakChain` is new: it adds a sequence of
 tweaks to a public key, parsing the key once rather than once per tweak,
