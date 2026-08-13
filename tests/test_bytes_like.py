@@ -159,10 +159,22 @@ MODULES = {
     "xonly": xonly,
 }
 
-# the two that take no argument crossing as a bare pointer: `parse` takes
-# one and is covered through every wrapper above, `serialize` takes the
-# libsecp256k1 object `parse` hands back and no bytes at all
-NOT_SWEPT = {"keys.serialize", "keys.parse"}
+# the ones that take no argument crossing as a bare pointer, or nothing
+# this sweep has not already exercised: `parse` takes one and is covered
+# through every wrapper above, `serialize` takes the libsecp256k1 object
+# `parse` hands back and no bytes at all. `pubkey_tweak_add_` is the same
+# shape as `serialize`, an already-parsed key and the already-32-byte
+# output of `scalar`, neither retyped here. `PubkeyTweakChain` calls
+# `parse` on construction and `scalar` on every `tweak_add`, so its own
+# bytes-like handling is `keys.pubkey_tweak_add`'s above, not a call this
+# sweep can equality-check across instances that are never equal to begin
+# with
+NOT_SWEPT = {
+    "keys.serialize",
+    "keys.parse",
+    "keys.pubkey_tweak_add_",
+    "keys.PubkeyTweakChain",
+}
 
 
 def retyped(value: Any, kind: type) -> Any:
