@@ -22,6 +22,30 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.1 (work in progress, not released yet)
 
+### Public key tweaking
+
+- **`keys.PubkeyTweakChain` adds a sequence of tweaks to a public key,
+  parsing it once** (#138), rather than once per tweak. `pubkey_tweak_add`
+  parses its argument and serializes its result on every call, which is
+  the right cost for one tweak and a wasted one for a caller who is about
+  to feed the result straight back in as the next call's argument — a
+  BIP32 path walked one unhardened index at a time, reported at
+  <https://github.com/btclib-org/btclib/issues/685>, needs exactly that:
+  each step's tweak is a hash of the previous step's serialized key, so
+  the bytes have to exist at every step, and the point they parse back
+  into is the one the step before had already built and only serialized
+  because its own caller — btclib's derivation loop — needed those bytes.
+  `PubkeyTweakChain` holds the parsed point across the calls instead: the
+  first tweak is the only one that pays for a parse, and every step still
+  returns the bytes its caller needs. `pubkey_tweak_add` itself is
+  unchanged in behaviour and cost, now sharing its point-addition step
+  with the chain through the new `pubkey_tweak_add_`, the inner half of
+  it that skips parsing and validating what the caller already has.
+  btclib decided against holding the parsed key itself and reaching for
+  `lib`/`ctx` directly, which would have left `_BIP32KeyData` holding a
+  cffi object where "the key is its serialization" is what keeps that
+  loop readable — hence the wrapper landing here rather than there.
+
 ## v0.8.0
 
 ### The name

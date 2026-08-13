@@ -168,13 +168,40 @@ def pubkey_negate(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
     return serialize(pubkey, compressed)
 
 
+def pubkey_tweak_add_(pubkey: CData, tweak_bytes: bytes) -> CData:
+    """Add the generator multiplied by the tweak, to an already-parsed key.
+
+    The inner half of `pubkey_tweak_add`, for a caller who already holds
+    both a parsed key and a validated tweak and so has no validation left
+    to redo: `PubkeyTweakChain` is the one, walking a BIP32 path one
+    tweak at a time without parsing the point back out of its own
+    serialization at every step.
+
+    Args:
+        pubkey: the already-parsed public key, as `parse` returns.
+            Mutated in place.
+        tweak_bytes: the tweak, already 32 bytes, as `scalar` returns.
+
+    Returns:
+        The same object passed in, tweaked.
+
+    Raises:
+        ValueError: if the tweak or the resulting public key is invalid.
+    """
+    if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes):
+        raise ValueError("invalid tweak or resulting public key")
+    return pubkey
+
+
 def pubkey_tweak_add(
     pubkey_bytes: BytesLike, tweak: BytesLike | int, compressed: bool = True
 ) -> bytes:
     """Add the generator multiplied by the tweak to a public key.
 
     This is the public-key side of BIP32 derivation: the key of
-    `prvkey_tweak_add(k, t)` is `pubkey_tweak_add(pubkey(k), t)`.
+    `prvkey_tweak_add(k, t)` is `pubkey_tweak_add(pubkey(k), t)`. Adding
+    more than one tweak to the same key is `PubkeyTweakChain`, which
+    parses the key once rather than once per tweak.
 
     Args:
         pubkey_bytes: the public key, 33 or 65 bytes.
@@ -193,9 +220,67 @@ def pubkey_tweak_add(
     """
     pubkey = parse(pubkey_bytes)
     tweak_bytes = scalar(tweak, "tweak")
-    if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes):
-        raise ValueError("invalid tweak or resulting public key")
+    pubkey_tweak_add_(pubkey, tweak_bytes)
     return serialize(pubkey, compressed)
+
+
+class PubkeyTweakChain:
+    """Add a sequence of tweaks to a public key, parsing it only once.
+
+    `pubkey_tweak_add` parses its argument and serializes its result, so
+    a caller adding tweak after tweak to its own output -- a BIP32 path
+    walked one index at a time, each needing the previous step's
+    serialized key to hash into the next tweak -- re-parses at every step
+    the very point the step before had already built, and only
+    serialized because *that* step's caller needed the bytes. This holds
+    the parsed point across the calls instead: the first tweak is the
+    only one that pays for a parse, and every step still returns the
+    bytes its caller needs.
+
+    Args:
+        pubkey_bytes: the public key the chain starts from, 33 or 65
+            bytes.
+
+    Raises:
+        ValueError: if the public key is not a valid point.
+
+    Example:
+        >>> from btclib_secp256k1 import keys, mult
+        >>> generator = mult.mult_(1)
+        >>> chain = keys.PubkeyTweakChain(generator)
+        >>> step1 = chain.tweak_add(2)
+        >>> step2 = chain.tweak_add(3)
+        >>> step1 == keys.pubkey_tweak_add(generator, 2)
+        True
+        >>> step2 == keys.pubkey_tweak_add(step1, 3)
+        True
+    """
+
+    # pydoclint (DOC301) asks that this carry no docstring of its own,
+    # the class docstring above being where the constructor is documented
+    def __init__(self, pubkey_bytes: BytesLike) -> None:  # noqa: D107
+        self._pubkey = parse(pubkey_bytes)
+
+    def tweak_add(self, tweak: BytesLike | int, compressed: bool = True) -> bytes:
+        """Add the generator multiplied by the tweak, to the held key.
+
+        Args:
+            tweak: the tweak, 32 bytes or an int below 2**256.
+            compressed: whether to return 33 bytes rather than 65.
+
+        Returns:
+            The serialized point, with this tweak and every earlier one
+            already added.
+
+        Raises:
+            ValueError: if the tweak is not 32 bytes or does not fit in
+                them, or if the tweak or the resulting key is invalid.
+            RuntimeError: if libsecp256k1 fails to serialize the result,
+                which no valid input can make it do.
+        """
+        tweak_bytes = scalar(tweak, "tweak")
+        pubkey_tweak_add_(self._pubkey, tweak_bytes)
+        return serialize(self._pubkey, compressed)
 
 
 def pubkey_tweak_mul(

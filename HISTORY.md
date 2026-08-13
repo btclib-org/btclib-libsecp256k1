@@ -7,6 +7,13 @@ a tag is generated from.
 
 ## v0.8.0.1 (work in progress, not released yet)
 
+Non-breaking. `keys.PubkeyTweakChain` is new: it adds a sequence of
+tweaks to a public key, parsing the key once rather than once per tweak,
+for a caller who is about to feed each result back in as the next tweak's
+argument — a BIP32 public derivation path is exactly that. Nothing
+existing changes shape or cost: `pubkey_tweak_add` still parses and
+serializes on every call, which is the right cost for one tweak.
+
 ## v0.8.0
 
 [libsecp256k1 0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)

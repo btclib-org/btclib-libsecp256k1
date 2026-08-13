@@ -134,6 +134,41 @@ def test_pubkey_algebra() -> None:
         keys.pubkey_combine([pubkey_a, keys.pubkey_negate(pubkey_a)])
 
 
+def test_pubkey_tweak_chain() -> None:
+    """Chained tweaks match the same tweaks added one call at a time.
+
+    `PubkeyTweakChain` parses the starting key once and carries the
+    parsed point across every `tweak_add`, rather than `pubkey_tweak_add`
+    re-parsing what the step before it just serialized; the two are
+    checked to answer the same bytes at every step, compressed and
+    uncompressed both, and to refuse the same invalid tweak and the same
+    landing on the point at infinity.
+    """
+    pubkey_bytes = mult.mult_(3)
+    tweaks = (5, N - 1, 11)
+
+    chain = keys.PubkeyTweakChain(pubkey_bytes)
+    key = pubkey_bytes
+    for tweak in tweaks:
+        key = keys.pubkey_tweak_add(key, tweak)
+        assert chain.tweak_add(tweak) == key
+
+    # the uncompressed form, from a chain that has not run out of state
+    uncompressed_chain = keys.PubkeyTweakChain(pubkey_bytes)
+    assert uncompressed_chain.tweak_add(5, False) == keys.pubkey_tweak_add(
+        pubkey_bytes, 5, False
+    )
+
+    # an invalid starting key, an invalid tweak, and the one sum that has
+    # no public key, all refused the same way pubkey_tweak_add refuses them
+    with pytest.raises(ValueError, match="public key"):
+        keys.PubkeyTweakChain(b"\x02" + b"\x00" * 32)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        keys.PubkeyTweakChain(pubkey_bytes).tweak_add(b"\x01" * 33)
+    with pytest.raises(ValueError, match="tweak or resulting public key"):
+        keys.PubkeyTweakChain(mult.mult_(7)).tweak_add(N - 7)
+
+
 def test_pubkey_serialization() -> None:
     """Both serialized forms parse, and either converts to the other.
 
