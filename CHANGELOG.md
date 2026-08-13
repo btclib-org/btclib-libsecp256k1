@@ -24,6 +24,19 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **The generated Code Quality analysis is off.** `Analyze (python)` ran
+  on every pull request and every push to `main` from a
+  `dynamic/github-code-scanning/codeql` workflow no file in this tree
+  declares -- some 52 seconds of a slot each time, out of twenty shared
+  with every other repository in the organization, where the same setting
+  was on. What it produced cannot be read from outside a browser: there is
+  no `code-quality/alerts` endpoint and no `code-quality/analyses`, both
+  404, the alert list is empty and every analysis carries `codeql.yml`'s
+  own category. REPOSITORY.md gains the section and the endpoint that
+  reports and sets it, `code-quality/setup`: not
+  `code-scanning/default-setup`, and not the Actions API, which answers
+  422 for a workflow this repository does not own.
+
 - **A pull request asks for fifty-one jobs instead of seventy-three**, and
   the number that decided it is a ceiling rather than a wall clock: GitHub
   Free gives an organization twenty concurrent jobs, shared across every

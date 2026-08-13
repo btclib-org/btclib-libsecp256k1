@@ -165,7 +165,8 @@ comes from this tree: GitHub keeps a generated
 `dynamic/github-code-scanning/codeql` workflow, which uploads *code
 quality* results rather than security ones — `python.quality.sarif` in its
 log, where the security analysis produced `python.sarif`. That is a
-separate setting, and the endpoint above does not report it:
+separate setting with an endpoint of its own, the "Code quality" section
+below, and the endpoint above reports nothing about it:
 
 ```shell
 gh api repos/btclib-org/btclib-secp256k1/actions/workflows \
@@ -225,6 +226,47 @@ the name the rule now wants; `enforce_admins` being off is what makes the
 window survivable rather than a lock. Every open pull request that predates
 the rename is blocked until it is rebased, which is the reason to do it
 with none open but the one doing the renaming.
+
+## Code quality
+
+The analysis the generated workflow above was left running, and it is off.
+Its setting is not `code-scanning/default-setup`, and the Actions API is
+not the way in either: a generated workflow is not one this repository
+owns, and `actions/workflows/<id>/disable` answers 422. The endpoint that
+reports the setting is the one that sets it:
+
+```shell
+gh api repos/btclib-org/btclib-secp256k1/code-quality/setup
+# {"state":"not-configured","languages":["python"], ...}
+
+gh api -X PATCH repos/btclib-org/btclib-secp256k1/code-quality/setup \
+  -F state=not-configured
+```
+
+What decided it is the ceiling the section above already trades against,
+not the queries. `Analyze (python)` ran on every pull request and every
+push to `main` — `Code Quality: PR #N` in the run list — for some 52
+seconds of a slot each time, and the twenty concurrent jobs are shared
+with every other repository in the organization, where the same setting
+was on.
+
+What it produced in exchange cannot be read from outside a browser. There
+is no `code-quality/alerts` and no `code-quality/analyses`, both 404, and
+a quality upload appears in neither endpoint that does answer: the alert
+list is empty, and every analysis carries `codeql.yml`'s own category.
+
+```shell
+gh api "repos/btclib-org/btclib-secp256k1/code-scanning/alerts?per_page=100" \
+  --jq length
+gh api "repos/btclib-org/btclib-secp256k1/code-scanning/analyses?per_page=100" \
+  --jq '[.[] | .category] | unique'
+```
+
+`state=configured` is the way back, and the argument for it is that these
+queries are a class of finding nothing else here makes: ruff, mypy and the
+spell checkers are the cover, and they are not the same questions. What
+refuses them is the ceiling, so a fleet not waiting for slots is what
+would change the answer.
 
 ## Branch protection
 
