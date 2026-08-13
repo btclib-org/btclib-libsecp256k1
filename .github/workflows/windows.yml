@@ -1,0 +1,154 @@
+---
+name: windows
+
+# the second platform the merge gate does not wait for, and the whole of
+# this file is macos.yml's argument applied to the rows beside those.
+#
+# The constraint is a ceiling rather than a wall clock, which is what makes
+# it worth re-deciding a split that was already made once: GitHub Free gives
+# an organization twenty concurrent jobs, shared across every repository in
+# it, and this workflow set asked for seventy-three of them on every commit
+# while btclib asked for thirty-nine and bitcoin-core-rpc for forty-four. On
+# one pull request run the twenty-one Windows suite cells were 27.3 of the
+# 112.9 runner-minutes and the largest single family of jobs in it, ahead of
+# every wheel build; the run's critical path was 1713 seconds, of which the
+# median cell spent 694 queueing. The command that re-derives it:
+#
+#     id=$(gh run list --workflow=test.yml --limit 1 \
+#         --json databaseId --jq '.[0].databaseId')
+#     gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100"
+#
+# **The Windows wheel builds stay in test.yml**, and that is the same line
+# macos.yml's header draws: the release publishes the artifacts of that run,
+# so a win_amd64 or win_arm64 wheel not built there is a wheel not on PyPI.
+# Those two jobs are not what stretched the run either -- what did was
+# twenty-one cells contending for slots behind them.
+#
+# What is given up is therefore narrower than twenty-one jobs suggests, and
+# cibuildwheel is why: `test-command` in pyproject.toml runs the whole suite
+# against every wheel it builds, on the runner that built it, so the Windows
+# wheels this package ships are still tested before a merge by the job that
+# produces them. What moves to Saturday is pip's *selection* among them --
+# the question suite-static exists to ask, and the one nothing else covers.
+#
+# What runs here is not what left, for the reason macos.yml gives at the
+# same point: the cells that moved installed a wheel built earlier in the
+# same run, and rebuilding those here would mean cibuildwheel per image and
+# artifact names the release must not confuse with test.yml's. This builds
+# from the tree instead, twice per cell -- the static extension a CPython
+# wheel carries, then the dynamic one, which is the choice
+# `BTCLIB_LIBSECP256K1_DYNAMIC` gives a developer and covers both branches
+# of `_load_lib`. Two steps of one job rather than two jobs, because the
+# queue is the cost being managed and a second job pays it again.
+#
+# It gates no commit and no merge -- a Windows regression sits on main for
+# at most a week -- but release.yml calls it, so one cannot be published
+
+on:
+  schedule:
+    # Saturday, the day nothing else here asks for -- the mutation session
+    # Sunday, links Monday, codeql Tuesday, macos and latest Wednesday,
+    # Dependabot Thursday -- so a failure notification still names the
+    # workflow by the day it arrived. A minute that is not the hour, as
+    # every cron here, for the reason links.yml gives, and minute 17 is
+    # shared with none of them (07, 11, 23, 29, 37, 49).
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "17 4 * * 6"
+  # lets release.yml gate a publication on this platform too, which is what
+  # keeps a weekly sentinel from being the only thing that ever asks
+  workflow_call:
+    inputs:
+      concurrency-suffix:
+        description: >
+          Appended to the concurrency group, and the release workflow is
+          the only caller that passes one. See the group below.
+        type: string
+        default: ""
+  # the escape hatch: the platform on demand, for a branch that touches the
+  # build, the loader or anything a toolchain decides
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, dependencies, build scripts) can read the token, so it must not
+# be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs: the subject here is the commit, which a newer one
+# supersedes. Named literally rather than through github.workflow, which in
+# a called workflow is the caller's name -- release.yml calls this one
+# alongside test.yml, and with that expression the two would share a group
+# and cancel each other. The suffix is the second half of the same problem,
+# github.ref inside a called workflow being the caller's ref: see lint.yml
+concurrency:
+  group: windows-${{ github.ref }}${{ inputs.concurrency-suffix }}
+  cancel-in-progress: true
+
+jobs:
+  suite-windows:
+    name: Run the suite on ${{ matrix.python-version }}, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # every cell to the end: which interpreter fails on which image is the
+      # whole answer, and stopping at the first one hides the rest
+      fail-fast: false
+      matrix:
+        # the two images test.yml's suite matrices no longer carry. Both,
+        # because what differs between them is the architecture the
+        # interpreter and the compiled extension target
+        os:
+          - windows-latest
+          - windows-11-arm
+        # the interpreter set the matrices ran, and the exclusions those
+        # carried are gone with the wheels that caused them: nothing here
+        # installs a published wheel, so there is no PyPy-on-Windows wheel
+        # to be missing. What remains is what an interpreter cannot do --
+        # CPython has no Windows arm64 build before 3.11, so 3.10 has no
+        # interpreter to run on that image
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+          - "pypy-3.10"
+          - "pypy-3.11"
+        exclude:
+          - os: windows-11-arm
+            python-version: "3.10"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the vendored library is what gets compiled here
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # the wheels of the test group, not the extension, which is built
+          # from the tree twice below whatever the cache holds
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      # the command CONTRIBUTING.md gives a developer, and the one the
+      # coverage job of test.yml runs on ubuntu: a static build, where
+      # `_load_lib` returns the extension's own `lib`
+      - name: Run pytest against a static build
+        run: uv run --locked --no-default-groups --group test pytest
+
+      # the other branch of `_load_lib`: cffi in ABI mode, dlopening the
+      # shared object beside the module.
+      # --reinstall-package with --no-cache because the extension already
+      # installed by the step above is the other linkage, and neither the
+      # environment nor the build cache is keyed on the variable that
+      # chooses between them
+      - name: Run pytest against a dynamic build
+        env:
+          BTCLIB_LIBSECP256K1_DYNAMIC: "true"
+        run: >
+          uv run --locked --no-default-groups --group test
+          --reinstall-package btclib_secp256k1 --no-cache pytest

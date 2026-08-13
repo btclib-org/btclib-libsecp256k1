@@ -35,7 +35,23 @@ gh api repos/btclib-org/btclib-secp256k1/branches/main/protection \
 | `test: every job passed` | `test.yml`, aggregate over the matrix |
 | `Lint and type-check` | `lint.yml`, its only job |
 | `Build the documentation` | `docs.yml`, its only job |
-| `codeql: every job passed` | `codeql.yml`, aggregate over the languages |
+
+`codeql: every job passed` is not among them, and that is the one place a
+check was traded for the slots it held. GitHub Free gives an organization
+twenty concurrent jobs, shared across every repository in it: this one asked
+for seventy-three on every commit, btclib for thirty-nine and
+bitcoin-core-rpc for forty-four, so a pull request in any of the three
+waited for a slot rather than for the work. `codeql.yml` now runs on `main`
+and on its Tuesday schedule, the analysis landing on the merge commit rather
+than ahead of it, and it still produces that aggregate — the name is
+available, so requiring it again is a patch to the rule and nothing in the
+tree.
+
+What still reads a branch before it merges is the workflow half of the same
+question: `zizmor` is a `pre-commit` hook, so `lint.yml` audits these very
+files for an injected expression on every pull request, and that check is
+required. What a merge defers is the rest of the analysis, for the time
+between that merge and the next run — which for `main` is the merge itself.
 
 `Build the documentation` is named on its own on purpose: a rule naming
 `Lint and type-check` alone would leave a red documentation build outside
@@ -60,17 +76,19 @@ rule names, `Lint and type-check`, checks the submodule out with
 developer's own commit. Re-read that skip list before adding to it: an
 entry may join for a reason of that kind and no other.
 
-Neither `macos.yml`, `latest.yml`, `links.yml`, `mutation.yml`,
-`published.yml` nor `vendored-vectors.yml` appears in the rule, and none of
-them must: each is expected to go red for a reason no pull request
-introduced. `macos.yml` is the one worth naming twice, because it does run
-the suite: what a merge no longer waits for is the platform whose runners
-queue for tens of minutes, measured in `test.yml`'s header, and
-`release.yml` calls it so that a publication still does.
+Neither `macos.yml`, `windows.yml`, `latest.yml`, `links.yml`,
+`mutation.yml`, `published.yml` nor `vendored-vectors.yml` appears in the
+rule, and none of them must: each is expected to go red for a reason no pull
+request introduced. `macos.yml` and `windows.yml` are the two worth naming
+twice, because they do run the suite: what a merge no longer waits for is
+the platform whose runners queue for tens of minutes and the one whose cells
+were the largest family of jobs in a run, both measured in `test.yml`'s
+header and theirs, and `release.yml` calls both so that a publication still
+does.
 
 A check can be bound to the app that produces it — `checks` with an
 `app_id` rather than the bare `contexts` list — so that nothing else can
-satisfy it, and 15368 is Actions, which produces them all. All four carry
+satisfy it, and 15368 is Actions, which produces them all. All three carry
 that binding, and the two that did not are why it is worth stating: an
 unbound context reads `app_id: null` and is satisfied by *any* app
 reporting a check run of that name, so anything installed on the
@@ -135,9 +153,12 @@ merge path open, where any other order closes it on a context nothing
 reports. `enforce_admins` being off is what makes that window survivable
 rather than a lock.
 
-That exchange has been made: the endpoint above answers `not-configured`,
-and the rule names `codeql: every job passed`. The order is kept here
-because the setting can be configured again.
+That exchange has been made: the endpoint above answers `not-configured`.
+What the rule does *not* name any more is `codeql: every job passed`, for
+the reason the section above gives — so the last step of that order was
+undone afterwards, deliberately, and the order is kept here because the
+setting can be configured again and because requiring the context again is
+the same `PATCH` with one entry more.
 
 A `CodeQL` check and an `Analyze (python)` job outlive it, and neither
 comes from this tree: GitHub keeps a generated
@@ -181,9 +202,7 @@ sub=branches/main/protection/required_status_checks
 gh api "repos/{owner}/{repo}/$sub" -X PATCH -F strict=true \
   -F 'checks[][context]=test: every job passed' -F 'checks[][app_id]=15368' \
   -F 'checks[][context]=Lint and type-check' -F 'checks[][app_id]=15368' \
-  -F 'checks[][context]=Build the documentation' -F 'checks[][app_id]=15368' \
-  -F 'checks[][context]=codeql: every job passed' \
-  -F 'checks[][app_id]=15368'
+  -F 'checks[][context]=Build the documentation' -F 'checks[][app_id]=15368'
 ```
 
 `checks[][…]` repeated is how one array of objects is written: `-F` pairs

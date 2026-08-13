@@ -63,6 +63,13 @@ jobs:
       # see the lint job above
       concurrency-suffix: "-release"
 
+  windows:
+    name: Run the windows workflow
+    uses: ./.github/workflows/windows.yml
+    with:
+      # see the lint job above
+      concurrency-suffix: "-release"
+
   # what a version cannot survive being wrong about, checked before
   # anything is built and long before anything is uploaded: a version is
   # consumed by the upload that carries it, and can then only be yanked.
@@ -291,7 +298,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch'
       && github.repository == 'btclib-org/btclib-secp256k1'
-    needs: [test, lint, docs, macos]
+    needs: [test, lint, docs, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -325,7 +332,7 @@ jobs:
     name: Publish to PyPI
     # see publish-testpypi for the repository condition
     if: github.event_name == 'push' && github.repository == 'btclib-org/btclib-secp256k1'
-    needs: [test, lint, docs, macos]
+    needs: [test, lint, docs, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:

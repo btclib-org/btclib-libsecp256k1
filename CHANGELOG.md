@@ -24,6 +24,34 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **A pull request asks for fifty-one jobs instead of seventy-three**, and
+  the number that decided it is a ceiling rather than a wall clock: GitHub
+  Free gives an organization twenty concurrent jobs, shared across every
+  repository in it, so a commit here, one in btclib and one in
+  bitcoin-core-rpc compete for the same twenty. Measured on one pull
+  request run, this workflow set asked for seventy-three jobs and 112.9
+  runner-minutes, its critical path 1713 seconds of which the median cell
+  spent 694 queueing. Two changes, each moving an answer off the review
+  path rather than dropping it:
+    - the twenty-one Windows suite cells become `windows.yml`, weekly on
+    Saturday and called by `release.yml`, exactly as `macos.yml` already
+    holds the macOS ones and built the same way -- from the tree, in both
+    linkages, two steps of one job rather than a wheel rebuilt per image.
+    They were 27.3 of the 112.9 runner-minutes, the largest family of jobs
+    in the run and ahead of every wheel build. **The Windows wheel builds
+    stay in `test.yml`**, for the reason its header gives of macOS: the
+    release publishes the artifacts of that run, and `cibuildwheel` runs
+    the suite against every wheel as it builds it, so what moves to
+    Saturday is pip's *selection* among them. With both Windows rows gone
+    so are the three exclusions `suite-static` carried, each of them a
+    wheel that is not built rather than a platform not worth running.
+    - `codeql.yml` loses its `pull_request` trigger and keeps `main` and its
+    Tuesday schedule, so `codeql: every job passed` is no longer one of
+    main's required checks -- three now, and REPOSITORY.md carries the rule
+    and the `PATCH` that dropped the context. `zizmor` is a `pre-commit`
+    hook, so `lint.yml` still audits these workflows for an injected
+    expression on every pull request.
+
 - **`github-release` no longer risks a skip on a release that actually
   succeeded.** Its `if` used to be the implicit default, and that default
   has no arguments: it does not stop at this job's own `needs`

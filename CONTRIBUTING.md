@@ -186,38 +186,54 @@ read by every checkout of this repository.
 
 | workflow | when | what it varies |
 | --- | --- | --- |
-| `test` | pull request, push | every platform but macOS, every interpreter |
+| `test` | pull request, push | the wheels, and ubuntu × every interpreter |
 | `lint`, `docs` | pull request, push | — |
-| `codeql` | pull request, push, Tuesday | the two scanned languages |
 | `vendored-vectors` | monthly, a change to itself | — |
+| `codeql` | push to main, Tuesday | the two scanned languages |
 | `macos` | Wednesday, a release | both macOS images, both linkages |
+| `windows` | Saturday, a release | both Windows images, both linkages |
 | `latest` | Wednesday | the dependencies, at their newest |
 | `links`, `mutation` | weekly | — |
 | `published` | monthly, a release | what PyPI serves |
-| `release` | a tag | calls the gates, `macos` and `published` |
+| `release` | a tag | calls the gates, `macos`, `windows`, `published` |
 
-The first three rows are what a merge waits for. macOS is not among them on
-purpose, and the numbers are in `test.yml`'s header: it is the one platform
-whose runners queue for tens of minutes rather than for two, so it answers
-weekly, and before a release, rather than before a review. The wheels it
-ships are still built on every pull request, `cibuildwheel` running the
-suite against each one as it builds it — what waits a week is pip's
-selection among them and the dynamic build. Everything but the first two
-rows also takes `workflow_dispatch`.
+The first two rows are what a merge waits for.
 
-`codeql` is the one gate with no local command: reproducing it means the
-CodeQL CLI, a bundle GitHub distributes rather than a dependency `uv.lock`
-can pin, so what answers a finding is the run itself and the Security tab
-beside it. What it scans, with which queries and on what schedule is in the
-file, `.github/workflows/codeql.yml`; the branch rule that names its
-aggregate is in REPOSITORY.md.
+What the rows below them have in common is one number: GitHub Free gives an
+organization twenty concurrent jobs, shared across every repository in it.
+A commit here asked for seventy-three, one in btclib for thirty-nine and one
+in bitcoin-core-rpc for forty-four, so a pull request in any of the three
+spent its wall clock waiting for a slot. A platform therefore earns a place
+before a review only if it is cheap to wait for, and neither of these is:
+macOS runners queue for tens of minutes rather than for two, and the
+twenty-one Windows suite cells were 27.3 of a run's 112.9 runner-minutes,
+the largest family of jobs in it and ahead of every wheel build. The numbers
+are in `test.yml`'s header and in each of the two files.
+
+**The wheels for both are still built on every pull request**, which is the
+half that does not move: `cibuildwheel` runs the suite against each wheel as
+it builds it, and the release publishes the artifacts of that run. What
+waits a week is pip's *selection* among them, and the dynamic build.
+Everything but the first two rows also takes `workflow_dispatch`, which for
+`codeql` and the two platform workflows is the only way to ask about a
+branch at all.
+
+`codeql` runs on `main` and on its Tuesday schedule and not on a pull
+request, which is the same arithmetic as the rows above: three slots held
+while a review waits. What still reads a branch before it merges is
+`zizmor`, a `pre-commit` hook and therefore part of `lint`, which audits
+these workflows for an injected expression; REPOSITORY.md has the trade in
+full. It is also the one workflow with no local command: reproducing it
+means the CodeQL CLI, a bundle GitHub distributes rather than a dependency
+`uv.lock` can pin, so what answers a finding is the run itself and the
+Security tab beside it.
 
 ### Running what CI runs
 
 Each job of the `lint`, `docs` and `test` workflows, and the local command
 that reproduces it. Two of them cannot be reproduced on a machine that is
-not the runner, and that is worth knowing before trying; the fourth gate,
-`codeql`, has no command at all, for the reason above.
+not the runner, and that is worth knowing before trying; `codeql` has no
+command at all, for the reason above, and no longer gates.
 
 - `Lint and type-check`
 
@@ -312,7 +328,7 @@ The sentinels beside it gate nothing, so a red one is read in the Actions
 tab rather than fixed on a branch. Each is dispatchable, and all but `links`
 run locally.
 
-- `macos`, which is the suite on the two macOS images and reproducible only
+- `macos` and `windows`, which are the suite on those images and reproducible only
   on a Mac. Both linkages, the commands being the pair given above under
   the suite job
 
