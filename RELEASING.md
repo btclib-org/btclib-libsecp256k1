@@ -276,19 +276,28 @@ Then:
    --failed` reruns the cell alone and it passes the second time
 1. check the GitHub release the workflow created once PyPI had accepted
    the upload — and check that it exists at all before reading anything
-   in it: `github-release` (`needs: [publish-pypi, attest]`, both of which
-   can be green) was left `skipped` rather than run on 0.8.0, at the same
-   time `published`'s cell above was failing and the Actions API was
-   answering this run's own `.../jobs` endpoint with intermittent `502`s
-   for a while after — evidence of a platform-side hiccup on this
-   particular run rather than a condition in the workflow, but not a
-   citation for one, and worth treating as an open question rather than a
-   settled one. `gh run rerun --failed` does not reach it either way: that
-   flag reruns jobs whose conclusion is `failure` and their dependents,
-   and `skipped` is neither, so a rerun scoped to `published`'s failing
-   cell leaves `github-release` exactly where it was. Recreate it by hand
-   from the run's own artifacts, which is the same thing that step would
-   have done:
+   in it: `github-release` was left `skipped` on both 0.8.0 and 0.8.0.1,
+   despite `publish-pypi` and `attest` succeeding both times. The cause
+   was `attest`'s own `if: always() && (...)`, needed so it can run past
+   a skipped sibling — `publish-testpypi` is always skipped on a real
+   tag, `publish-pypi` on a dispatch. `github-release`'s implicit default
+   `if`, called with no arguments, does not stop at its own direct
+   `needs`; it looks at the whole graph reachable through them, and a
+   skipped job found two hops back through an `always()`-guarded edge is
+   treated the same as a failed direct one — which skipped this job on
+   every real release regardless of what `publish-pypi` and `attest`
+   themselves did. Fixed now: `github-release`'s `if` is explicit,
+   `needs.publish-pypi.result == 'success' && needs.attest.result ==
+   'success'`, asking only the two questions this job has a reason to
+   ask. A release cut after this fix should not need what follows here;
+   keep it for a release that predates the fix, or for a failure of
+   `github-release` itself rather than a skip, which `gh run rerun
+   --failed` reaches directly — a skip, unlike a failure, is not what
+   that flag reruns, so before the fix a rerun scoped to some other job's
+   failing cell always left `github-release` exactly where it was.
+
+   Recreate a skipped release by hand from the run's own artifacts, which
+   is the same thing that step would have done:
 
    ```shell
    run=<run id>; tag=v0.8.0; repo=btclib-org/btclib-secp256k1

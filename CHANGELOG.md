@@ -22,6 +22,29 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.2 (work in progress, not released yet)
 
+### CI
+
+- **`github-release` no longer risks a skip on a release that actually
+  succeeded.** Its `if` used to be the implicit default, and that default
+  has no arguments: it does not stop at this job's own `needs`
+  (`[publish-pypi, attest]`), it looks at the whole graph reachable
+  through them. `attest`'s own `if` is `always()`, needed so it can run
+  past a skipped sibling — `publish-testpypi` is always skipped on a real
+  tag, `publish-pypi` on a dispatch — and the implicit default treats a
+  skipped job found two hops back through that `always()`-guarded edge
+  the same as a failed direct one. That skipped `github-release` on every
+  real release regardless of what `publish-pypi` and `attest` themselves
+  did: both v0.8.0 and v0.8.0.1 published clean and neither produced a
+  GitHub release, found only because the release was missing rather than
+  because anything failed loudly. The `if` is explicit now,
+  `needs.publish-pypi.result == 'success' && needs.attest.result ==
+  'success'`, asking only the two questions this job has a reason to ask.
+  RELEASING.md's "Cutting a release" section carries the recovery this
+  cost both times — recreating the release by hand from the run's own
+  `sdist` and `attestation` artifacts — for a release that predates the
+  fix, or for a `github-release` failure of its own that `gh run rerun
+  --failed` still reaches directly
+
 ## v0.8.0.1
 
 ### Public key tweaking

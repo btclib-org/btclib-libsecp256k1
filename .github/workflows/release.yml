@@ -433,15 +433,35 @@ jobs:
   # what can already be installed, and the download url in pyproject.toml
   # points at the page this creates.
   # Both jobs above in `needs`, and not attest alone: attest runs in a
-  # rehearsal too, so naming it by itself would make this job -- which has
-  # no `if` of its own -- cut a release from a dispatch, where publish-pypi
-  # is skipped and a skipped need is what keeps this to the tag. attest
-  # earns its place in the list by producing the bundle attached below; a
-  # failure there leaves the version published and no release cut, which
-  # `gh run rerun --failed` finishes without rebuilding anything
+  # rehearsal too, so naming it by itself would make this job cut a
+  # release from a dispatch, where publish-pypi is skipped and a skipped
+  # need is what keeps this to the tag.
+  # The `if` is explicit and checks only these two `.result`s, which is
+  # not the same thing as leaving it to the implicit default -- this job
+  # used to, and that was a bug, not a simplification. attest's own `if`
+  # above is `always()`, so the implicit default here does not stop at
+  # this job's direct needs: with no arguments it looks at the whole
+  # dependency graph, and publish-testpypi -- two hops back, through
+  # attest's always()-guarded edge -- is *always* skipped on a real tag,
+  # only running on a dispatch. The implicit default treats a skipped
+  # job found that way the same as a failed direct need, so this job was
+  # skipped on every real release regardless of whether publish-pypi and
+  # attest themselves succeeded. They did, twice: v0.8.0 and v0.8.0.1
+  # both published clean and both left no GitHub release, which is how
+  # this was found. `needs.attest.result == 'success'` asks the one
+  # question that matters -- did the job actually succeed -- without
+  # asking the implicit default's much larger question about a job this
+  # one has no reason to care about.
+  # A failure in either named job still leaves the version published and
+  # no release cut, which `gh run rerun --failed` finishes without
+  # rebuilding anything, same as before this fix; what is different is
+  # that a *success* on both no longer risks a skip
   github-release:
     name: Attach the files to the GitHub release
     needs: [publish-pypi, attest]
+    if: >-
+      needs.publish-pypi.result == 'success' &&
+      needs.attest.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
