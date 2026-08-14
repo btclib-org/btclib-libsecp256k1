@@ -7,6 +7,28 @@ a tag is generated from.
 
 ## v0.8.0.2 (work in progress, not released yet)
 
+Non-breaking, and two additions for a caller that verifies signatures it
+did not make.
+
+Verification takes the parsed public key now, where it took only the
+bytes: `dsa.verify_`, `ssa.verify_` and `ecdh.shared_secret_` are the
+inner halves of the three, taking what `keys.parse` and `xonly.parse`
+return, and `keys.pubkey_negate_`, `keys.pubkey_tweak_mul_`,
+`keys.pubkey_cmp_` and `xonly.from_pubkey_` complete the convention
+`keys.pubkey_tweak_add_` had started. A caller that validated a key
+before verifying with it, or that checks several signatures against one
+key, parses it once instead of once per call — and for a compressed key
+that parse is a field square root, a measurable part of a verification
+rather than a rounding error. Every outer half is unchanged in behaviour
+and cost.
+
+`dsa.verify` and `dsa.verify_` take a `normalize` flag, off by default:
+with it on, a signature outside the lower-s form is normalized and
+verified rather than rejected, which is what a caller checking other
+people's signatures wants. `dsa.verify(msg, key, dsa.normalize(sig))`
+still says the same thing and costs a DER serialization and a second
+parse more. What the default refuses, it still refuses.
+
 The benchmark is no longer in this repository: it lives in
 [btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) as
 `scripts/libsecp256k1_wrappers.py`. `uv sync --group bench` resolves

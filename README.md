@@ -222,7 +222,13 @@ and decides nothing else.
   full public key with odd y would be verified or tweaked as a point the
   caller did not pass, so `xonly.from_pubkey` is where a y coordinate
   gets dropped, in the caller's own code. A leniency is a guess at what
-  the caller meant, and that decision is theirs to make
+  the caller meant, and that decision is theirs to make.
+  `dsa.verify(..., normalize=True)` is that decision made, rather than an
+  exception to it: ECDSA signatures are malleable, which of the two forms
+  one carries was the signer's choice, and a caller checking signatures
+  it did not make says so in the call instead of round-tripping the
+  signature through `dsa.normalize` and back into DER. Off, which is the
+  default, a signature outside the lower-s form is refused as before
 - **the one convenience is the int scalar,** and it widens nothing. A
   private key or a tweak may be given as an `int`, checked against
   `0 <= num < 2**256` and serialized big endian. This is not the padding
@@ -253,6 +259,33 @@ And there is a way past all of it: `lib` and `ffi` are exported, and a
 call made through them has no python in front of it whatsoever. That is
 how MuSig2 is reachable, and it is the path for a caller who wants the
 library and nothing added to it.
+
+## Parsing the key once
+
+A public key crosses this boundary as bytes, and every wrapper taking one
+begins by parsing it — for a compressed key that is a field square root,
+which is a measurable part of the verification that follows it. A caller
+that has already paid for that parse can hand it on instead of paying
+again: `keys.parse` returns the libsecp256k1 object, and every wrapper
+whose first act is to build one has an inner half, spelled with a
+trailing underscore, taking that object in place of the bytes.
+
+```python
+>>> ecdsa_sig = dsa.sign(msg, prvkey)
+>>> parsed = keys.parse(pubkey)          # a valid point: proved once
+>>> dsa.verify_(msg, parsed, ecdsa_sig)  # and used, rather than proved again
+True
+
+```
+
+The outer half is the inner half with a `parse` in front of it, and
+nothing else about the two differs: the remaining arguments are checked
+exactly as before, a bare pointer's length being what no C return code
+can report. The two callers this is for are the one that validates a key
+and then verifies with it, and the one checking several signatures
+against a single key. `xonly.parse` is the same thing for the 32-byte
+x-only key BIP340 verifies against, and `keys.serialize` is how a parsed
+key becomes bytes again.
 
 ## Wrapped modules
 

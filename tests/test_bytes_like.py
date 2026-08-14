@@ -44,6 +44,10 @@ MSG = b"\x01" * 32
 PUBKEY = keys.pubkey_from_prvkey(PRVKEY)
 PUBKEY_LONG = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
 XONLY, PARITY = xonly.from_pubkey(PUBKEY)
+# the parsed forms the inner halves take, which are what those entry
+# points have in place of the bytes rather than an argument to retype
+PARSED = keys.parse(PUBKEY)
+PARSED_XONLY = xonly.parse(XONLY)
 DER = dsa.sign(MSG, PRVKEY)
 COMPACT = dsa.to_compact(DER)
 SSA_SIG = ssa.sign(MSG, PRVKEY, bytes(32))
@@ -85,6 +89,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("hashes.tagged_sha256", hashes.tagged_sha256, (b"TapLeaf", MSG), {}),
     ("dsa.sign", dsa.sign, (MSG, PRVKEY, bytes(32)), {}),
     ("dsa.verify", dsa.verify, (MSG, PUBKEY, DER), {}),
+    ("dsa.verify_", dsa.verify_, (MSG, PARSED, DER), {}),
     ("dsa.normalize", dsa.normalize, (DER,), {}),
     ("dsa.is_low_s", dsa.is_low_s, (DER,), {}),
     ("dsa.to_compact", dsa.to_compact, (DER,), {}),
@@ -92,6 +97,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("ssa.sign", ssa.sign, (MSG, PRVKEY, bytes(32)), {}),
     ("ssa.sign_custom", ssa.sign_custom, (b"a message", PRVKEY, bytes(32)), {}),
     ("ssa.verify", ssa.verify, (MSG, XONLY, SSA_SIG), {}),
+    ("ssa.verify_", ssa.verify_, (MSG, PARSED_XONLY, SSA_SIG), {}),
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
     ("xonly.tweak_add", xonly.tweak_add, (XONLY, TWEAK), {}),
     (
@@ -105,6 +111,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("recovery.recover", recovery.recover, (MSG, RECOVERABLE, RECID), {}),
     ("recovery.to_der", recovery.to_der, (RECOVERABLE, RECID), {}),
     ("ecdh.shared_secret", ecdh.shared_secret, (PUBKEY, PRVKEY), {}),
+    ("ecdh.shared_secret_", ecdh.shared_secret_, (PARSED, PRVKEY), {}),
     ("ellswift.create", ellswift.create, (PRVKEY, bytes(32)), {}),
     ("ellswift.encode", ellswift.encode, (PUBKEY, bytes(32)), {}),
     ("ellswift.decode", ellswift.decode, (ELL_A,), {}),
@@ -160,20 +167,26 @@ MODULES = {
 }
 
 # the ones that take no argument crossing as a bare pointer, or nothing
-# this sweep has not already exercised: `parse` takes one and is covered
-# through every wrapper above, `serialize` takes the libsecp256k1 object
-# `parse` hands back and no bytes at all. `pubkey_tweak_add_` is the same
-# shape as `serialize`, an already-parsed key and the already-32-byte
-# output of `scalar`, neither retyped here. `PubkeyTweakChain` calls
-# `parse` on construction and `scalar` on every `tweak_add`, so its own
-# bytes-like handling is `keys.pubkey_tweak_add`'s above, not a call this
-# sweep can equality-check across instances that are never equal to begin
-# with
+# this sweep has not already exercised. Both `parse` functions take one
+# and are covered through every wrapper above; `serialize`,
+# `pubkey_negate_`, `pubkey_cmp_` and `from_pubkey_` take the
+# libsecp256k1 object a `parse` hands back and no bytes at all. The two
+# tweaking inner halves do take a tweak, and it is the retyped one of
+# `keys.pubkey_tweak_add` and `keys.pubkey_tweak_mul` above, which pass
+# theirs straight in: what they answer with is the parsed key they
+# mutated, and two calls of it are never equal. `PubkeyTweakChain` is the
+# same, calling `parse` on construction and reaching `scalar` through
+# `pubkey_tweak_add_` on every `tweak_add`
 NOT_SWEPT = {
     "keys.serialize",
     "keys.parse",
+    "keys.pubkey_negate_",
     "keys.pubkey_tweak_add_",
+    "keys.pubkey_tweak_mul_",
+    "keys.pubkey_cmp_",
     "keys.PubkeyTweakChain",
+    "xonly.parse",
+    "xonly.from_pubkey_",
 }
 
 
