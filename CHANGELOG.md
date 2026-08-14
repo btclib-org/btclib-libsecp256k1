@@ -20,6 +20,30 @@ This file starts at v0.7.1.2. The releases before it were documented at
 release-notes length in the first place, and are still in
 [HISTORY.md](./HISTORY.md) rather than duplicated here.
 
+## v0.8.0.3 (work in progress, not released yet)
+
+### CI
+
+- **`github-release` needed `always()` too, not just an explicit `if`.**
+  The previous fix (v0.8.0.2's own CHANGELOG entry, right below) added
+  `needs.publish-pypi.result == 'success' && needs.attest.result ==
+  'success'` and reasoned that asking only about direct needs would be
+  enough — it was not: v0.8.0.2 published clean and was *still* skipped
+  with both of those green. GitHub's needs-based skip is structural, not
+  a property of which question a job's own `if` asks: a job with a
+  skipped job anywhere in its ancestry is force-skipped regardless of its
+  condition unless that condition itself starts with `always()`, and the
+  override does not clear the taint for whoever depends on the job that
+  used it. `attest`'s `always()` keeps attest itself from being skipped
+  when `publish-testpypi` is (always, on a real tag); `github-release`,
+  needing `attest`, still sat behind that same skipped ancestor and was
+  force-skipped in turn until it opted out on its own. `if: always() &&
+  needs.publish-pypi.result == 'success' && needs.attest.result ==
+  'success'` is what actually breaks the chain. v0.8.0, v0.8.0.1 and
+  v0.8.0.2 all published clean and none produced a GitHub release,
+  recreated by hand from each run's own `sdist` and `attestation`
+  artifacts every time
+
 ## v0.8.0.2
 
 ### The parsed public key

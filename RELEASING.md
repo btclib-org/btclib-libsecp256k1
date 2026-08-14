@@ -276,25 +276,32 @@ Then:
    --failed` reruns the cell alone and it passes the second time
 1. check the GitHub release the workflow created once PyPI had accepted
    the upload — and check that it exists at all before reading anything
-   in it: `github-release` was left `skipped` on both 0.8.0 and 0.8.0.1,
-   despite `publish-pypi` and `attest` succeeding both times. The cause
-   was `attest`'s own `if: always() && (...)`, needed so it can run past
-   a skipped sibling — `publish-testpypi` is always skipped on a real
-   tag, `publish-pypi` on a dispatch. `github-release`'s implicit default
-   `if`, called with no arguments, does not stop at its own direct
-   `needs`; it looks at the whole graph reachable through them, and a
-   skipped job found two hops back through an `always()`-guarded edge is
-   treated the same as a failed direct one — which skipped this job on
-   every real release regardless of what `publish-pypi` and `attest`
-   themselves did. Fixed now: `github-release`'s `if` is explicit,
-   `needs.publish-pypi.result == 'success' && needs.attest.result ==
-   'success'`, asking only the two questions this job has a reason to
-   ask. A release cut after this fix should not need what follows here;
-   keep it for a release that predates the fix, or for a failure of
-   `github-release` itself rather than a skip, which `gh run rerun
-   --failed` reaches directly — a skip, unlike a failure, is not what
-   that flag reruns, so before the fix a rerun scoped to some other job's
-   failing cell always left `github-release` exactly where it was.
+   in it: `github-release` was left `skipped` on 0.8.0, 0.8.0.1 and
+   0.8.0.2, despite `publish-pypi` and `attest` succeeding every time.
+   The cause is `attest`'s own `if: always() && (...)`, needed so it can
+   run past a skipped sibling — `publish-testpypi` is always skipped on a
+   real tag, `publish-pypi` on a dispatch. GitHub's needs-based skip is
+   structural, not a property of which question a job's own `if` asks: a
+   job with a skipped job anywhere in its ancestry is force-skipped
+   regardless of its condition, unless that condition itself starts with
+   `always()` — and the override does not clear the taint for whoever
+   depends on the job that used it. That is what the 0.8.0 fix got wrong:
+   it gave `github-release` an explicit `if:
+   needs.publish-pypi.result == 'success' && needs.attest.result ==
+   'success'`, reasoning that asking only about direct needs would be
+   enough, and 0.8.0.2 shipped with exactly that and was skipped all the
+   same — `attest`'s `always()` keeps attest itself from being skipped
+   when `publish-testpypi` is, but `github-release`, needing attest,
+   still sat behind that same skipped ancestor and was force-skipped in
+   turn. `github-release`'s `if` needs its own `always()` too: `if:
+   always() && needs.publish-pypi.result == 'success' &&
+   needs.attest.result == 'success'`. A release cut after this second fix
+   should not need what follows here; keep it for a release that
+   predates it, or for a failure of `github-release` itself rather than a
+   skip, which `gh run rerun --failed` reaches directly — a skip, unlike
+   a failure, is not what that flag reruns, so before this fix a rerun
+   scoped to some other job's failing cell always left `github-release`
+   exactly where it was.
 
    Recreate a skipped release by hand from the run's own artifacts, which
    is the same thing that step would have done:
