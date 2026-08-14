@@ -7,10 +7,42 @@
 
 from __future__ import annotations
 
-from . import BytesLike, ffi, lib
-from ._scalar import octets, scalar
+from . import BytesLike, CData, ffi, keys, lib
+from ._scalar import scalar
 from ._secret import take
 from .context import ctx
+
+
+def shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
+    """Compute the ECDH shared secret from an already-parsed public key.
+
+    The inner half of `shared_secret`, for a caller who already holds the
+    other party's parsed key -- one exchanging with the same counterparty
+    more than once, or one that validated the key on receipt: see
+    `keys.parse` for what the underscore means throughout.
+
+    Args:
+        pubkey: the other party's already-parsed public key, as
+            `keys.parse` returns.
+        prvkey: this party's private key, 32 bytes or an int below
+            2**256.
+
+    Returns:
+        The 32-byte shared secret, the SHA256 of the compressed shared
+        point as `shared_secret` documents it.
+
+    Raises:
+        ValueError: if the private key is not 32 bytes, does not fit in
+            them, or is not a valid scalar.
+    """
+    prvkey_bytes = scalar(prvkey, "private key")
+
+    output = ffi.new("char[32]")
+    # a NULL hash function selects secp256k1_ecdh_hash_function_sha256,
+    # which writes 32 bytes to output
+    if not lib.secp256k1_ecdh(ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL):
+        raise ValueError("invalid private key")
+    return take(output)
 
 
 def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
@@ -40,16 +72,4 @@ def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
             private key is not 32 bytes or does not fit in them, or if
             it is not a valid scalar.
     """
-    prvkey_bytes = scalar(prvkey, "private key")
-    pubkey_bytes = octets(pubkey_bytes, "public key")
-
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError("invalid public key")
-
-    output = ffi.new("char[32]")
-    # a NULL hash function selects secp256k1_ecdh_hash_function_sha256,
-    # which writes 32 bytes to output
-    if not lib.secp256k1_ecdh(ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL):
-        raise ValueError("invalid private key")
-    return take(output)
+    return shared_secret_(keys.parse(pubkey_bytes), prvkey)

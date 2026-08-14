@@ -431,6 +431,45 @@ def test_dsa_low_s() -> None:
     assert dsa.verify(msg, pubkey_bytes, dsa.normalize(malleated_bytes))
 
 
+def test_dsa_verify_normalizes_when_it_is_told_to() -> None:
+    """`normalize=True` is that round trip, without the round trip.
+
+    The same verdict as verifying `normalize(sig)`, on the malleated
+    signature and on the one that was already low-s, and through both
+    halves of `verify`. What it does not do is make anything else
+    verify: the wrong message is still False with it on, so the answer
+    is a normalization and not a leniency. The default is unchanged and
+    is asserted here too, that being the promise the keyword is behind.
+    """
+    prvkey = 7
+    pubkey_bytes = compress(mult.mult_(prvkey))
+    pubkey = keys.parse(pubkey_bytes)
+    der_bytes = dsa.sign(msg, prvkey)
+
+    compact_bytes = dsa.to_compact(der_bytes)
+    s = int.from_bytes(compact_bytes[32:], "big")
+    malleated_bytes = dsa.to_der(compact_bytes[:32] + (N - s).to_bytes(32, "big"))
+
+    # the same answer the round trip through DER gives, and the outer and
+    # inner halves agree on it
+    assert dsa.verify(msg, pubkey_bytes, malleated_bytes, True)
+    assert dsa.verify_(msg, pubkey, malleated_bytes, True)
+    # a signature already low-s is normalized to itself, so nothing about
+    # the ordinary case changes
+    assert dsa.verify(msg, pubkey_bytes, der_bytes, True)
+    assert dsa.verify_(msg, pubkey, der_bytes, True)
+
+    # and the default is still the refusal, through both halves
+    assert not dsa.verify(msg, pubkey_bytes, malleated_bytes)
+    assert not dsa.verify_(msg, pubkey, malleated_bytes)
+
+    # normalizing s says nothing about the message: a signature of
+    # another one is False either way
+    other_msg = hashlib.sha256(b"another message").digest()
+    assert not dsa.verify(other_msg, pubkey_bytes, malleated_bytes, True)
+    assert not dsa.verify(other_msg, pubkey_bytes, der_bytes, True)
+
+
 def test_size_checks_refuse_both_sides() -> None:
     """Both x-only size checks refuse a value too short as well as too long.
 
@@ -441,7 +480,7 @@ def test_size_checks_refuse_both_sides() -> None:
     """
     xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
 
-    # _parse, reached through both entry points
+    # parse, reached through both entry points
     with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
         xonly.tweak_add(xonly_bytes[:-1], b"\x01" * 32)
 

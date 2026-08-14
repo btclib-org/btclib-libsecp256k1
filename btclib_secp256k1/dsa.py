@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, lib
+from . import BytesLike, CData, ffi, keys, lib
 from ._scalar import octets, scalar
 from .context import ctx
 
@@ -70,18 +70,71 @@ def sign(
     return _serialize_der(sig)
 
 
+def verify_(
+    msg_bytes: BytesLike,
+    pubkey: CData,
+    signature_bytes: BytesLike,
+    normalize: bool = False,
+) -> bool:
+    """Verify an ECDSA signature against an already-parsed public key.
+
+    The inner half of `verify`, for a caller who already holds the parsed
+    key -- one that validated it before verifying with it, or one
+    checking several signatures against the same key: see `keys.parse`
+    for what the underscore means throughout. For a compressed key that
+    parse is a field square root, which is a measurable part of the
+    verification it precedes rather than a rounding error.
+
+    Args:
+        msg_bytes: the 32-byte hash of the message.
+        pubkey: the already-parsed public key, as `keys.parse` returns.
+        signature_bytes: the signature in DER encoding.
+        normalize: whether to verify the lower-s form of the signature
+            rather than reject a signature that is not in it.
+
+    Returns:
+        True if the signature is valid for that key and message.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, or if the DER
+            signature is malformed. A well-formed signature that simply
+            does not verify is False, not an exception.
+    """
+    msg_bytes = octets(msg_bytes, "message hash", 32)
+    signature = _parse_der(signature_bytes)
+    if normalize:
+        # libsecp256k1 takes the same object as input and output here,
+        # documenting sigout == sigin, so this is the normalization
+        # alone: `verify(msg, key, normalize(sig))` is the same answer
+        # through a DER serialization and a second parse of it. The
+        # return value says whether anything was changed, which is what
+        # `is_low_s` asks and this does not
+        lib.secp256k1_ecdsa_signature_normalize(ctx, signature, signature)
+    return bool(lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey))
+
+
 def verify(
-    msg_bytes: BytesLike, pubkey_bytes: BytesLike, signature_bytes: BytesLike
+    msg_bytes: BytesLike,
+    pubkey_bytes: BytesLike,
+    signature_bytes: BytesLike,
+    normalize: bool = False,
 ) -> bool:
     """Verify a ECDSA signature.
 
-    A signature which is not in the normalized lower-s form is rejected;
-    normalize it first if it comes from a system not enforcing it.
+    A signature which is not in the normalized lower-s form is rejected,
+    unless `normalize` is set: which of the two forms a signature carries
+    was the signer's choice, so a caller checking signatures it did not
+    make normalizes rather than refuses, and says so here rather than
+    round-tripping the signature through `normalize` and back into DER.
+    The default is the refusal, that being what a caller enforcing the
+    lower-s form of its own signatures wants.
 
     Args:
         msg_bytes: the 32-byte hash of the message.
         pubkey_bytes: the public key, 33 or 65 bytes.
         signature_bytes: the signature in DER encoding.
+        normalize: whether to verify the lower-s form of the signature
+            rather than reject a signature that is not in it.
 
     Returns:
         True if the signature is valid for that key and message.
@@ -99,20 +152,17 @@ def verify(
         >>> dsa.verify(msg, mult.mult_(1), dsa.sign(msg, 1))
         True
     """
-    msg_bytes = octets(msg_bytes, "message hash", 32)
-
-    signature = _parse_der(signature_bytes)
-
-    pubkey_bytes = octets(pubkey_bytes, "public key")
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError("invalid public key")
-
-    return bool(lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey))
+    return verify_(msg_bytes, keys.parse(pubkey_bytes), signature_bytes, normalize)
 
 
 def normalize(signature_bytes: BytesLike) -> bytes:
     """Convert a DER signature to its normalized lower-s form.
+
+    This is for a caller that needs the normalized bytes -- storing them,
+    forwarding them, comparing them. Normalizing in order to verify is
+    `verify(..., normalize=True)` instead, which is the same
+    normalization without the serialization and the second parse between
+    it and the verification.
 
     Args:
         signature_bytes: the signature in DER encoding.

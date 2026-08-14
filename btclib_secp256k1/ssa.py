@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import secrets
 
-from . import BytesLike, CData, ffi, lib
+from . import BytesLike, CData, ffi, lib, xonly
 from ._scalar import octets, scalar
 from ._secret import wipe
 from .context import ctx
@@ -125,6 +125,41 @@ def sign_custom(
     raise RuntimeError("schnorr signing failed")
 
 
+def verify_(
+    msg_bytes: BytesLike, xonly_pubkey: CData, signature_bytes: BytesLike
+) -> bool:
+    """Verify a Schnorr signature against an already-parsed x-only key.
+
+    The inner half of `verify`, for a caller who already holds the parsed
+    key -- one that proved 32 bytes to be the x coordinate of a point,
+    which is what `xonly.parse` answers and what this verification would
+    ask again, or one checking several signatures against the same key:
+    see `keys.parse` for what the underscore means throughout.
+
+    Args:
+        msg_bytes: the message, of any length.
+        xonly_pubkey: the already-parsed x-only public key, as
+            `xonly.parse` returns.
+        signature_bytes: the 64-byte signature.
+
+    Returns:
+        True if the signature is valid for that key and message.
+
+    Raises:
+        ValueError: if the signature is not 64 bytes. A well-formed
+            signature that simply does not verify is False, not an
+            exception.
+    """
+    msg_bytes = octets(msg_bytes, "message")
+    signature_bytes = octets(signature_bytes, "signature", 64)
+
+    return bool(
+        lib.secp256k1_schnorrsig_verify(
+            ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
+        )
+    )
+
+
 def verify(
     msg_bytes: BytesLike, pubkey_bytes: BytesLike, signature_bytes: BytesLike
 ) -> bool:
@@ -150,20 +185,7 @@ def verify(
             well-formed signature that simply does not verify is False,
             not an exception.
     """
-    msg_bytes = octets(msg_bytes, "message")
-    signature_bytes = octets(signature_bytes, "signature", 64)
-    # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    pubkey_bytes = octets(pubkey_bytes, "x-only public key", 32)
-
-    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
-        raise ValueError("invalid x-only public key")
-
-    return bool(
-        lib.secp256k1_schnorrsig_verify(
-            ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
-        )
-    )
+    return verify_(msg_bytes, xonly.parse(pubkey_bytes), signature_bytes)
 
 
 def _keypair(prvkey: BytesLike | int) -> CData:

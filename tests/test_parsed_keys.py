@@ -1,0 +1,210 @@
+# Copyright (c) The btclib developers
+#
+# Distributed under the MIT software license, see the accompanying
+# LICENSE file or https://opensource.org/license/mit for the full text.
+
+"""Every inner half answers what its outer half answers.
+
+A trailing underscore means one thing across these bindings, and
+`keys.parse` states it: the wrapper takes the parsed public key in place
+of the bytes, and the outer half is that same call with a `parse` in
+front of it. That is an equality, so it is written as one here, pair by
+pair and over both serializations of the key -- which is what keeps the
+two halves from drifting into two implementations of the same thing.
+
+`test_every_inner_half_is_paired` holds the table to the modules' own
+contents, so an inner half added and not paired here is visible as an
+absence rather than as a test nobody wrote.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+
+from btclib_secp256k1 import dsa, ecdh, keys, mult, ssa, xonly
+
+# secp256k1 group order
+N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+
+PRVKEY = 7
+TWEAK = 11
+MSG = hashlib.sha256(b"btclib_secp256k1").digest()
+
+PUBKEY_LONG = mult.mult_(PRVKEY)
+PUBKEY = keys.pubkey_from_prvkey(PRVKEY)
+OTHER = keys.pubkey_from_prvkey(3)
+XONLY, PARITY = xonly.from_pubkey(PUBKEY)
+DER = dsa.sign(MSG, PRVKEY)
+SSA_SIG = ssa.sign(MSG, PRVKEY, bytes(32))
+
+# every pair of the convention: the name of the outer half, that half as
+# a call of the serialized key alone, and the inner half as a call of the
+# parsed one. The arguments that are not the key are closed over, being
+# the same on both sides by construction. Two of the inner halves answer
+# with the key they mutated, and a cffi object is equal to no other, so
+# those are compared through `keys.serialize` -- which is what their
+# outer halves do with the same object
+PAIRS: list[tuple[str, Callable[[bytes], Any], Callable[[Any], Any]]] = [
+    (
+        "keys.pubkey_negate",
+        keys.pubkey_negate,
+        lambda pubkey: keys.serialize(keys.pubkey_negate_(pubkey)),
+    ),
+    (
+        "keys.pubkey_tweak_add",
+        lambda pubkey_bytes: keys.pubkey_tweak_add(pubkey_bytes, TWEAK),
+        lambda pubkey: keys.serialize(keys.pubkey_tweak_add_(pubkey, TWEAK)),
+    ),
+    (
+        "keys.pubkey_tweak_mul",
+        lambda pubkey_bytes: keys.pubkey_tweak_mul(pubkey_bytes, TWEAK),
+        lambda pubkey: keys.serialize(keys.pubkey_tweak_mul_(pubkey, TWEAK)),
+    ),
+    (
+        "keys.pubkey_cmp",
+        lambda pubkey_bytes: keys.pubkey_cmp(pubkey_bytes, OTHER),
+        lambda pubkey: keys.pubkey_cmp_(pubkey, keys.parse(OTHER)),
+    ),
+    ("xonly.from_pubkey", xonly.from_pubkey, xonly.from_pubkey_),
+    (
+        "ecdh.shared_secret",
+        lambda pubkey_bytes: ecdh.shared_secret(pubkey_bytes, PRVKEY),
+        lambda pubkey: ecdh.shared_secret_(pubkey, PRVKEY),
+    ),
+    (
+        "dsa.verify",
+        lambda pubkey_bytes: dsa.verify(MSG, pubkey_bytes, DER),
+        lambda pubkey: dsa.verify_(MSG, pubkey, DER),
+    ),
+]
+
+
+@pytest.mark.parametrize("pubkey_bytes", [PUBKEY, PUBKEY_LONG], ids=["33", "65"])
+@pytest.mark.parametrize("name,outer,inner", PAIRS, ids=[pair[0] for pair in PAIRS])
+def test_the_inner_half_is_the_outer_one_without_the_parse(
+    name: str,
+    outer: Callable[[bytes], Any],
+    inner: Callable[[Any], Any],
+    pubkey_bytes: bytes,
+) -> None:
+    """`outer(key_bytes)` is `inner(parse(key_bytes))`, in both forms.
+
+    Both serializations, because the parse is what tells them apart: the
+    compressed one costs a field square root the uncompressed one does
+    not, which is the whole reason for the pair, and the parsed key it
+    ends at is the same point either way.
+
+    Args:
+        name: the outer half, for the test id.
+        outer: it, as a call of the serialized key.
+        inner: the inner half, as a call of the parsed key.
+        pubkey_bytes: the key, compressed or not.
+    """
+    assert outer(pubkey_bytes) == inner(keys.parse(pubkey_bytes))
+
+
+def test_the_schnorr_pair_parses_the_x_only_key() -> None:
+    """`ssa.verify` is `ssa.verify_` behind `xonly.parse`.
+
+    The one pair whose parsed key is not `keys.parse`'s: BIP340 verifies
+    against the 32-byte x-only key, so what a caller holds is what
+    `xonly.parse` returns, and proving those 32 bytes to be the x
+    coordinate of a point is the call the verification would make again.
+    """
+    assert ssa.verify(MSG, XONLY, SSA_SIG)
+    assert ssa.verify_(MSG, xonly.parse(XONLY), SSA_SIG)
+    # and a signature that does not verify is False through both, rather
+    # than an equality that holds because everything is True
+    tampered = bytes([SSA_SIG[0] ^ 1]) + SSA_SIG[1:]
+    assert not ssa.verify(MSG, XONLY, tampered)
+    assert not ssa.verify_(MSG, xonly.parse(XONLY), tampered)
+
+
+def test_a_parsed_key_verifies_more_than_once() -> None:
+    """The motivating case: one parse, several signatures.
+
+    Verification does not consume or change the key it is given -- the
+    C call takes it const -- so a caller checking a batch of signatures
+    against one key pays for the parse once. Checked by verifying three
+    signatures of three messages through the same parsed key, and then
+    asserting the key still serializes to the bytes it was parsed from.
+    """
+    pubkey = keys.parse(PUBKEY)
+    for index in range(3):
+        msg = hashlib.sha256(index.to_bytes(4, "big")).digest()
+        assert dsa.verify_(msg, pubkey, dsa.sign(msg, PRVKEY))
+        assert not dsa.verify_(msg, pubkey, DER)
+    assert keys.serialize(pubkey) == PUBKEY
+
+
+def test_an_inner_half_still_checks_everything_but_the_key() -> None:
+    """What the underscore drops is the parse, and nothing else.
+
+    Each remaining argument is refused exactly as the outer half refuses
+    it: a message hash that is not 32 octets, a DER signature that is
+    malformed, a signature that is not 64, a private key that is not a
+    scalar, a tweak that is not 32 octets. A bare pointer's length is
+    what no C return code can report, so an inner half that skipped these
+    would be reading past the end of a short value.
+    """
+    pubkey = keys.parse(PUBKEY)
+
+    with pytest.raises(ValueError, match="message hash"):
+        dsa.verify_(MSG[1:], pubkey, DER)
+    with pytest.raises(ValueError, match="DER"):
+        dsa.verify_(MSG, pubkey, b"\x00" * 10)
+    with pytest.raises(ValueError, match="signature must be 64 bytes"):
+        ssa.verify_(MSG, xonly.parse(XONLY), SSA_SIG[1:])
+    with pytest.raises(ValueError, match="private key"):
+        ecdh.shared_secret_(pubkey, 0)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        keys.pubkey_tweak_add_(pubkey, b"\x01" * 31)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        keys.pubkey_tweak_mul_(pubkey, b"\x01" * 33)
+
+    # and the two verdicts libsecp256k1 gives on a tweak, through the
+    # inner halves: the sum that is the point at infinity, and the zero
+    # multiplier
+    with pytest.raises(ValueError, match="tweak or resulting public key"):
+        keys.pubkey_tweak_add_(keys.parse(mult.mult_(7)), N - 7)
+    with pytest.raises(ValueError, match="invalid tweak"):
+        keys.pubkey_tweak_mul_(pubkey, 0)
+
+
+def test_every_inner_half_is_paired() -> None:
+    """Every trailing underscore of the boundary is in the table above.
+
+    The convention is a claim about every function spelled that way, so
+    the table is checked against what the modules export rather than
+    trusted to have been kept up to date. `mult.mult_` is the one
+    exception and is named as one: its underscore is older and means the
+    other thing, the serialized point against the pair of coordinates
+    `mult` answers with, and there is no key to hand it already parsed.
+    """
+    modules = {
+        "dsa": dsa,
+        "ecdh": ecdh,
+        "keys": keys,
+        "mult": mult,
+        "ssa": ssa,
+        "xonly": xonly,
+    }
+    paired = {f"{name}_" for name, *_ in PAIRS} | {"ssa.verify_"}
+    inner_halves = {
+        f"{module_name}.{name}"
+        for module_name, module in modules.items()
+        for name in dir(module)
+        if name.endswith("_")
+        and not name.startswith("_")
+        and callable(getattr(module, name))
+        and getattr(getattr(module, name), "__module__", "")
+        == f"btclib_secp256k1.{module_name}"
+    }
+
+    assert inner_halves - paired == {"mult.mult_"}
+    # and the table names nothing the modules do not have
+    assert paired - inner_halves == set()

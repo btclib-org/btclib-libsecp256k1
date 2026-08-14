@@ -22,6 +22,75 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.2 (work in progress, not released yet)
 
+### The parsed public key
+
+- **Verification takes the parsed key a caller already holds** (#147).
+  `keys.parse` was public and `keys.serialize` took what it returned, and
+  `pubkey_tweak_add_` consumed one — but `dsa.verify`, `ssa.verify` and
+  `ecdh.shared_secret` took bytes and parsed them, so a caller holding a
+  parsed key had nowhere to put it. Two callers pay for that twice: one
+  that validates a key before verifying with it, which is
+  <https://github.com/btclib-org/btclib/issues/887> and the other half of
+  this pair, and one checking several signatures against one key, which
+  is the case `PubkeyTweakChain` exists to stop for tweaks. For a
+  compressed key the parse is a field square root, so it is not a
+  rounding error next to the verification it precedes. `dsa.verify_`,
+  `ssa.verify_`, `ecdh.shared_secret_`, `keys.pubkey_negate_`,
+  `keys.pubkey_tweak_mul_`, `keys.pubkey_cmp_` and `xonly.from_pubkey_`
+  are the inner halves, and `xonly.parse` is public beside `keys.parse`
+  because BIP340 verifies against the x-only key and that is the object
+  `ssa.verify_` takes.
+- **The convention is one sentence, and it is in `keys.parse`**: the
+  inner half takes the parsed key in place of the bytes, and the outer
+  half is that inner half with a `parse` in front of it. Nothing else
+  differs — every remaining argument is checked exactly as before, a bare
+  pointer's length being what no C return code can report, which is why
+  these are not quite the "already validated, nothing left to redo" shape
+  `pubkey_tweak_add_` was documented as. That one is brought to the same
+  rule here: it takes `BytesLike | int` and validates the tweak itself,
+  where it took 32 bytes on trust and would have read past the end of a
+  shorter value. `PubkeyTweakChain` is unchanged in behaviour, its
+  `scalar` call now happening one frame further in.
+- **`tests/test_parsed_keys.py` holds every pair to that equality**, over
+  both serializations of the key, and holds the table of pairs to what
+  the modules export: an inner half added and left unpaired fails there
+  rather than going untested. `mult.mult_` is named in it as the one
+  trailing underscore that means the older thing — the serialized point
+  against `mult`'s pair of coordinates — and has no key to be handed
+  already parsed.
+- **What is deliberately not there**: `keys.pubkey_combine` and
+  `keys.pubkey_sort` take sequences, so their inner halves would take
+  lists of cffi objects, and no caller has asked; and there is no
+  `xonly.serialize` beside `xonly.parse`, nothing here handing back a
+  parsed x-only key for one to take.
+
+### ECDSA signature normalization
+
+- **`dsa.verify` and `dsa.verify_` take a `normalize` flag** (#148),
+  false by default. `verify` does not accept a signature outside the
+  lower-s form, and which of the two forms a signature carries was the
+  signer's choice, so a caller checking signatures it did not make always
+  normalizes first — and `normalize` takes DER and returns DER, so that
+  is a parse, a normalization, a serialization, and then `verify` parsing
+  what came out. libsecp256k1 documents `sigout == sigin` for
+  `secp256k1_ecdsa_signature_normalize`, so neither the serialization nor
+  the second parse is the normalization's own need: with the flag, the
+  normalization happens on the signature `verify` has already parsed.
+  <https://github.com/btclib-org/btclib/issues/889> is the caller.
+- **A flag rather than a public parsed-signature form**, which is the
+  other answer #148 offered and the one that would have followed #147
+  exactly. The parsed *key* is a thing a caller holds for its own reasons
+  — `keys.parse` is how a key is validated — while a parsed DER signature
+  is an intermediate nothing here produces or consumes, so publishing it
+  would have meant a `parse` and a `serialize` for signatures and inner
+  halves of `normalize`, `is_low_s` and `to_compact` besides, for one
+  caller that wants none of them. The flag is the whole of what that
+  caller needs, and the default keeps today's refusal for the caller
+  enforcing the lower-s form of its own signatures. It is not the
+  leniency the README's "nothing is normalized into validity" refuses,
+  either: that bullet is about a boundary guessing what the caller meant,
+  and this is the caller saying it.
+
 ### The benchmark
 
 - **`scripts/benchmark.py` moves to

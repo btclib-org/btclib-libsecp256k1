@@ -147,6 +147,28 @@ def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> byte
     return serialize(pubkey, compressed)
 
 
+def pubkey_negate_(pubkey: CData) -> CData:
+    """Negate an already-parsed public key.
+
+    The inner half of `pubkey_negate`, for a caller who already holds the
+    parsed point: see `parse` for what the underscore means throughout.
+
+    Args:
+        pubkey: the already-parsed public key, as `parse` returns.
+            Mutated in place.
+
+    Returns:
+        The same object passed in, negated.
+
+    Raises:
+        RuntimeError: if libsecp256k1 fails to negate it, which no valid
+            key can make it do.
+    """
+    if not lib.secp256k1_ec_pubkey_negate(ctx, pubkey):
+        raise RuntimeError("public key negation failed")
+    return pubkey
+
+
 def pubkey_negate(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
     """Negate a public key.
 
@@ -162,33 +184,31 @@ def pubkey_negate(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
         RuntimeError: if libsecp256k1 fails to negate or serialize it,
             which no valid key can make it do.
     """
-    pubkey = parse(pubkey_bytes)
-    if not lib.secp256k1_ec_pubkey_negate(ctx, pubkey):
-        raise RuntimeError("public key negation failed")
-    return serialize(pubkey, compressed)
+    return serialize(pubkey_negate_(parse(pubkey_bytes)), compressed)
 
 
-def pubkey_tweak_add_(pubkey: CData, tweak_bytes: bytes) -> CData:
+def pubkey_tweak_add_(pubkey: CData, tweak: BytesLike | int) -> CData:
     """Add the generator multiplied by the tweak, to an already-parsed key.
 
     The inner half of `pubkey_tweak_add`, for a caller who already holds
-    both a parsed key and a validated tweak and so has no validation left
-    to redo: `PubkeyTweakChain` is the one, walking a BIP32 path one
-    tweak at a time without parsing the point back out of its own
-    serialization at every step.
+    the parsed point and so has no parse left to redo: `PubkeyTweakChain`
+    is the one, walking a BIP32 path one tweak at a time without parsing
+    the point back out of its own serialization at every step. See
+    `parse` for what the underscore means throughout.
 
     Args:
         pubkey: the already-parsed public key, as `parse` returns.
             Mutated in place.
-        tweak_bytes: the tweak, already 32 bytes, as `scalar` returns.
+        tweak: the tweak, 32 bytes or an int below 2**256.
 
     Returns:
         The same object passed in, tweaked.
 
     Raises:
-        ValueError: if the tweak or the resulting public key is invalid.
+        ValueError: if the tweak is not 32 bytes or does not fit in them,
+            or if the tweak or the resulting public key is invalid.
     """
-    if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes):
+    if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, scalar(tweak, "tweak")):
         raise ValueError("invalid tweak or resulting public key")
     return pubkey
 
@@ -218,10 +238,7 @@ def pubkey_tweak_add(
         RuntimeError: if libsecp256k1 fails to serialize the result,
             which no valid input can make it do.
     """
-    pubkey = parse(pubkey_bytes)
-    tweak_bytes = scalar(tweak, "tweak")
-    pubkey_tweak_add_(pubkey, tweak_bytes)
-    return serialize(pubkey, compressed)
+    return serialize(pubkey_tweak_add_(parse(pubkey_bytes), tweak), compressed)
 
 
 class PubkeyTweakChain:
@@ -278,9 +295,33 @@ class PubkeyTweakChain:
             RuntimeError: if libsecp256k1 fails to serialize the result,
                 which no valid input can make it do.
         """
-        tweak_bytes = scalar(tweak, "tweak")
-        pubkey_tweak_add_(self._pubkey, tweak_bytes)
-        return serialize(self._pubkey, compressed)
+        return serialize(pubkey_tweak_add_(self._pubkey, tweak), compressed)
+
+
+def pubkey_tweak_mul_(pubkey: CData, tweak: BytesLike | int) -> CData:
+    """Multiply an already-parsed public key by a tweak.
+
+    The inner half of `pubkey_tweak_mul`, for a caller who already holds
+    the parsed point: see `parse` for what the underscore means
+    throughout. This is the shared point of an ECDH exchange, and
+    `ecdh.shared_secret_` is the hash of it from the same parsed key.
+
+    Args:
+        pubkey: the already-parsed public key, as `parse` returns.
+            Mutated in place.
+        tweak: the scalar to multiply by, 32 bytes or an int below
+            2**256.
+
+    Returns:
+        The same object passed in, multiplied.
+
+    Raises:
+        ValueError: if the tweak is not 32 bytes or does not fit in them,
+            or if it is zero or at or above the group order.
+    """
+    if not lib.secp256k1_ec_pubkey_tweak_mul(ctx, pubkey, scalar(tweak, "tweak")):
+        raise ValueError("invalid tweak")
+    return pubkey
 
 
 def pubkey_tweak_mul(
@@ -309,11 +350,7 @@ def pubkey_tweak_mul(
         RuntimeError: if libsecp256k1 fails to serialize the result,
             which no valid input can make it do.
     """
-    pubkey = parse(pubkey_bytes)
-    tweak_bytes = scalar(tweak, "tweak")
-    if not lib.secp256k1_ec_pubkey_tweak_mul(ctx, pubkey, tweak_bytes):
-        raise ValueError("invalid tweak")
-    return serialize(pubkey, compressed)
+    return serialize(pubkey_tweak_mul_(parse(pubkey_bytes), tweak), compressed)
 
 
 def pubkey_combine(
@@ -348,6 +385,27 @@ def pubkey_combine(
     return serialize(combined, compressed)
 
 
+def pubkey_cmp_(pubkey1: CData, pubkey2: CData) -> int:
+    """Compare two already-parsed public keys, in compressed-form order.
+
+    The inner half of `pubkey_cmp`, for a caller who already holds both
+    parsed points -- sorting keys it has parsed for another reason, where
+    every comparison of a sort would otherwise parse both of its
+    arguments again. See `parse` for what the underscore means
+    throughout.
+
+    Args:
+        pubkey1: the first already-parsed public key, as `parse` returns.
+        pubkey2: the second one.
+
+    Returns:
+        A negative number, zero, or a positive number, according to
+        whether the first key sorts before, equal to, or after the
+        second.
+    """
+    return int(lib.secp256k1_ec_pubkey_cmp(ctx, pubkey1, pubkey2))
+
+
 def pubkey_cmp(pubkey1_bytes: BytesLike, pubkey2_bytes: BytesLike) -> int:
     """Compare two public keys, in lexicographic order of compressed form.
 
@@ -366,9 +424,7 @@ def pubkey_cmp(pubkey1_bytes: BytesLike, pubkey2_bytes: BytesLike) -> int:
     Raises:
         ValueError: if either key is not a valid point.
     """
-    return int(
-        lib.secp256k1_ec_pubkey_cmp(ctx, parse(pubkey1_bytes), parse(pubkey2_bytes))
-    )
+    return pubkey_cmp_(parse(pubkey1_bytes), parse(pubkey2_bytes))
 
 
 def pubkey_sort(
@@ -408,6 +464,19 @@ def parse(pubkey_bytes: BytesLike) -> CData:
     The internal form is what the raw `lib` calls take, and what
     `serialize` turns back into bytes: `serialize(parse(key))` is the
     compressed form of a key given in either form.
+
+    It is also what a trailing underscore means across these bindings.
+    Every wrapper whose first act is to parse a public key has an inner
+    half spelled with one -- `pubkey_tweak_add_` here, `dsa.verify_`
+    elsewhere -- taking the object this returns in place of the bytes,
+    and the outer half is that inner half with a `parse` in front of it,
+    which is the equality `tests/test_parsed_keys.py` holds every pair
+    to. For a compressed key that parse is a field square root, so a
+    caller who has already paid for one -- having validated the key, or
+    being about to use the same key again -- can hand it on rather than
+    buy it twice. Nothing else about the two halves differs: the
+    remaining arguments are checked exactly as the outer half checks
+    them, a bare pointer's length being what no C return code can report.
 
     Args:
         pubkey_bytes: the public key, 33 or 65 bytes.
