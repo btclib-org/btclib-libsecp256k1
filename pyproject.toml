@@ -239,20 +239,6 @@ mutation = ["cosmic-ray"]
 # section and the git submodule matter here in a way they do not for
 # btclib's own pure Python build
 docs = ["myst-parser", "sphinx", "sphinx_rtd_theme"]
-# what scripts/benchmark.py times these bindings against, deliberately
-# left out of dev: btclib depends on this package, so it cannot be a
-# dependency of developing it. It used to be harmless here too, the lock
-# resolving btclib's requirement to the editable build of this very tree,
-# the two distributions having had one name. Until the rename reaches a
-# btclib release, that requirement is `btclib_libsecp256k1` and the lock
-# answers it with 0.7.1.3 from PyPI, installed beside this tree: a second
-# copy where there used to be none, and one that collides with nothing,
-# the import package having been renamed with the distribution. It costs
-# the benchmark nothing either -- btclib's own rows run with its dispatch
-# off, for the reason scripts/benchmark.py gives. coincurve and secp256k1
-# compile a libsecp256k1 of their own, so building this group needs
-# pkg-config besides the toolchain the README lists
-bench = ["btclib", "coincurve", "secp256k1"]
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
@@ -326,11 +312,11 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-# comparands of the benchmark script, not dependencies of the project:
-# btclib in particular must not become one, as it is btclib that depends
-# on these bindings. secp256k1 also has to be skipped explicitly, or the
-# vendored C tree is picked up as a namespace package of the same name
-module = ["btclib.*", "coincurve", "secp256k1"]
+# not a dependency and not a comparand either, now that the benchmark
+# that compared against one lives in btclib-benchmarks: `secp256k1` here
+# is the vendored C tree, which without this entry is picked up as a
+# namespace package of the same name
+module = ["secp256k1"]
 follow_imports = "skip"
 ignore_missing_imports = true
 
@@ -529,11 +515,6 @@ max-complexity = 10
 # needs. The name says which call is under test; the docstring says what
 # about it is being claimed
 "tests/*" = ["assert"]
-# the benchmark script asserts its own results before timing them, and
-# prints them: T20 is selected for the library, which writes to no stream
-# of its own, and a script whose caller is a terminal is the case it is
-# not about
-"scripts/benchmark.py" = ["assert", "print"]
 # the build scripts drive CMake and load the cffi build description by
 # exec(): both are inherent to compiling a C dependency from a build
 # backend, and neither ever sees untrusted input.
@@ -548,9 +529,9 @@ max-complexity = 10
     "subprocess-without-shell-equals-true",
     "start-process-with-partial-path",
 ]
-# same `print` exemption as the benchmark script above: the warning
-# printed here is what a wheel builder reads in its own log, not the
-# library talking to a stream it does not own
+# T20 is selected for the library, which writes to no stream of its own;
+# the warning printed here is what a wheel builder reads in its own log,
+# which is the case that rule is not about
 "scripts/hatch_build.py" = ["exec-builtin", "print"]
 # docstring-in-stub asks that a stub carry none, on the assumption that
 # one lives in the .py file the stub mirrors -- true everywhere else, and

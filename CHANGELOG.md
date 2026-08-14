@@ -22,6 +22,30 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.2 (work in progress, not released yet)
 
+### The benchmark
+
+- **`scripts/benchmark.py` moves to
+  [btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks)**,
+  as `scripts/libsecp256k1_wrappers.py`, and the `bench` dependency group
+  goes with it (issues #144 and #145).
+
+  The group named `btclib`, `coincurve` and `secp256k1`, which put the
+  packages being timed into this repository's lock. `btclib` was the
+  wrong way round in particular: it is btclib that depends on these
+  bindings, so a benchmark comparand made the dependency circular in the
+  one direction a lock can express it — and the copy it resolved was
+  `btclib_libsecp256k1` 0.7.1.3 from PyPI, an older release of *this*
+  package installed beside the tree it was meant to measure.
+
+  What #144 and #145 asked for — narrowing the comparison to
+  wrapper-against-wrapper, and adding `electrum-ecc` to it — is work on
+  that script, and it moves with the script rather than being done or
+  abandoned here.
+
+  `[[tool.mypy.overrides]]` keeps its `secp256k1` entry and loses the
+  other two: that name has a second job here, the vendored C tree being
+  picked up as a namespace package of the same name without it.
+
 ### CI
 
 - **The generated Code Quality analysis is off.** `Analyze (python)` ran

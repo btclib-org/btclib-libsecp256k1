@@ -19,7 +19,7 @@ and stays, in:
 
 - [README.md](README.md) — design, wrapped modules, build, and the
   static/dynamic/sdist distinction
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test and benchmark
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build and test
   locally, how to reproduce each CI job, and what a change has to satisfy
 - [RELEASING.md](RELEASING.md) — the release, and the rehearsal
 - [scripts/README.md](scripts/README.md) — the build backend, one file at
