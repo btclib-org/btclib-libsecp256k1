@@ -516,3 +516,21 @@ without the index.
 The steps to cut a release, to rehearse one on TestPyPI, and the
 one-time setup each index needs are in
 [RELEASING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/RELEASING.md).
+
+## Comparison
+
+Wrappers of the same C library cannot honestly differ in what it
+computes, nor in how fast — the point Design makes above about where the
+actual work goes, `coincurve`, `secp256k1-py` and `electrum-ecc`
+included, every one of them the same libsecp256k1 underneath. That does
+not make the difference unmeasurable, only certain about what it is a
+difference *in*: not the cryptography, which is upstream's regardless of
+which wrapper calls it, but the boundary each one places around the same
+calls — how much a caller pays to cross it. Measuring that honestly, and
+publishing the run rather than a claim, is what
+[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks)
+is for, and
+[the libsecp256k1 wrappers table](https://github.com/btclib-org/btclib-benchmarks/blob/main/results/libsecp256k1-wrappers.md)
+is where this project's own boundary is timed against the others', one
+run kept whole rather than reduced to a single figure — an order of
+magnitude to read there, never a number to quote here.
