@@ -17,7 +17,7 @@ libsecp256k1 release rather than the calendar. -->
 [![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
 
 Thank you for investing your time in this project. What follows is how to
-build, test and benchmark these bindings, and what this repository
+build and test these bindings, and what this repository
 expects of a change. What the build itself does on each platform is in
 the [Build](README.md#build) section of the README, which is not repeated
 here.
@@ -124,16 +124,11 @@ uv run pre-commit run --all-files
 ```
 
 To time these bindings against the other python wrappers of
-libsecp256k1, and against the pure python implementation of btclib:
-
-```shell
-uv run --group bench scripts/benchmark.py
-```
-
-That group is not part of `dev`, and installing it is a choice: btclib
-depends on this package, so it cannot be a dependency of developing it,
-and `coincurve` and `secp256k1` build a libsecp256k1 of their own, which
-needs `pkg-config` besides the C toolchain.
+libsecp256k1, clone
+[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) and
+run `scripts/libsecp256k1_wrappers.py` there. The comparands are that
+project's dependencies rather than this one's, which is the point: btclib
+is one of them, and btclib is what depends on these bindings.
 
 To test against another supported interpreter, bypass the build cache:
 uv keys it on the sources, which do not tell it that the compiled

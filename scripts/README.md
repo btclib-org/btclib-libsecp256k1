@@ -1,6 +1,6 @@
 # scripts
 
-The build backend of this package, plus the benchmark. Nothing here is
+The build backend of this package. Nothing here is
 part of the installed package: `btclib_secp256k1` never imports these
 modules, and they carry no public API. They are, however, shipped in the
 sdist, because building it from source runs two of them.
@@ -120,19 +120,12 @@ Note that the two are not interchangeable as predicates: the choice
 between the MSVC and the Unix static path keys off the real host, while
 the shared library suffix and the wheel tag key off the target.
 
-## benchmark.py
+## The benchmark is not here
 
-Times DSA and Schnorr verification of these bindings against the other
-python wrappers of libsecp256k1, `coincurve` and `secp256k1`, and against
-the pure python implementation of btclib. Each case asserts its own
-result before being timed, so a comparand that is merely fast and wrong
-cannot win.
-
-```shell
-uv run --group bench scripts/benchmark.py
-```
-
-The `bench` group is deliberately outside `dev`: btclib depends on this
-package, so it cannot be a dependency of developing it, and the two
-wrappers build a libsecp256k1 of their own, needing `pkg-config` on top
-of the C toolchain. Installing it is a choice.
+It compared these bindings against `coincurve`, `secp256k1` and btclib's
+pure python arithmetic, which made the packages it timed dependencies of
+this repository's lock — btclib among them, and btclib is what depends on
+this package rather than the other way round. It lives in
+[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) now,
+as `scripts/libsecp256k1_wrappers.py`, where its comparands are what the
+project is for.

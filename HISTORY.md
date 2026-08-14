@@ -7,6 +7,12 @@ a tag is generated from.
 
 ## v0.8.0.2 (work in progress, not released yet)
 
+The benchmark is no longer in this repository: it lives in
+[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) as
+`scripts/libsecp256k1_wrappers.py`. `uv sync --group bench` resolves
+nothing — that dependency group is gone — and CONTRIBUTING.md says where
+to run it instead.
+
 ## v0.8.0.1
 
 Non-breaking. `keys.PubkeyTweakChain` is new: it adds a sequence of

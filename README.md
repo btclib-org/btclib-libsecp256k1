@@ -465,8 +465,8 @@ with mingw-w64, through the vendored CMake toolchain file, and is
 x86_64 only.
 
 How to get the submodule, set up the development environment, run the
-suite and the benchmarks, reproduce each CI job locally, and what a
-change is expected to satisfy are in
+suite, reproduce each CI job locally, and what a change is expected to
+satisfy are in
 [CONTRIBUTING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/CONTRIBUTING.md).
 
 ## Release process
