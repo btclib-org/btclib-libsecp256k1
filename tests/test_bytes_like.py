@@ -167,6 +167,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     # function above which serializes what it built, so what the sweep
     # compares is the bytes its outer half would have answered
     ("keys.pubkey_from_prvkey_", created, (PRVKEY,), {}),
+    ("keys.pubkey_verify", keys.pubkey_verify, (PUBKEY,), {}),
     ("keys.pubkey_negate", keys.pubkey_negate, (PUBKEY,), {}),
     ("keys.pubkey_tweak_add", keys.pubkey_tweak_add, (PUBKEY, TWEAK), {}),
     ("keys.pubkey_tweak_mul", keys.pubkey_tweak_mul, (PUBKEY, TWEAK), {}),

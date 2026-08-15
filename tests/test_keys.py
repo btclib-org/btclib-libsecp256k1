@@ -551,3 +551,37 @@ def test_size_checks_refuse_both_sides() -> None:
     # and the tweaked key of the commitment check, one octet too many
     with pytest.raises(ValueError, match="tweaked x-only public key"):
         xonly.tweak_add_check(xonly_bytes + b"\x01", parity, xonly_bytes, b"\x01" * 32)
+
+
+def test_pubkey_verify_is_the_parse_with_nothing_kept() -> None:
+    """`keys.pubkey_verify` answers what `keys.parse` proves.
+
+    True for exactly what parses, in either serialization, and False for
+    everything else -- a point of no curve, and octets of a length no
+    public key has, which every other entry point taking a key raises
+    over. A verdict is what a library validating its own input wants:
+    `parse` would hand it an object to hold and `reserialize` the octets
+    it already had.
+    """
+    prvkey = 11
+    compressed = keys.pubkey_from_prvkey(prvkey)
+    uncompressed = mult.mult_(prvkey)
+
+    for form in (compressed, uncompressed):
+        assert keys.pubkey_verify(form)
+        assert keys.serialize(keys.parse(form)) == compressed
+
+    # what does not parse, in the two ways it can fail
+    for refused in (b"\x02" + bytes(32), b"\x04" + b"\xff" * 64):
+        assert not keys.pubkey_verify(refused)
+        with pytest.raises(ValueError, match="invalid public key"):
+            keys.parse(refused)
+
+    # and a length no serialization has, which is a verdict here and an
+    # exception everywhere else
+    for wrong_size in (b"", compressed[:-1], compressed + b"\x00"):
+        assert not keys.pubkey_verify(wrong_size)
+
+    # the type check is not relaxed with it: a str is no octets
+    with pytest.raises(TypeError, match="public key"):
+        keys.pubkey_verify("02" + "00" * 32)  # type: ignore[arg-type]

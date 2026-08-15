@@ -194,6 +194,22 @@ release-notes length in the first place, and are still in
   the root once and leaves every later call at the price of reading it.
   Measured as the entries above, median of seven alternating rounds of
   20 000 calls, `mult.mult_` control within 0.04.
+- **`keys.pubkey_verify` is the validation with nothing kept**, and the
+  public-key twin of `prvkey_verify`, which has been there since the
+  beginning. A library proving a key at its own boundary has
+  `secp256k1_ec_pubkey_parse` and no use for what it produces: `parse`
+  hands back an object whose lifetime becomes the caller's, and
+  `reserialize` hands back the octets it was given — 0.37 us of
+  serialization for an answer that was in the argument. btclib's
+  `to_pub_key.pub_keyinfo_from_pub_key` is the caller, and that
+  serialization is what it was paying.
+
+  A verdict rather than an exception, as `prvkey_verify` answers one:
+  what is wrong with the octets is the caller's to phrase. False for a
+  length no serialization has, too, where every other entry point taking
+  a key raises — a caller asking whether it holds a public key has asked
+  about the length as well.
+
 - **Every entry point taking a public key takes any of its three
   serializations**, and `xonly.parse` is where that is written: 32, 33 or
   65 octets, all of them the same BIP340 key. `02 || x`, `03 || x` and
