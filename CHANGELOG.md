@@ -64,6 +64,37 @@ release-notes length in the first place, and are still in
   used to name the message. Each on its own is refused as before, and
   every wipe that happened still happens
 
+### The parsed public key
+
+- **`xonly.tweak_add_` tweaks the point, where `tweak_add` tweaks its
+  x.** BIP341's output key is an internal key plus the TapTweak hash
+  times the generator, and the caller reaching it holds a public key it
+  has just validated — which is a `keys.parse`, and for a compressed key
+  a field square root. `tweak_add` takes the 32-byte x-only form and
+  parses that, so such a caller lifted one x twice:
+  `secp256k1_xonly_pubkey_from_pubkey` is a conversion and not a lift,
+  and reading the y it is given costs what the square root did not.
+  Measured as the entry above, on an Apple M5, macOS 26.6, arm64, CPython
+  3.14.6, and by the median of seven alternating rounds of 20 000 calls,
+  microseconds per call: `tweak_add` 5.92, `tweak_add_` 3.79, with a
+  `mult.mult_` control that moved by 0.06 across the rounds. btclib's
+  `script.taproot.output_pubkey` is the caller: it validates the internal
+  key through `pub_keyinfo_from_key` and then hands the x-only octets to
+  `tweak_add`.
+- **It takes a full public key, and that is the module's rule rather than
+  an exception to it.** The bytes entry points take the 32-byte form so
+  that a y coordinate is never discarded inside an argument check; a call
+  taking what `keys.parse` returns and answering 32 bytes discards it in
+  plain sight. An odd-y point is tweaked as its negation, BIP341's
+  internal key being x-only, and answers the output key `tweak_add`
+  answers for the same x — `from_pubkey_` is where that parity is read,
+  and takes the same object.
+- **`tests/test_parsed_keys.py` pairs it outside the parametrized
+  table**, as it pairs `ssa.verify_`: the equality is
+  `tweak_add_(keys.parse(sec))` against `tweak_add(from_pubkey(sec)[0])`,
+  held over both serializations and over the negated key, so the
+  odd-y case is not left to the reading of a docstring.
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**
