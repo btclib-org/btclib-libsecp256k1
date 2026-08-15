@@ -28,8 +28,10 @@
 #   written as a second copy of the buffer's own size. Six of the 13.
 #   `ffi.sizeof` now derives the capacity from the buffer and the buffer is
 #   what is unpacked, so a wrong size reaches the caller instead of being
-#   absorbed -- and the DER buffer, sized 73 for a serialization that
-#   cannot exceed 72, has a test for the octet that decides it
+#   absorbed. The DER buffer went with them: 73 was slack over a
+#   serialization that cannot exceed 72, so shrinking it was a mutant no
+#   test could distinguish, and at the 72 it is now
+#   `test_der_reaches_all_72_octets` reaches the last octet and 71 dies
 #
 #   secrets.token_bytes(32) -> 31 or 33, randomness this package generates
 #   rather than accepts: a BIP340 aux, an ellswift encoding, the context
