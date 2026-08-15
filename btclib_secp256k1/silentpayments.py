@@ -16,17 +16,23 @@ it -- which is why every function here takes keys and a serialized
 outpoint rather than a transaction, and why deciding which inputs are
 eligible, and which of the eligible ones are taproot, is the caller's:
 BIP352 states those rules over scripts, and there is no script here.
+
+This is the module with the most keys to parse per call, and so the one
+where the private halves earn the most: a wallet scanning block after
+block parses each of its own keys once and hands the objects to
+`_scan_outputs_`, where `scan_outputs` parses the spend key and every
+transaction output again at every transaction.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 
-from . import BytesLike, CData, ffi, lib
-from ._scalar import octets, scalar
-from ._secret import take, wipe
-from .context import ctx
-from .keys import serialize
+from . import BytesLike, CData, ffi, keys, lib, xonly
+from ._cdata import array
+from ._scalar import in_range, octets, scalar
+from ._secret import keypair, take, wipe
+from .context import ctx, guarded
 
 # the two widths this module has to check, neither of them a macro that
 # survives the preprocessing of the headers into cffi definitions. The
@@ -38,8 +44,94 @@ SUMMARY_SIZE = ffi.sizeof("secp256k1_silentpayments_prevouts_summary")
 LABEL_SIZE = 33
 
 
+def _create_outputs_(
+    recipients: Sequence[tuple[CData, CData]],
+    outpoint_smallest36: BytesLike,
+    taproot_prvkeys: Sequence[BytesLike | int] = (),
+    prvkeys: Sequence[BytesLike | int] = (),
+) -> list[CData]:
+    """Create the taproot outputs paying already-parsed recipient keys.
+
+    The private half of `create_outputs`, in both directions: it takes
+    the parsed scan and spend keys and answers the parsed outputs. See
+    the package docstring for what the two underscores mean throughout.
+    A sender paying the same recipient in transaction after transaction
+    parses that address once, where the public half is two field square
+    roots per output.
+
+    The private keys are not part of that trade and stay octets: they are
+    consumed as scalars, the keypair a taproot input needs is built and
+    wiped inside this call, and handing that lifetime to a caller would
+    be a secret in memory nothing here could take back.
+
+    Args:
+        recipients: the addresses to pay, each a pair of the recipient's
+            already-parsed scan and spend public keys. At least one is
+            required.
+        outpoint_smallest36: the 36-byte serialization of the
+            lexicographically smallest outpoint of *all* the transaction
+            inputs, eligible or not.
+        taproot_prvkeys: the private keys of the taproot inputs, 32
+            bytes or an int below 2**256 each.
+        prvkeys: the private keys of the other eligible inputs.
+
+    Returns:
+        The libsecp256k1 x-only public key object of one taproot output
+        per recipient, in the order the recipients were given.
+
+    Raises:
+        ValueError: if no recipient or no private key is given, if the
+            outpoint is not 36 bytes, if any private key is not 32 bytes,
+            does not fit in them, or is not in [1, n-1], if libsecp256k1
+            refuses the set, or if any object is not a public key it will
+            read; see `context.guarded`.
+    """
+    if not recipients:
+        raise ValueError("at least one recipient is required")
+    if not taproot_prvkeys and not prvkeys:
+        raise ValueError("at least one private key is required")
+    outpoint_smallest36 = octets(outpoint_smallest36, "smallest outpoint", 36)
+
+    recipient_objs = [
+        _recipient(scan_pubkey, spend_pubkey, index)
+        for index, (scan_pubkey, spend_pubkey) in enumerate(recipients)
+    ]
+    outputs = [ffi.new("secp256k1_xonly_pubkey *") for _ in recipient_objs]
+
+    # the two key lists are built inside the try, not before it: each
+    # element carries a private key and the next one can raise, so what
+    # wipes them has to already be in force while they are being made
+    keypairs: list[CData] = []
+    seckeys: list[CData] = []
+    try:
+        keypairs.extend(keypair(prvkey) for prvkey in taproot_prvkeys)
+        seckeys.extend(
+            ffi.new("unsigned char[32]", scalar(prvkey, "private key"))
+            for prvkey in prvkeys
+        )
+        with guarded():
+            created = lib.secp256k1_silentpayments_sender_create_outputs(
+                ctx,
+                array("secp256k1_xonly_pubkey *[]", outputs),
+                array("secp256k1_silentpayments_recipient *[]", recipient_objs),
+                len(recipient_objs),
+                outpoint_smallest36,
+                array("secp256k1_keypair *[]", keypairs),
+                len(keypairs),
+                array("unsigned char *[]", seckeys),
+                len(seckeys),
+            )
+    finally:
+        for buffer in (*keypairs, *seckeys):
+            wipe(buffer)
+
+    if not created:
+        raise ValueError("silent payment output creation failed")
+    return outputs
+
+
 def create_outputs(
-    recipients: Sequence[tuple[BytesLike, BytesLike]],
+    recipients_bytes: Sequence[tuple[BytesLike, BytesLike]],
     outpoint_smallest36: BytesLike,
     taproot_prvkeys: Sequence[BytesLike | int] = (),
     prvkeys: Sequence[BytesLike | int] = (),
@@ -58,10 +150,10 @@ def create_outputs(
     being over the whole set.
 
     Args:
-        recipients: the addresses to pay, each a pair of the recipient's
-            scan and spend public keys, 33 or 65 bytes each. The same
-            address may appear more than once, which pays it that many
-            outputs. At least one is required.
+        recipients_bytes: the addresses to pay, each a pair of the
+            recipient's scan and spend public keys, 33 or 65 bytes each.
+            The same address may appear more than once, which pays it
+            that many outputs. At least one is required.
         outpoint_smallest36: the 36-byte serialization of the
             lexicographically smallest outpoint of *all* the transaction
             inputs, eligible or not. Choosing it is the caller's, and
@@ -95,61 +187,30 @@ def create_outputs(
         >>> len(outputs), len(outputs[0])
         (1, 32)
     """
-    if not recipients:
-        raise ValueError("at least one recipient is required")
-    if not taproot_prvkeys and not prvkeys:
-        raise ValueError("at least one private key is required")
-    outpoint_smallest36 = octets(outpoint_smallest36, "smallest outpoint", 36)
-
-    recipient_objs = [
-        _recipient(scan_pubkey_bytes, spend_pubkey_bytes, index)
-        for index, (scan_pubkey_bytes, spend_pubkey_bytes) in enumerate(recipients)
+    recipients = [
+        (
+            keys.parse(scan_pubkey_bytes, "scan public key"),
+            keys.parse(spend_pubkey_bytes, "spend public key"),
+        )
+        for scan_pubkey_bytes, spend_pubkey_bytes in recipients_bytes
     ]
-    outputs = [ffi.new("secp256k1_xonly_pubkey *") for _ in recipient_objs]
-
-    # the two key lists are built inside the try, not before it: each
-    # element carries a private key and the next one can raise, so what
-    # wipes them has to already be in force while they are being made
-    keypairs: list[CData] = []
-    seckeys: list[CData] = []
-    try:
-        keypairs.extend(_keypair(prvkey) for prvkey in taproot_prvkeys)
-        seckeys.extend(
-            ffi.new("unsigned char[32]", scalar(prvkey, "private key"))
-            for prvkey in prvkeys
+    return [
+        xonly.serialize(output)
+        for output in _create_outputs_(
+            recipients, outpoint_smallest36, taproot_prvkeys, prvkeys
         )
-        created = lib.secp256k1_silentpayments_sender_create_outputs(
-            ctx,
-            ffi.new("secp256k1_xonly_pubkey *[]", outputs),
-            # the array holds borrowed pointers: the list above is what
-            # keeps the recipients it points to alive, and libsecp256k1
-            # reorders the array rather than the objects
-            ffi.new("secp256k1_silentpayments_recipient *[]", recipient_objs),
-            len(recipient_objs),
-            outpoint_smallest36,
-            _array("secp256k1_keypair *[]", keypairs),
-            len(keypairs),
-            _array("unsigned char *[]", seckeys),
-            len(seckeys),
-        )
-    finally:
-        for buffer in (*keypairs, *seckeys):
-            wipe(buffer)
-
-    if not created:
-        raise ValueError("silent payment output creation failed")
-    return [_serialize_xonly(output) for output in outputs]
+    ]
 
 
-def label_(scan_prvkey: BytesLike | int, m: int) -> tuple[CData, bytes]:
+def _label_(scan_prvkey: BytesLike | int, m: int) -> tuple[CData, bytes]:
     """Create the m-th label of a scan key as a parsed label, and its tweak.
 
-    The inner half of `label`, and the one that answers with the label
-    object rather than with its 33 bytes: see `keys.parse` for what the
-    underscore means throughout. A label is a point, so parsing those 33
-    bytes back is a field square root -- which is what a recipient
-    publishing a labeled address pays between `label` and
-    `labeled_spend_pubkey`, and what this and `labeled_spend_pubkey_`
+    The private half of `label`, and the one that answers with the label
+    object rather than with its 33 bytes: see the package docstring for
+    what the two underscores mean throughout. A label is a point, so
+    parsing those 33 bytes back is a field square root -- which is what a
+    recipient publishing a labeled address pays between `label` and
+    `labeled_spend_pubkey`, and what this and `_labeled_spend_pubkey_`
     are for. The 33 bytes are still wanted, being what `scan_outputs` is
     keyed on: `serialize_label` is where they come from.
 
@@ -164,14 +225,14 @@ def label_(scan_prvkey: BytesLike | int, m: int) -> tuple[CData, bytes]:
         what was paid to it.
 
     Raises:
+        TypeError: if m is not an int.
         ValueError: if m is out of range, or if the scan key is not 32
             bytes, does not fit in them, or is not in [1, n-1].
     """
     scan_prvkey_bytes = scalar(scan_prvkey, "scan private key")
     # uint32_t: cffi would answer an out of range m with OverflowError,
     # which is not how this package reports an argument out of domain
-    if not 0 <= m < 2**32:
-        raise ValueError("the label m must fit in 4 bytes")
+    m = in_range(m, "label m", 2**32 - 1)
 
     label_obj = ffi.new("secp256k1_silentpayments_label *")
     tweak = ffi.new("char[32]")
@@ -208,6 +269,7 @@ def label(scan_prvkey: BytesLike | int, m: int) -> tuple[bytes, bytes]:
         to it.
 
     Raises:
+        TypeError: if m is not an int.
         ValueError: if m is out of range, or if the scan key is not 32
             bytes, does not fit in them, or is not in [1, n-1].
 
@@ -217,25 +279,25 @@ def label(scan_prvkey: BytesLike | int, m: int) -> tuple[bytes, bytes]:
         >>> len(label), len(tweak)
         (33, 32)
     """
-    label_obj, tweak = label_(scan_prvkey, m)
+    label_obj, tweak = _label_(scan_prvkey, m)
     return serialize_label(label_obj), tweak
 
 
-def labeled_spend_pubkey_(spend_pubkey: CData, label_obj: CData) -> CData:
+def _labeled_spend_pubkey_(spend_pubkey: CData, label_obj: CData) -> CData:
     """Add an already-parsed label to an already-parsed spend public key.
 
-    The inner half of `labeled_spend_pubkey`, taking both parsed objects
-    and answering with a third: see `keys.parse` for what the underscore
-    means throughout. A recipient publishing a labeled address holds
-    both of them already -- the label from `label_`, the spend key from
-    `keys.parse` -- so this is the pair of C calls BIP352 asks for with
-    no serialization between them, and `keys.serialize` is how what comes
-    out becomes an address.
+    The private half of `labeled_spend_pubkey`, taking both parsed
+    objects and answering with a third: see the package docstring for
+    what the two underscores mean throughout. A recipient publishing a
+    labeled address holds both of them already -- the label from
+    `_label_`, the spend key from `keys.parse` -- so this is the pair of
+    C calls BIP352 asks for with no serialization between them, and
+    `keys.serialize` is how what comes out becomes an address.
 
     Args:
         spend_pubkey: the recipient's already-parsed unlabeled spend
             public key, as `keys.parse` returns.
-        label_obj: the parsed label, as `label_` returns and as
+        label_obj: the parsed label, as `_label_` returns and as
             `parse_label` reads back.
 
     Returns:
@@ -243,12 +305,16 @@ def labeled_spend_pubkey_(spend_pubkey: CData, label_obj: CData) -> CData:
 
     Raises:
         ValueError: if the two sum to the point at infinity, which has no
-            serialization and which a label BIP352 made cannot produce.
+            serialization and which a label BIP352 made cannot produce,
+            or if either object is not one libsecp256k1 will read; see
+            `context.guarded`.
     """
     labeled = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
-        ctx, labeled, spend_pubkey, label_obj
-    ):
+    with guarded():
+        added = lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
+            ctx, labeled, spend_pubkey, label_obj
+        )
+    if not added:
         raise ValueError("invalid labeled spend public key")
     return labeled
 
@@ -287,18 +353,73 @@ def labeled_spend_pubkey(
         >>> len(silentpayments.labeled_spend_pubkey(spend_pubkey, label))
         33
     """
-    return serialize(
-        labeled_spend_pubkey_(
-            _pubkey(spend_pubkey_bytes, "spend public key"), parse_label(label_bytes)
+    return keys.serialize(
+        _labeled_spend_pubkey_(
+            keys.parse(spend_pubkey_bytes, "spend public key"),
+            parse_label(label_bytes),
         ),
         compressed,
     )
 
 
+def _prevouts_summary_(
+    outpoint_smallest36: BytesLike,
+    taproot_pubkeys: Sequence[CData] = (),
+    pubkeys: Sequence[CData] = (),
+) -> CData:
+    """Summarize already-parsed input keys, as the summary object.
+
+    The private half of `prevouts_summary`, and the one that answers with
+    the object rather than with the octets of it: see the package
+    docstring for what the two underscores mean throughout. What it saves
+    is a round trip of the summary itself -- `_scan_outputs_` takes this
+    object, where the public halves write those octets out of one struct
+    and back into another -- and, for a caller holding the input keys
+    parsed, their parse.
+
+    Args:
+        outpoint_smallest36: the 36-byte serialization of the
+            lexicographically smallest outpoint of all the transaction
+            inputs, eligible or not.
+        taproot_pubkeys: the already-parsed x-only public keys of the
+            taproot inputs, as `xonly.parse` returns.
+        pubkeys: the already-parsed public keys of the other eligible
+            inputs, as `keys.parse` returns.
+
+    Returns:
+        The libsecp256k1 summary object.
+
+    Raises:
+        ValueError: if no public key is given, if the outpoint is not 36
+            bytes, if the inputs sum to the point at infinity, which is
+            BIP352's "not a Silent Payments transaction" and which the
+            recipient skips, or if any object is not a key libsecp256k1
+            will read; see `context.guarded`.
+    """
+    if not taproot_pubkeys and not pubkeys:
+        raise ValueError("at least one public key is required")
+    outpoint_smallest36 = octets(outpoint_smallest36, "smallest outpoint", 36)
+
+    summary = ffi.new("secp256k1_silentpayments_prevouts_summary *")
+    with guarded():
+        summarized = lib.secp256k1_silentpayments_recipient_prevouts_summary_create(
+            ctx,
+            summary,
+            outpoint_smallest36,
+            array("secp256k1_xonly_pubkey *[]", taproot_pubkeys),
+            len(taproot_pubkeys),
+            array("secp256k1_pubkey *[]", pubkeys),
+            len(pubkeys),
+        )
+    if not summarized:
+        raise ValueError("not a silent payments transaction")
+    return summary
+
+
 def prevouts_summary(
     outpoint_smallest36: BytesLike,
-    taproot_pubkeys: Sequence[BytesLike] = (),
-    pubkeys: Sequence[BytesLike] = (),
+    taproot_pubkeys_bytes: Sequence[BytesLike] = (),
+    pubkeys_bytes: Sequence[BytesLike] = (),
 ) -> bytes:
     """Summarize the inputs of a transaction, for scanning it.
 
@@ -315,10 +436,11 @@ def prevouts_summary(
         outpoint_smallest36: the 36-byte serialization of the
             lexicographically smallest outpoint of all the transaction
             inputs, eligible or not.
-        taproot_pubkeys: the 32-byte x-only public keys of the taproot
-            inputs.
-        pubkeys: the public keys of the other eligible inputs, 33 or 65
-            bytes each.
+        taproot_pubkeys_bytes: the x-only public keys of the taproot
+            inputs, 32, 33 or 65 bytes each: an x names the even-y
+            point whichever way it arrives, for which see `xonly.parse`.
+        pubkeys_bytes: the public keys of the other eligible inputs, 33
+            or 65 bytes each.
 
     Returns:
         The summary, as the bytes libsecp256k1 holds it in. They are
@@ -336,37 +458,129 @@ def prevouts_summary(
     Example:
         >>> from btclib_secp256k1 import keys, silentpayments
         >>> summary = silentpayments.prevouts_summary(
-        ...     bytes(36), pubkeys=[keys.pubkey_from_prvkey(3)]
+        ...     bytes(36), pubkeys_bytes=[keys.pubkey_from_prvkey(3)]
         ... )
         >>> len(summary) == silentpayments.SUMMARY_SIZE
         True
     """
-    if not taproot_pubkeys and not pubkeys:
-        raise ValueError("at least one public key is required")
-    outpoint_smallest36 = octets(outpoint_smallest36, "smallest outpoint", 36)
-
-    xonly_pubkeys = [
-        _xonly_pubkey(pubkey_bytes, "taproot public key")
-        for pubkey_bytes in taproot_pubkeys
-    ]
-    full_pubkeys = [_pubkey(pubkey_bytes, "public key") for pubkey_bytes in pubkeys]
-
-    summary = ffi.new("secp256k1_silentpayments_prevouts_summary *")
-    if not lib.secp256k1_silentpayments_recipient_prevouts_summary_create(
-        ctx,
-        summary,
+    summary = _prevouts_summary_(
         outpoint_smallest36,
-        _array("secp256k1_xonly_pubkey *[]", xonly_pubkeys),
-        len(xonly_pubkeys),
-        _array("secp256k1_pubkey *[]", full_pubkeys),
-        len(full_pubkeys),
-    ):
-        raise ValueError("not a silent payments transaction")
+        [
+            xonly.parse(pubkey_bytes, "taproot public key")
+            for pubkey_bytes in taproot_pubkeys_bytes
+        ],
+        [keys.parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes],
+    )
     return bytes(ffi.buffer(summary))
 
 
+def _scan_outputs_(
+    tx_outputs: Sequence[CData],
+    scan_prvkey: BytesLike | int,
+    summary: CData,
+    spend_pubkey: CData,
+    labels: Mapping[bytes, BytesLike] | None = None,
+) -> list[tuple[bytes, bytes, bytes | None]]:
+    """Find the outputs paying an already-parsed Silent Payments address.
+
+    The private half of `scan_outputs`: see the package docstring for
+    what the two underscores mean throughout. A wallet scanning every
+    transaction of a block parses its own spend key once here, where the
+    public half parses it once per transaction, and takes the summary
+    `_prevouts_summary_` built rather than octets to be written back into
+    a struct.
+
+    What it answers is octets even so: an output's tweak is a secret this
+    call takes back out of libsecp256k1's memory before returning, and
+    its x-only key is 32 bytes a caller compares rather than computes
+    with.
+
+    Args:
+        tx_outputs: the already-parsed x-only public keys of the
+            transaction's taproot outputs, in vout order, as
+            `xonly.parse` returns. At least one is required.
+        scan_prvkey: the recipient's scan private key, 32 bytes or an
+            int below 2**256.
+        summary: the summary of the transaction's inputs, as
+            `_prevouts_summary_` returns.
+        spend_pubkey: the recipient's already-parsed unlabeled spend
+            public key, as `keys.parse` returns.
+        labels: the recipient's label cache, mapping each 33-byte label
+            to its 32-byte tweak, or None where no labeled address was
+            published.
+
+    Returns:
+        One triple per output found, in vout order: its 32-byte x-only
+        public key, the 32-byte tweak to add to the spend private key to
+        spend it, and the 33-byte label it was found with, or None where
+        it was paid to the unlabeled address.
+
+    Raises:
+        ValueError: if no output is given, if the scan key is not 32
+            bytes, does not fit in them, or is not in [1, n-1], if a
+            label or a label tweak is the wrong length, if libsecp256k1
+            refuses the scan, or if any object is not one it will read;
+            see `context.guarded`.
+    """
+    if not tx_outputs:
+        raise ValueError("at least one transaction output is required")
+    scan_prvkey_bytes = scalar(scan_prvkey, "scan private key")
+
+    # the found outputs array is as long as the outputs one, as the
+    # header requires, and libsecp256k1 says through n_found how much of
+    # it it wrote
+    found_objs = [
+        ffi.new("secp256k1_silentpayments_found_output *") for _ in tx_outputs
+    ]
+    n_found = ffi.new("uint32_t *")
+
+    # the cache is filled inside the try, not built before it: every
+    # entry carries a tweak and the next one can raise, so what wipes them
+    # has to already be in force while they are being made -- create_outputs
+    # builds its two key lists the same way and for the same reason. A
+    # `dict` filled entry by entry is what makes that reachable, where a
+    # comprehension would drop the ones already made along with the
+    # exception
+    cache: dict[bytes, CData] = {}
+    # a NULL lookup is how libsecp256k1 is told no label is in play, and
+    # it is not the same as one that never matches: with it the scan skips
+    # the label branch altogether. What decides it is `labels`, an empty
+    # mapping being a cache with nothing in it rather than the absence of
+    # one; the callback is held in a local because it has to outlive the
+    # call it is passed to
+    lookup = ffi.NULL
+    try:
+        if labels is not None:
+            _fill_label_cache(labels, cache)
+            lookup = ffi.callback(
+                "secp256k1_silentpayments_label_lookup", _lookup(cache)
+            )
+        with guarded():
+            scanned = lib.secp256k1_silentpayments_recipient_scan_outputs(
+                ctx,
+                array("secp256k1_silentpayments_found_output *[]", found_objs),
+                n_found,
+                array("secp256k1_xonly_pubkey *[]", tx_outputs),
+                len(tx_outputs),
+                scan_prvkey_bytes,
+                summary,
+                spend_pubkey,
+                lookup,
+                ffi.NULL,
+            )
+        if not scanned:
+            raise ValueError("silent payment scanning failed")
+        return [_found_output(found) for found in found_objs[: n_found[0]]]
+    finally:
+        # every found output carries the tweak that spends it, and the
+        # cache the tweaks of the labels: both are secrets in memory this
+        # package owns, and so both are taken back
+        for buffer in (*found_objs, *cache.values()):
+            wipe(buffer)
+
+
 def scan_outputs(
-    tx_outputs: Sequence[BytesLike],
+    tx_outputs_bytes: Sequence[BytesLike],
     scan_prvkey: BytesLike | int,
     summary_bytes: BytesLike,
     spend_pubkey_bytes: BytesLike,
@@ -380,8 +594,9 @@ def scan_outputs(
     what a label changes is the address, not what is scanned for.
 
     Args:
-        tx_outputs: the 32-byte x-only public keys of the transaction's
-            taproot outputs, in vout order. At least one is required.
+        tx_outputs_bytes: the 32-byte x-only public keys of the
+            transaction's taproot outputs, in vout order. At least one is
+            required.
         scan_prvkey: the recipient's scan private key, 32 bytes or an
             int below 2**256.
         summary_bytes: the summary of the transaction's inputs, as
@@ -419,7 +634,7 @@ def scan_outputs(
         ...     [(scan_pubkey, spend_pubkey)], bytes(36), prvkeys=[3]
         ... )
         >>> summary = silentpayments.prevouts_summary(
-        ...     bytes(36), pubkeys=[keys.pubkey_from_prvkey(3)]
+        ...     bytes(36), pubkeys_bytes=[keys.pubkey_from_prvkey(3)]
         ... )
         >>> found = silentpayments.scan_outputs(
         ...     outputs, 1, summary, spend_pubkey
@@ -427,70 +642,23 @@ def scan_outputs(
         >>> [pubkey for pubkey, _tweak, _label in found] == outputs
         True
     """
-    if not tx_outputs:
-        raise ValueError("at least one transaction output is required")
-    scan_prvkey_bytes = scalar(scan_prvkey, "scan private key")
     summary_bytes = octets(summary_bytes, "prevouts summary", SUMMARY_SIZE)
-    spend_pubkey = _pubkey(spend_pubkey_bytes, "spend public key")
-
-    output_objs = [
-        _xonly_pubkey(pubkey_bytes, "transaction output") for pubkey_bytes in tx_outputs
-    ]
     # the summary is opaque both ways: what came out of prevouts_summary
     # is written straight back into a struct of the same size, there
     # being no parser for it and nothing here that reads it
     summary = ffi.new("secp256k1_silentpayments_prevouts_summary *")
     ffi.buffer(summary)[:] = summary_bytes
-    # the found outputs array is as long as the outputs one, as the
-    # header requires, and libsecp256k1 says through n_found how much of
-    # it it wrote
-    found_objs = [
-        ffi.new("secp256k1_silentpayments_found_output *") for _ in output_objs
-    ]
-    n_found = ffi.new("uint32_t *")
 
-    # the cache is filled inside the try, not built before it: every
-    # entry carries a tweak and the next one can raise, so what wipes them
-    # has to already be in force while they are being made -- create_outputs
-    # builds its two key lists the same way and for the same reason. A
-    # `dict` filled entry by entry is what makes that reachable, where a
-    # comprehension would drop the ones already made along with the
-    # exception
-    cache: dict[bytes, CData] = {}
-    # a NULL lookup is how libsecp256k1 is told no label is in play, and
-    # it is not the same as one that never matches: with it the scan skips
-    # the label branch altogether. What decides it is `labels`, an empty
-    # mapping being a cache with nothing in it rather than the absence of
-    # one; the callback is held in a local because it has to outlive the
-    # call it is passed to
-    lookup = ffi.NULL
-    try:
-        if labels is not None:
-            _fill_label_cache(labels, cache)
-            lookup = ffi.callback(
-                "secp256k1_silentpayments_label_lookup", _lookup(cache)
-            )
-        scanned = lib.secp256k1_silentpayments_recipient_scan_outputs(
-            ctx,
-            ffi.new("secp256k1_silentpayments_found_output *[]", found_objs),
-            n_found,
-            ffi.new("secp256k1_xonly_pubkey *[]", output_objs),
-            len(output_objs),
-            scan_prvkey_bytes,
-            summary,
-            spend_pubkey,
-            lookup,
-            ffi.NULL,
-        )
-        if not scanned:
-            raise ValueError("silent payment scanning failed")
-        return [_found_output(found) for found in found_objs[: n_found[0]]]
-    finally:
-        # every found output carries the tweak that spends it, and the
-        # cache the tweaks of the labels: both are secrets in memory this
-        # package owns, and so both are taken back
-        for buffer in (*found_objs, *cache.values()):
-            wipe(buffer)
+    return _scan_outputs_(
+        [
+            xonly.parse(pubkey_bytes, "transaction output")
+            for pubkey_bytes in tx_outputs_bytes
+        ],
+        scan_prvkey,
+        summary,
+        keys.parse(spend_pubkey_bytes, "spend public key"),
+        labels,
+    )
 
 
 def _fill_label_cache(
@@ -505,7 +673,7 @@ def _fill_label_cache(
 
     The dictionary is filled rather than returned, so that a tweak copied
     before a later entry is refused is one the caller can still wipe: see
-    `scan_outputs`, which owns it and does.
+    `_scan_outputs_`, which owns it and does.
 
     Args:
         labels: the caller's mapping of 33-byte labels to 32-byte tweaks.
@@ -558,124 +726,37 @@ def _found_output(found: CData) -> tuple[bytes, bytes, bytes | None]:
         RuntimeError: if libsecp256k1 fails to serialize either, which
             an output it produced cannot make it do.
     """
-    pubkey = _serialize_xonly(ffi.addressof(found, "output"))
+    pubkey = xonly.serialize(ffi.addressof(found, "output"))
+    # `ffi.buffer` and not `ffi.unpack`, which every fixed-size read in
+    # this package is: the field is an `unsigned char[32]` rather than a
+    # `char[32]`, and unpacking one answers a list of 32 ints
     tweak = bytes(ffi.buffer(found.tweak))
     if not found.found_with_label:
         return pubkey, tweak, None
     return pubkey, tweak, serialize_label(ffi.addressof(found, "label"))
 
 
-def _array(cdecl: str, items: list[CData]) -> CData:
-    """Build the array of borrowed pointers libsecp256k1 takes, or NULL.
+def _recipient(scan_pubkey: CData, spend_pubkey: CData, index: int) -> CData:
+    """Build one recipient of `_create_outputs_`.
 
     Args:
-        cdecl: the cffi declaration of the array type.
-        items: the objects to point at, which the caller keeps alive.
-
-    Returns:
-        The array, or NULL where there is nothing to point at, which is
-        what libsecp256k1 requires rather than merely accepts: it reads
-        the count against the pointer, and a non-NULL one with a count of
-        zero fails an ARG_CHECK -- `n_xonly_pubkeys > 0`, reported through
-        the illegal callback. cffi would hand over an array of length
-        zero quite happily, `keys.pubkey_sort` passing one for an empty
-        sequence, so it is this call that has to say NULL.
-    """
-    return ffi.new(cdecl, items) if items else ffi.NULL
-
-
-def _recipient(
-    scan_pubkey_bytes: BytesLike, spend_pubkey_bytes: BytesLike, index: int
-) -> CData:
-    """Build one recipient of `create_outputs`.
-
-    Args:
-        scan_pubkey_bytes: the recipient's scan public key, 33 or 65
-            bytes.
-        spend_pubkey_bytes: the recipient's spend public key, labeled or
-            not -- which of the two it is the sender neither knows nor
-            needs to.
+        scan_pubkey: the recipient's already-parsed scan public key.
+        spend_pubkey: the recipient's already-parsed spend public key,
+            labeled or not -- which of the two it is the sender neither
+            knows nor needs to.
         index: the position of this recipient among them, which is what
             libsecp256k1 orders the outputs it returns by.
 
     Returns:
         The libsecp256k1 recipient object.
-
-    Raises:
-        ValueError: if either key is not a valid point.
     """
     recipient = ffi.new("secp256k1_silentpayments_recipient *")
     # assigning a struct to a struct field copies it, so the parsed keys
     # need not outlive this call
-    recipient.scan_pubkey = _pubkey(scan_pubkey_bytes, "scan public key")[0]
-    recipient.spend_pubkey = _pubkey(spend_pubkey_bytes, "spend public key")[0]
+    recipient.scan_pubkey = scan_pubkey[0]
+    recipient.spend_pubkey = spend_pubkey[0]
     recipient.index = index
     return recipient
-
-
-def _pubkey(pubkey_bytes: BytesLike, name: str) -> CData:
-    """Parse a public key, named as the exception should call it.
-
-    `keys.parse` is the same call and says "public key"; this module
-    passes four kinds of them -- scan, spend, taproot input, other input
-    -- and which one was refused is the whole of what the caller needs.
-
-    Args:
-        pubkey_bytes: the public key, 33 or 65 bytes.
-        name: what the key is, as the exception should call it.
-
-    Returns:
-        The libsecp256k1 public key object.
-
-    Raises:
-        ValueError: if the bytes are not a valid point in either
-            serialization.
-    """
-    pubkey_bytes = octets(pubkey_bytes, name)
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError(f"invalid {name}")
-    return pubkey
-
-
-def _xonly_pubkey(pubkey_bytes: BytesLike, name: str) -> CData:
-    """Parse a 32-byte x-only public key, named as the exception calls it.
-
-    Args:
-        pubkey_bytes: the 32-byte x coordinate.
-        name: what the key is, as the exception should call it.
-
-    Returns:
-        The libsecp256k1 x-only public key object.
-
-    Raises:
-        ValueError: if it is not 32 bytes, or not a valid x coordinate.
-    """
-    # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    pubkey_bytes = octets(pubkey_bytes, name, 32)
-    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
-        raise ValueError(f"invalid {name}")
-    return xonly_pubkey
-
-
-def _serialize_xonly(xonly_pubkey: CData) -> bytes:
-    """Serialize an x-only public key libsecp256k1 produced.
-
-    Args:
-        xonly_pubkey: the libsecp256k1 x-only public key object.
-
-    Returns:
-        Its 32-byte x coordinate.
-
-    Raises:
-        RuntimeError: if libsecp256k1 fails to serialize it, which a key
-            it produced cannot make it do.
-    """
-    output = ffi.new("char[32]")
-    if not lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey):
-        raise RuntimeError("x-only public key serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
 
 
 def parse_label(label_bytes: BytesLike) -> CData:
@@ -685,8 +766,8 @@ def parse_label(label_bytes: BytesLike) -> CData:
     same reason: those 33 bytes are a compressed point, so reading them
     back is a field square root. A recipient that keeps its labels as
     bytes -- the cache `scan_outputs` takes is exactly that -- parses one
-    here and hands it to `labeled_spend_pubkey_`, rather than through the
-    outer half which parses it again at every address.
+    here and hands it to `_labeled_spend_pubkey_`, rather than through
+    the public half which parses it again at every address.
 
     Args:
         label_bytes: the label, as `label` returned it.
@@ -713,37 +794,22 @@ def serialize_label(label_obj: CData) -> bytes:
     recipient keys its label cache on, and what `label` answers with.
 
     Args:
-        label_obj: the libsecp256k1 label object, as `label_` returns.
+        label_obj: the libsecp256k1 label object, as `_label_` returns.
 
     Returns:
         Its 33 bytes, which are the compressed point it is.
 
     Raises:
-        RuntimeError: if libsecp256k1 fails to serialize it, which a
-            label it produced cannot make it do.
+        ValueError: if the object is not a label libsecp256k1 will read;
+            see `context.guarded`.
+        RuntimeError: if libsecp256k1 fails for any other reason, which
+            a label it produced cannot make it do.
     """
     output = ffi.new(f"char[{LABEL_SIZE}]")
-    if not lib.secp256k1_silentpayments_recipient_label_serialize(
-        ctx, output, label_obj
-    ):
+    with guarded():
+        serialized = lib.secp256k1_silentpayments_recipient_label_serialize(
+            ctx, output, label_obj
+        )
+    if not serialized:
         raise RuntimeError("label serialization failed")
     return ffi.unpack(output, ffi.sizeof(output))
-
-
-def _keypair(prvkey: BytesLike | int) -> CData:
-    """Create a keypair from a private key.
-
-    Args:
-        prvkey: the private key, 32 bytes or an int below 2**256.
-
-    Returns:
-        The libsecp256k1 keypair object.
-
-    Raises:
-        ValueError: if the key is not 32 bytes, does not fit in them, or
-            is not in [1, n-1].
-    """
-    keypair = ffi.new("secp256k1_keypair *")
-    if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
-        raise ValueError("invalid private key")
-    return keypair

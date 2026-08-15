@@ -10,6 +10,12 @@ it as an operation on a scalar rather than as the public key of a private
 key: serialized uncompressed, and as a pair of coordinates. The C call is
 `keys.pubkey_from_prvkey`, which is the same multiplication answering in
 either serialization.
+
+`mult_bytes` used to be `mult_`, and was renamed for the trailing
+underscore rather than for anything it does: that underscore now means a
+private half speaking in parsed objects, and this is a public function
+answering octets. `_bytes` is what the rest of this package calls the
+octets of a thing.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ from . import BytesLike
 from .keys import pubkey_from_prvkey
 
 
-def mult_(num: BytesLike | int) -> bytes:
+def mult_bytes(num: BytesLike | int) -> bytes:
     """Multiply the generator point, in serialized form.
 
     Args:
@@ -40,7 +46,7 @@ def mult_(num: BytesLike | int) -> bytes:
 
     Example:
         >>> from btclib_secp256k1 import mult
-        >>> mult.mult_(1).hex()[:10]
+        >>> mult.mult_bytes(1).hex()[:10]
         '0479be667e'
     """
     return pubkey_from_prvkey(num, compressed=False)
@@ -55,9 +61,10 @@ def mult(num: BytesLike | int) -> tuple[int, int]:
 
     Returns:
         The affine coordinates (x, y) of the resulting point, as ints.
-        This is `mult_` with the two halves of its output read as big
-        endian integers; a caller that wants bytes wants `mult_`, or
-        `keys.pubkey_from_prvkey` for the compressed form.
+        This is `mult_bytes` with the two halves of its output read as
+        big endian integers; a caller that wants bytes wants
+        `mult_bytes`, or `keys.pubkey_from_prvkey` for the compressed
+        form.
 
     Raises:
         ValueError: if the scalar is not 32 bytes or does not fit in
@@ -65,5 +72,5 @@ def mult(num: BytesLike | int) -> tuple[int, int]:
         RuntimeError: if libsecp256k1 fails to serialize the point,
             which no input can make it do.
     """
-    result = mult_(num)
+    result = mult_bytes(num)
     return int.from_bytes(result[1:33], "big"), int.from_bytes(result[33:], "big")

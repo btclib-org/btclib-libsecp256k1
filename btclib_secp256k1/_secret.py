@@ -17,11 +17,17 @@ than a limit.
 It buys one copy, not safety: the `bytes` returned to the caller holds
 the same secret and cannot be overwritten. Scalar work that must not
 leave a trace belongs where that can be promised.
+
+The one such buffer this package builds rather than fills is the
+keypair, and `keypair` below is where it is built, so that the module
+holding the obligation to wipe one is the module that hands one out.
 """
 
 from __future__ import annotations
 
-from . import CData, ffi
+from . import BytesLike, CData, ffi, lib
+from ._scalar import scalar
+from .context import ctx
 
 
 def wipe(buffer: CData) -> None:
@@ -56,3 +62,32 @@ def take(buffer: CData) -> bytes:
     secret = bytes(ffi.buffer(buffer))
     wipe(buffer)
     return secret
+
+
+def keypair(prvkey: BytesLike | int) -> CData:
+    """Build the libsecp256k1 keypair of a private key.
+
+    Three modules need one -- `ssa` to sign, `xonly` to tweak a taproot
+    private key, `silentpayments` to spend a taproot input -- and each
+    wipes it on the way out, `wipe` above being how. That is why the
+    building of it lives here beside the wiping rather than in `keys`:
+    what a keypair holds is the private key in libsecp256k1's own
+    layout, so a caller of this owes the buffer a `wipe`, and the two
+    halves of that obligation are better read together than looked up in
+    two places.
+
+    Args:
+        prvkey: the private key, 32 bytes or an int below 2**256.
+
+    Returns:
+        The libsecp256k1 keypair object, which the caller wipes.
+
+    Raises:
+        TypeError: if the key is neither an int nor bytes.
+        ValueError: if it is not 32 bytes, does not fit in them, or is
+            not in [1, n-1].
+    """
+    buffer = ffi.new("secp256k1_keypair *")
+    if not lib.secp256k1_keypair_create(ctx, buffer, scalar(prvkey, "private key")):
+        raise ValueError("invalid private key: not in [1, n-1]")
+    return buffer

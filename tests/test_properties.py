@@ -85,7 +85,7 @@ def test_serialization_round_trips() -> None:
     a fixed key exercises one of them.
     """
     for prvkey in derived(b"serialization"):
-        uncompressed = mult.mult_(prvkey)
+        uncompressed = mult.mult_bytes(prvkey)
         compressed = compress(uncompressed)
 
         # either form parses, and serializes back to either form
@@ -105,7 +105,7 @@ def test_serialization_round_trips() -> None:
         assert keys.prvkey_negate(keys.prvkey_negate(prvkey)) == prvkey
         assert keys.pubkey_negate(keys.pubkey_negate(compressed)) == compressed
         # and negating the private key negates the point, i.e. flips y
-        negated = mult.mult_(keys.prvkey_negate(prvkey))
+        negated = mult.mult_bytes(keys.prvkey_negate(prvkey))
         assert negated[1:33] == uncompressed[1:33]
         assert negated[64] & 1 != uncompressed[64] & 1
 
@@ -119,23 +119,23 @@ def test_scalar_algebra_matches_point_algebra() -> None:
     and combining two points to be adding their scalars.
     """
     for prvkey, tweak in zip(derived(b"scalar"), derived(b"tweak"), strict=True):
-        pubkey = compress(mult.mult_(prvkey))
+        pubkey = compress(mult.mult_bytes(prvkey))
 
         # (d + t)G == dG + tG, and (d * t)G == t(dG)
-        assert mult.mult_(keys.prvkey_tweak_add(prvkey, tweak)) == mult.mult_(
+        assert mult.mult_bytes(keys.prvkey_tweak_add(prvkey, tweak)) == mult.mult_bytes(
             keys.prvkey_tweak_add(tweak, prvkey)
         )
         assert compress(
-            mult.mult_(keys.prvkey_tweak_add(prvkey, tweak))
+            mult.mult_bytes(keys.prvkey_tweak_add(prvkey, tweak))
         ) == keys.pubkey_tweak_add(pubkey, tweak)
         assert compress(
-            mult.mult_(keys.prvkey_tweak_mul(prvkey, tweak))
+            mult.mult_bytes(keys.prvkey_tweak_mul(prvkey, tweak))
         ) == keys.pubkey_tweak_mul(pubkey, tweak)
 
         # combining points is adding scalars
         assert keys.pubkey_combine([
             pubkey,
-            compress(mult.mult_(tweak)),
+            compress(mult.mult_bytes(tweak)),
         ]) == keys.pubkey_tweak_add(pubkey, tweak)
 
 
@@ -148,7 +148,7 @@ def test_ecdsa_signature_forms() -> None:
     signature and the result still verifies.
     """
     for prvkey, entropy in zip(derived(b"ecdsa"), derived(b"ndata"), strict=True):
-        pubkey = compress(mult.mult_(prvkey))
+        pubkey = compress(mult.mult_bytes(prvkey))
         msg = hashlib.sha256(prvkey).digest()
 
         sig = dsa.sign(msg, prvkey)
@@ -178,7 +178,7 @@ def test_recovery_recovers_the_signer() -> None:
     the ValueError is suppressed rather than expected.
     """
     for prvkey in derived(b"recovery"):
-        pubkey = compress(mult.mult_(prvkey))
+        pubkey = compress(mult.mult_bytes(prvkey))
         msg = hashlib.sha256(prvkey).digest()
 
         signature, recid = recovery.sign(msg, prvkey)
@@ -202,7 +202,7 @@ def test_schnorr_and_taproot_tweaking() -> None:
     can confirm.
     """
     for prvkey, tweak in zip(derived(b"schnorr"), derived(b"taptweak"), strict=True):
-        pubkey = compress(mult.mult_(prvkey))
+        pubkey = compress(mult.mult_bytes(prvkey))
         msg = hashlib.sha256(prvkey).digest()
         aux_rand32 = hashlib.sha256(msg).digest()
 
@@ -238,8 +238,8 @@ def test_ecdh_and_ellswift_agree() -> None:
     one value to the two parties naming their own side.
     """
     for prvkey_a, prvkey_b in zip(derived(b"ecdh a"), derived(b"ecdh b"), strict=True):
-        pubkey_a = compress(mult.mult_(prvkey_a))
-        pubkey_b = compress(mult.mult_(prvkey_b))
+        pubkey_a = compress(mult.mult_bytes(prvkey_a))
+        pubkey_b = compress(mult.mult_bytes(prvkey_b))
 
         # both parties reach the same secret, which is the SHA256 of the
         # shared point keys returns
@@ -268,7 +268,7 @@ def test_public_key_ordering() -> None:
     to the order rather than only the sort to the comparison.
     """
     prvkeys = list(derived(b"ordering", 8))
-    pubkeys = [compress(mult.mult_(prvkey)) for prvkey in prvkeys]
+    pubkeys = [compress(mult.mult_bytes(prvkey)) for prvkey in prvkeys]
 
     # the ordering is the one of the compressed serialization, which
     # sorting those same bytes is an independent way to obtain
@@ -303,7 +303,7 @@ def test_scalar_range_ends() -> None:
     msg = hashlib.sha256(b"edge").digest()
     for scalar in (1, N - 1):
         assert keys.prvkey_verify(scalar)
-        pubkey = compress(mult.mult_(scalar))
+        pubkey = compress(mult.mult_bytes(scalar))
         assert dsa.verify(msg, pubkey, dsa.sign(msg, scalar))
         assert ssa.verify(msg, pubkey[1:], ssa.sign(msg, scalar))
     # and they are each other's negation
@@ -324,7 +324,7 @@ def test_pinned_zero_leading_x() -> None:
     prvkey = bytes.fromhex(
         "ee69f731efff2c96989416d78ac759f38e5668927f2ffdb4d782a84e36ae48b6"
     )
-    uncompressed = mult.mult_(prvkey)
+    uncompressed = mult.mult_bytes(prvkey)
     assert uncompressed[1] == 0
 
     assert keys.serialize(keys.parse(uncompressed)) == compress(uncompressed)
@@ -353,7 +353,7 @@ def test_pinned_short_der_signature() -> None:
     sig = dsa.sign(msg, prvkey)
     assert len(sig) == 69
 
-    assert dsa.verify(msg, compress(mult.mult_(prvkey)), sig)
+    assert dsa.verify(msg, compress(mult.mult_bytes(prvkey)), sig)
     assert dsa.to_der(dsa.to_compact(sig)) == sig
     assert dsa.normalize(sig) == sig
     signature, recid = recovery.sign(msg, prvkey)

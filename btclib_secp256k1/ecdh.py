@@ -10,16 +10,17 @@ from __future__ import annotations
 from . import BytesLike, CData, ffi, keys, lib
 from ._scalar import scalar
 from ._secret import take
-from .context import ctx
+from .context import ctx, guarded
 
 
-def shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
+def _shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
     """Compute the ECDH shared secret from an already-parsed public key.
 
-    The inner half of `shared_secret`, for a caller who already holds the
-    other party's parsed key -- one exchanging with the same counterparty
-    more than once, or one that validated the key on receipt: see
-    `keys.parse` for what the underscore means throughout.
+    The private half of `shared_secret`, for a caller who already holds
+    the other party's parsed key -- one exchanging with the same
+    counterparty more than once, or one that validated the key on
+    receipt: see the package docstring for what the two underscores mean
+    throughout.
 
     Args:
         pubkey: the other party's already-parsed public key, as
@@ -33,14 +34,21 @@ def shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
 
     Raises:
         ValueError: if the private key is not 32 bytes, does not fit in
-            them, or is not a valid scalar.
+            them, is not a valid scalar, or if the object is not a public
+            key libsecp256k1 will read; see `context.guarded`, without
+            which an unreadable key would answer success and 32 bytes
+            that are a shared secret with nobody.
     """
     prvkey_bytes = scalar(prvkey, "private key")
 
     output = ffi.new("char[32]")
     # a NULL hash function selects secp256k1_ecdh_hash_function_sha256,
     # which writes 32 bytes to output
-    if not lib.secp256k1_ecdh(ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL):
+    with guarded():
+        computed = lib.secp256k1_ecdh(
+            ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL
+        )
+    if not computed:
         raise ValueError("invalid private key")
     return take(output)
 
@@ -58,9 +66,9 @@ def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
     being available as keys.pubkey_tweak_mul(pubkey_bytes, prvkey),
     itself constant time. A protocol needing another derivation applies
     it to that: SHA256 of it is what this function returns. Wanting both
-    of them is where the inner halves earn their keep -- one
-    `keys.parse`, then `shared_secret_` and `keys.pubkey_tweak_mul_` of
-    it -- the two outer halves parsing the same key twice.
+    of them is where the private halves earn their keep -- one
+    `keys.parse`, then `_shared_secret_` and `keys._pubkey_tweak_mul_` of
+    it -- the two public halves parsing the same key twice.
 
     Args:
         pubkey_bytes: the other party's public key, 33 or 65 bytes.
@@ -75,4 +83,4 @@ def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
             private key is not 32 bytes or does not fit in them, or if
             it is not a valid scalar.
     """
-    return shared_secret_(keys.parse(pubkey_bytes), prvkey)
+    return _shared_secret_(keys.parse(pubkey_bytes), prvkey)

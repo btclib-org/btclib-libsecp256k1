@@ -3,7 +3,30 @@
 # Distributed under the MIT software license, see the accompanying
 # LICENSE file or https://opensource.org/license/mit for the full text.
 
-"""Pure python cffi bindings to libsecp256k1: https://github.com/bitcoin-core/secp256k1."""
+"""Pure python cffi bindings to libsecp256k1: https://github.com/bitcoin-core/secp256k1.
+
+Every entry point of these bindings takes octets and answers octets. A
+libsecp256k1 object crosses the boundary only where a caller already
+holds one: `keys.parse` and `keys.serialize`, and the pairs beside them
+in `xonly`, `dsa`, `recovery` and `silentpayments`, are that bridge, and
+a MuSig2 session driven through the raw `lib` is who is on the other
+side of it.
+
+Under each of those entry points is the half of it that speaks in those
+objects, spelled `_foo_`. The leading underscore says private, because
+an object is a promise no argument check can hold a caller to: what can
+be proved of a bare pointer's contents is nothing, and what answers for
+it is libsecp256k1 itself, through the illegal callback `context.guarded`
+turns back into an exception. The trailing one says which kind of
+private, `_verify_` taking a parsed key where `_parse_der` is an
+ordinary helper. `foo` is `_foo_` with a parse in front of it, a
+serialize behind it, or both, which is the equality
+`tests/test_parsed_keys.py` holds every pair to; what the private half
+saves is what composing two public ones pays between them, a
+serialization of a point that was already in hand and a parse of what
+was just serialized -- and for a compressed key that parse is a field
+square root.
+"""
 
 import pathlib
 from importlib.metadata import version

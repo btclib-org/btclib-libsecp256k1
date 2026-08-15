@@ -214,9 +214,13 @@ and decides nothing else.
   the function applying it; the `ValueError` names what the library
   refused. No wrapper here knows the curve order
 - **nothing is normalized into validity.** An argument of the wrong size
-  raises, and is never padded: the 32 bytes of nonce entropy (`ndata`,
-  `aux_rand32`, `rnd32`) are 32 bytes or omitted, a shorter value being a
-  caller mistake rather than a small number. Taking a public key in any
+  raises, and is never padded: the 32 bytes of nonce entropy are 32 bytes
+  or omitted, a shorter value being a caller mistake rather than a small
+  number. They are `aux_rand32` in every module that takes them, BIP340's
+  own name for the pair libsecp256k1 spells `ndata` here and `rnd32`
+  there, and what omitting them means is the one thing that differs:
+  fresh randomness where BIP340 and BIP324 ask for it, and the RFC6979
+  nonce alone where ECDSA leaves it deterministic. Taking a public key in any
   of its three serializations is not a leniency of that kind and is worth
   the distinction: BIP340 verification (`ssa.verify`) and taproot
   tweaking (`xonly.tweak_add`, `xonly.tweak_add_check`) take 32, 33 or 65
@@ -266,56 +270,68 @@ library and nothing added to it.
 
 ## Parsing the key once
 
-A public key crosses this boundary as bytes, and every wrapper taking one
-begins by parsing it — for a compressed key that is a field square root,
-which is a measurable part of the verification that follows it. A caller
-that has already paid for that parse can hand it on instead of paying
-again: `keys.parse` returns the libsecp256k1 object, and every wrapper
-whose first act is to build one has an inner half, spelled with a
-trailing underscore, taking that object in place of the bytes.
+A public key crosses this boundary as octets, and every wrapper taking
+one begins by parsing it — for a compressed key that is a field square
+root, which is a measurable part of the verification that follows it. A
+caller that has already paid for that parse can hand it on instead of
+paying again: `keys.parse` returns the libsecp256k1 object, and every
+wrapper whose first act is to build one has a half that takes it in
+place of the octets.
+
+That half is spelled `_foo_`, and both underscores are load-bearing. The
+leading one says private, and means it: an object is a promise no
+argument check can hold a caller to, so what answers for a wrong one is
+libsecp256k1's own illegal-argument callback, and a caller reaching for
+these is past the boundary that proves things. The trailing one says
+which kind of private — `_verify_` takes a parsed key where `_parse_der`
+is an ordinary helper.
 
 ```python
 >>> ecdsa_sig = dsa.sign(msg, prvkey)
->>> parsed = keys.parse(pubkey)          # a valid point: proved once
->>> dsa.verify_(msg, parsed, ecdsa_sig)  # and used, rather than proved again
+>>> parsed = keys.parse(pubkey)           # a valid point: proved once
+>>> parsed_sig = dsa.parse_der(ecdsa_sig)
+>>> dsa._verify_(msg, parsed, parsed_sig)  # used, rather than proved again
 True
 
 ```
 
-The outer half is the inner half with a `parse` in front of it, and
+The public half is the private one with a `parse` in front of it, and
 nothing else about the two differs: the remaining arguments are checked
 exactly as before, a bare pointer's length being what no C return code
-can report. The two callers this is for are the one that validates a key
-and then verifies with it, and the one checking several signatures
-against a single key. `xonly.parse` is the same thing for the 32-byte
-x-only key BIP340 verifies against, and `keys.serialize` is how a parsed
-key becomes bytes again.
+can report. The callers this is for are the one that validates a key and
+then verifies with it, the one checking several signatures against a
+single key, and the one asking `is_low_s` about a signature it is about
+to verify. `xonly.parse` is the same thing for the x coordinate BIP340
+verifies against, `dsa.parse_der` and `dsa.parse_compact` for the two
+serializations of a signature, and every one of them has a `serialize`
+beside it turning the object back into octets.
 
 The other side of the boundary is spelled the same way. A wrapper that
-*produces* a key — recovering it from a signature, decoding it,
-deriving it, adding keys together — serializes what libsecp256k1 handed
-it already parsed, and its inner half answers with the object instead:
+*produces* an object — recovering a key from a signature, decoding it,
+deriving it, adding keys together, signing — serializes what
+libsecp256k1 handed it already made, and its private half answers with
+the object instead:
 
 ```python
 >>> from btclib_secp256k1 import recovery
 >>> sig, recid = recovery.sign(msg, prvkey)
->>> recovered = recovery.recover_(msg, sig, recid)  # the point, not its bytes
->>> dsa.verify_(msg, recovered, ecdsa_sig)          # used as it stands
+>>> parsed_recoverable = recovery.parse_compact(sig, recid)
+>>> recovered = recovery._recover_(msg, parsed_recoverable)  # the point
+>>> dsa._verify_(msg, recovered, parsed_sig)                 # as it stands
 True
 
 ```
 
-So the underscore means one thing in both directions: the half that
-speaks in parsed keys, where the outer half speaks in bytes. What it
+So `_foo_` means one thing in both directions: the half that speaks in
+libsecp256k1 objects, where the public half speaks in octets. What it
 buys is what composing two wrappers otherwise pays between them — a
 serialization of a point that was already in hand, and a parse of what
 was just serialized, which for the compressed form is that square root
-again. `keys.pubkey_from_prvkey_`, `keys.pubkey_combine_`,
-`keys.pubkey_sort_`, `recovery.recover_`, `ellswift.decode_` and
-`silentpayments.label_` are the producing halves; sorting keys and then
-adding them together is the composition that pays it per key, and
-`silentpayments.parse_label` is `keys.parse` for the 33 bytes of a
-label, which are a point like any other.
+again. Sorting keys and then adding them together is the composition
+that pays it per key; scanning block after block for a silent payment
+pays it per transaction, which is why `silentpayments` has a private
+half for each of its three entry points, the summary of a transaction's
+inputs included.
 
 Two entry points are there instead of two halves. `xonly.from_prvkey` is
 the x-only public key of a private key — the two halves above composed,
@@ -376,7 +392,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `silentpayments`    | `silentpayments` (BIP352)                 |
 
 `keys` provides the public key of a private key (`pubkey_from_prvkey`,
-compressed by default, of which `mult.mult_` is the uncompressed
+compressed by default, of which `mult.mult_bytes` is the uncompressed
 spelling) and the scalar and point algebra (tweaking, negation,
 combination, arbitrary point multiplication) underlying BIP32 key
 derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,

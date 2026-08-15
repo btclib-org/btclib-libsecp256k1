@@ -27,7 +27,9 @@ from btclib_secp256k1 import (
     lib,
     mult,
     recovery,
+    silentpayments,
     ssa,
+    xonly,
 )
 
 prvkey = 1
@@ -59,7 +61,7 @@ def test_sign_and_verify() -> None:
     custom_sig = dsa.sign(msg, prvkey, b"\x01" * 32)
     assert custom_sig != dsa_sig
     assert dsa.verify(msg, pubkey_bytes, custom_sig)
-    with pytest.raises(ValueError, match="ndata must be 32 bytes"):
+    with pytest.raises(ValueError, match="aux_rand32 must be 32 bytes"):
         dsa.sign(msg, prvkey, b"\x01")
 
     ssa_sig = ssa.sign(msg, prvkey)
@@ -144,7 +146,7 @@ def test_mult() -> None:
     `mult_` answers the serialized public key and `mult` the coordinates,
     so the x of the second is the x the first carries.
     """
-    pubkey_ = mult.mult_(prvkey)
+    pubkey_ = mult.mult_bytes(prvkey)
     assert pubkey_[1:33] == pubkey_bytes[1:]
     pubkey = mult.mult(prvkey)
     assert pubkey[0] == int.from_bytes(pubkey_bytes[1:], "big")
@@ -154,7 +156,7 @@ def test_invalid_inputs() -> None:
     """Every argument out of the domain is refused at the boundary.
 
     A zero private key, a message hash that is not 32 octets, an
-    ndata that is not, a signature that is not DER, and a public key
+    aux_rand32 that is not, a signature that is not DER, and a public key
     that does not parse -- each raising ValueError with the message
     naming the argument, which is what a caller catches rather than
     finding out from libsecp256k1's return code.
@@ -166,7 +168,7 @@ def test_invalid_inputs() -> None:
         dsa.sign(msg, 0)
     with pytest.raises(ValueError, match="32 bytes"):
         dsa.sign(msg[1:], prvkey)
-    with pytest.raises(ValueError, match="ndata must be 32 bytes"):
+    with pytest.raises(ValueError, match="aux_rand32 must be 32 bytes"):
         dsa.sign(msg, prvkey, b"\x01" * 33)
     with pytest.raises(ValueError, match="message hash"):
         dsa.verify(msg[1:], pubkey_bytes, dsa_sig)
@@ -184,7 +186,7 @@ def test_invalid_inputs() -> None:
         ssa.sign(msg, prvkey, b"\x01" * 33)
     with pytest.raises(ValueError, match="64 bytes"):
         ssa.verify(msg, xonly_bytes, ssa_sig[1:])
-    with pytest.raises(ValueError, match="invalid x-only public key"):
+    with pytest.raises(ValueError, match="invalid public key"):
         # 32 bytes which are not the x coordinate of a curve point
         ssa.verify(msg, b"\x00" * 32, ssa_sig)
 
@@ -221,7 +223,7 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
     that says mypy already knew.
     """
     prvkey = 7
-    pubkey_bytes = mult.mult_(prvkey)
+    pubkey_bytes = mult.mult_bytes(prvkey)
 
     with pytest.raises(TypeError, match="tag must be bytes, not str"):
         hashes.tagged_sha256("TapLeaf", b"")  # type: ignore[arg-type]
@@ -251,7 +253,7 @@ def test_a_bool_is_not_a_scalar() -> None:
     This is the one type whose acceptance could not be seen in the
     answer. `keys.prvkey_verify(False)` returned False, which is the
     correct verdict on the scalar zero and indistinguishable from the
-    correct verdict on whatever the caller meant; `mult.mult_(True)`
+    correct verdict on whatever the caller meant; `mult.mult_bytes(True)`
     returned the generator. A `float` or a `str` in the same place is a
     typo that raises, and always did.
 
@@ -276,6 +278,35 @@ def test_a_bool_is_not_a_scalar() -> None:
     sig_bytes, recid = recovery.sign(msg, 7)
     assert recid in (0, 1)
     assert recovery.recover(msg, sig_bytes, bool(recid)) == keys.pubkey_from_prvkey(7)
+
+
+def test_a_flag_that_is_not_an_int_is_refused_by_name() -> None:
+    """What a flag refuses is what is not a number at all.
+
+    A recovery id, a y parity, an ElligatorSwift party and a label index
+    are each a small number libsecp256k1 takes as a C int, and each is
+    held to one place -- so a `float` is refused by all four alike, and
+    the message names the argument. `0.0` is the value that makes the
+    check worth making: it passes an `in (0, 1)` test, python holding it
+    equal to the int, and what it would reach cffi as is a float.
+    """
+    msg = b"\x01" * 32
+    sig_bytes, _ = recovery.sign(msg, 7)
+    xonly_bytes, parity = xonly.from_pubkey(keys.pubkey_from_prvkey(7))
+    tweaked, tweaked_parity = xonly.tweak_add(xonly_bytes, 11)
+    ell = ellswift.create(7, bytes(32))
+
+    with pytest.raises(TypeError, match="recovery id must be an int, not float"):
+        recovery.recover(msg, sig_bytes, 0.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="parity must be an int, not float"):
+        xonly.tweak_add_check(tweaked, float(tweaked_parity), xonly_bytes, 11)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="party must be an int, not float"):
+        ellswift.xdh(ell, ell, 7, 0.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="label m must be an int, not float"):
+        silentpayments.label(7, 0.0)  # type: ignore[arg-type]
+
+    # and the y parity of a key is unchanged by any of it
+    assert parity in (0, 1)
 
 
 def test_a_memoryview_of_wider_items_is_not_octets() -> None:
@@ -327,7 +358,7 @@ def test_size_checks_refuse_both_sides() -> None:
     """
     msg = b"\x01" * 32
     prvkey = 7
-    pubkey_bytes = mult.mult_(prvkey)
+    pubkey_bytes = mult.mult_bytes(prvkey)
     der_bytes = dsa.sign(msg, prvkey)
     ssa_sig = ssa.sign(msg, prvkey)
     xonly_bytes = pubkey_bytes[1:33]

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import secrets
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from . import CData, ffi, lib
 
@@ -120,13 +122,13 @@ def check() -> None:
     session is, and it reports what was last recorded: call it right
     after the call whose return value you are explaining.
 
-    The bindings check their arguments before calling, so a violated
-    precondition is unreachable through all but two of them:
-    `keys.serialize` takes a libsecp256k1 public key and
-    `xonly.from_keypair` a libsecp256k1 keypair, rather than bytes, and
-    there is nothing to check about either before handing it over. Both
-    call this themselves, which is what keeps their own failure from
-    being left on the thread for the next caller to find.
+    The wrappers do not need it where they hand libsecp256k1 bytes,
+    having proved those bytes first; where they hand it an object the
+    caller built, they cannot prove anything and run the call inside
+    `guarded` below, which is what calls this. So a violated
+    precondition raised through a wrapper is this message, and no
+    wrapper leaves one on the thread for the next caller to be blamed
+    for.
 
     What was recorded is cleared, so a second call reports nothing and
     a later one cannot inherit this call's message.
@@ -142,3 +144,51 @@ def check() -> None:
         raise RuntimeError(f"libsecp256k1 internal error: {error}")
     if illegal is not None:
         raise ValueError(f"libsecp256k1 illegal argument: {illegal}")
+
+
+@contextmanager
+def guarded() -> Iterator[None]:
+    """Run a libsecp256k1 call whose argument could not be checked first.
+
+    Every argument these bindings pass as bytes is proved before the
+    call, a bare pointer's length being what no C return code can
+    report. An argument that is a libsecp256k1 object is the case that
+    cannot be: `keys.serialize` takes a public key, `xonly.from_keypair`
+    a keypair, and every private half takes what a `parse` returned, and
+    of none of them is there anything to ask before handing it over. So
+    what answers for those is libsecp256k1 itself, through the illegal
+    callback, and this is how what it says reaches the caller.
+
+    Both halves are here because either alone is a bug. The clearing is
+    what makes the message this call's own: recorded and left by an
+    earlier call, one would be raised out of this one, which is the
+    misattribution `check` exists to prevent. The `check` is what makes
+    the failure speak: `secp256k1_ec_pubkey_negate` of a pointer to
+    nothing returns 0 like any other refusal, and the reason it returns
+    0 is on the thread and nowhere else.
+
+    And it is called whatever the call answered, not only on a failure,
+    because a violated precondition does not always show in the return
+    value: `secp256k1_ecdsa_verify` of an unreadable key answers False,
+    which is a verdict a caller would believe, and
+    `secp256k1_ecdh` of one answers success and 32 bytes that are a
+    shared secret with nobody.
+
+    Yields:
+        None: nothing, the block being what this is for. It should hold
+        that call and nothing else -- an exception raised inside it
+        passes through with the thread left as libsecp256k1 set it.
+
+    Raises:
+        ValueError: if libsecp256k1 reported a violated precondition.
+        RuntimeError: if it reported an internal error.
+
+    Example:
+        >>> from btclib_secp256k1 import ffi, keys
+        >>> keys.serialize(ffi.NULL)
+        Traceback (most recent call last):
+        ValueError: libsecp256k1 illegal argument: pubkey != NULL
+    """
+    _reported.illegal = _reported.error = None
+    yield
+    check()

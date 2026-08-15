@@ -10,19 +10,17 @@ https://github.com/bitcoin/bips/blob/master/bip-0324.mediawiki
 
 from __future__ import annotations
 
-import secrets
-
 from . import BytesLike, CData, ffi, lib
-from ._scalar import octets, scalar
+from ._scalar import entropy, in_range, octets, scalar
 from ._secret import take
-from .context import ctx
+from .context import ctx, guarded
 from .keys import parse, serialize
 
 
 def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> bytes:
     """Create the 64-byte ElligatorSwift encoding of a private key's public key.
 
-    This is safer than encode(mult_(prvkey)), as the private key itself
+    This is safer than encode(mult_bytes(prvkey)), as the private key itself
     is used as entropy for the encoding.
 
     Args:
@@ -40,52 +38,50 @@ def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> byte
     """
     prvkey_bytes = scalar(prvkey, "private key")
 
-    # entropy is not a serialization: a shorter value is a caller mistake
-    # rather than a small number, and is not padded into a valid argument
-    aux_rand32 = (
-        secrets.token_bytes(32)
-        if aux_rand32 is None
-        else octets(aux_rand32, "aux_rand32", 32)
-    )
-
     ell_bytes = ffi.new("char[64]")
-    if not lib.secp256k1_ellswift_create(ctx, ell_bytes, prvkey_bytes, aux_rand32):
-        raise ValueError("invalid private key")
+    if not lib.secp256k1_ellswift_create(
+        ctx, ell_bytes, prvkey_bytes, entropy(aux_rand32)
+    ):
+        raise ValueError("invalid private key: not in [1, n-1]")
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
-def encode_(pubkey: CData, rnd32: BytesLike | None = None) -> bytes:
+def _encode_(pubkey: CData, aux_rand32: BytesLike | None = None) -> bytes:
     """Encode an already-parsed public key as 64 ElligatorSwift bytes.
 
-    The inner half of `encode`, for a caller who already holds the parsed
-    point -- one encoding a key it has just decoded, or one encoding the
-    same key more than once, which BIP324 does with fresh randomness at
-    every connection: see `keys.parse` for what the underscore means
-    throughout.
+    The private half of `encode`, for a caller who already holds the
+    parsed point -- one encoding a key it has just decoded, or one
+    encoding the same key more than once, which BIP324 does with fresh
+    randomness at every connection: see the package docstring for what
+    the two underscores mean throughout.
 
     Args:
         pubkey: the already-parsed public key, as `keys.parse` returns.
-        rnd32: the 32 bytes deciding which of the encodings of that key
-            is produced, or None for fresh randomness.
+        aux_rand32: the 32 bytes deciding which of the encodings of that
+            key is produced, or None for fresh randomness.
 
     Returns:
         The 64-byte ElligatorSwift encoding.
 
     Raises:
-        ValueError: if rnd32 is given and is not 32 bytes.
+        ValueError: if aux_rand32 is given and is not 32 bytes, or if the
+            object is not a public key libsecp256k1 will read; see
+            `context.guarded`.
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
-    # 32 bytes of entropy, or nothing: see the comment in create
-    rnd32 = secrets.token_bytes(32) if rnd32 is None else octets(rnd32, "rnd32", 32)
-
     ell_bytes = ffi.new("char[64]")
-    if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
+    aux_rand32_bytes = entropy(aux_rand32)
+    with guarded():
+        encoded = lib.secp256k1_ellswift_encode(
+            ctx, ell_bytes, pubkey, aux_rand32_bytes
+        )
+    if not encoded:
         raise RuntimeError("ElligatorSwift encoding failed")
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
-def encode(pubkey_bytes: BytesLike, rnd32: BytesLike | None = None) -> bytes:
+def encode(pubkey_bytes: BytesLike, aux_rand32: BytesLike | None = None) -> bytes:
     """Encode a public key as 64 ElligatorSwift bytes.
 
     The randomness must not be a deterministic function of the public
@@ -93,29 +89,29 @@ def encode(pubkey_bytes: BytesLike, rnd32: BytesLike | None = None) -> bytes:
 
     Args:
         pubkey_bytes: the public key to encode, 33 or 65 bytes.
-        rnd32: the 32 bytes deciding which of the encodings of that key
-            is produced, or None for fresh randomness.
+        aux_rand32: the 32 bytes deciding which of the encodings of that
+            key is produced, or None for fresh randomness.
 
     Returns:
         The 64-byte ElligatorSwift encoding, indistinguishable from
         uniform bytes.
 
     Raises:
-        ValueError: if the public key is not a valid point, or if rnd32
-            is given and is not 32 bytes.
+        ValueError: if the public key is not a valid point, or if
+            aux_rand32 is given and is not 32 bytes.
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
-    return encode_(parse(pubkey_bytes), rnd32)
+    return _encode_(parse(pubkey_bytes), aux_rand32)
 
 
-def decode_(ell_bytes: BytesLike) -> CData:
+def _decode_(ell_bytes: BytesLike) -> CData:
     """Decode a 64-byte ElligatorSwift public key into a parsed key.
 
-    The inner half of `decode`, and the one that answers with the point
-    rather than with its serialization: see `keys.parse` for what the
-    underscore means throughout. A decoded key that is about to be
-    tweaked, verified against or encoded again is what this is for --
+    The private half of `decode`, and the one that answers with the point
+    rather than with its serialization: see the package docstring for
+    what the two underscores mean throughout. A decoded key that is about
+    to be tweaked, verified against or encoded again is what this is for --
     libsecp256k1 hands the point over already lifted, and serializing it
     only to lift it back is a field square root nothing asked for.
 
@@ -157,7 +153,7 @@ def decode(ell_bytes: BytesLike, compressed: bool = True) -> bytes:
         RuntimeError: if libsecp256k1 fails to decode or serialize,
             which no 64 bytes can make it do.
     """
-    return serialize(decode_(ell_bytes), compressed)
+    return serialize(_decode_(ell_bytes), compressed)
 
 
 def xdh(
@@ -182,14 +178,15 @@ def xdh(
         so BIP324's initiator goes first.
 
     Raises:
+        TypeError: if the party is not an int.
         ValueError: if either encoding is not 64 bytes, if party is not
             0 or 1, or if the private key is not 32 bytes, does not fit
             in them, or is not a valid scalar.
     """
     ell_a_bytes = octets(ell_a_bytes, "ElligatorSwift public key of A", 64)
     ell_b_bytes = octets(ell_b_bytes, "ElligatorSwift public key of B", 64)
-    if party not in (0, 1):
-        raise ValueError("the party must be 0 (A) or 1 (B)")
+    # 0 is A and 1 is B, which is what the argument's own name says
+    party = in_range(party, "party", 1)
 
     prvkey_bytes = scalar(prvkey, "private key")
 

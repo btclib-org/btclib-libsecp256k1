@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
-from . import BytesLike
+import secrets
+
+from . import BytesLike, CData, ffi
 
 
 def octets(value: BytesLike, name: str, size: int | None = None) -> bytes:
@@ -129,3 +131,95 @@ def scalar(num: BytesLike | int, name: str) -> bytes:
     if not isinstance(num, (bytes, bytearray, memoryview)):
         raise TypeError(f"the {name} must be bytes or an int, not {type(num).__name__}")
     return octets(num, name, 32)
+
+
+def entropy(aux_rand32: BytesLike | None, name: str = "aux_rand32") -> bytes:
+    """Normalize 32 bytes of entropy, generating them where none was given.
+
+    Entropy is not a serialization: a shorter value is a caller mistake
+    rather than a small number, and padding it here would turn one into a
+    valid argument. Omitting it altogether is not that mistake, and is
+    what every caller with no entropy of its own should do -- BIP340
+    recommends fresh randomness at every signature, and the
+    ElligatorSwift encoding requires randomness that is not a function of
+    the key it encodes.
+
+    Args:
+        aux_rand32: the 32 bytes given by the caller, or None.
+        name: what the entropy is, as the exception should call it.
+
+    Returns:
+        Those 32 bytes, or 32 freshly generated ones.
+
+    Raises:
+        TypeError: if a value is given and is not bytes.
+        ValueError: if a value is given and is not 32 bytes.
+    """
+    if aux_rand32 is None:
+        return secrets.token_bytes(32)
+    return octets(aux_rand32, name, 32)
+
+
+def optional_entropy(
+    aux_rand32: BytesLike | None, name: str = "aux_rand32"
+) -> bytes | CData:
+    """Normalize 32 bytes of entropy, or the NULL that asks for none.
+
+    What `entropy` is where omitting the argument means fresh randomness,
+    this is where it means none at all: the RFC6979 nonce is a function
+    of the message and the key, and the extra entropy libsecp256k1 mixes
+    into it is what a NULL pointer declines. Generating it here instead
+    would take determinism away from a caller who asked for it by saying
+    nothing.
+
+    Args:
+        aux_rand32: the 32 bytes given by the caller, or None.
+        name: what the entropy is, as the exception should call it.
+
+    Returns:
+        Those 32 bytes, or NULL.
+
+    Raises:
+        TypeError: if a value is given and is not bytes.
+        ValueError: if a value is given and is not 32 bytes.
+    """
+    if aux_rand32 is None:
+        return ffi.NULL
+    return octets(aux_rand32, name, 32)
+
+
+def in_range(value: int, name: str, upper: int) -> int:
+    """Normalize an int the caller chose from a small closed set.
+
+    A recovery id, a y parity, an ElligatorSwift party, a label index:
+    each is a small number libsecp256k1 takes as a C int, and each is out
+    of domain in the same way. Refused here rather than at the boundary,
+    where cffi answers an out of range value with OverflowError and a
+    float with a TypeError about a ctype, neither of which names the
+    argument.
+
+    A bool passes, where `scalar` refuses one, and the two are the same
+    rule rather than opposite ones: there a `True` would be the scalar 1
+    and the answer to a question nobody asked, indistinguishable from
+    the answer to the one that was meant, while here the value *is* the
+    number, and `bool(recid)` of a recovery id that is 0 or 1 says
+    exactly what it says. What is refused is what is not a number at
+    all: `0.0` passes an `in (0, 1)` test and reaches cffi as a float.
+
+    Args:
+        value: the number, as the caller passed it.
+        name: what the number is, as the exception should call it.
+        upper: the largest value the set holds, the smallest being zero.
+
+    Returns:
+        The value itself, that being what it already is.
+
+    Raises:
+        TypeError: if it is not an int.
+        ValueError: if it is outside [0, upper].
+    """
+    if not isinstance(value, int):
+        raise TypeError(f"the {name} must be an int, not {type(value).__name__}")
+    if not 0 <= value <= upper:
+        raise ValueError(f"the {name} must be in [0, {upper}]")
+    return value

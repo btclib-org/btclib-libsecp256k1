@@ -11,13 +11,12 @@ https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 
 from __future__ import annotations
 
-import secrets
 from types import TracebackType
 
 from . import BytesLike, CData, ffi, lib, xonly
-from ._scalar import octets, scalar
-from ._secret import wipe
-from .context import ctx
+from ._scalar import entropy, octets
+from ._secret import keypair, wipe
+from .context import ctx, guarded
 
 # SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
 # survive the preprocessing of the headers into cffi definitions
@@ -57,18 +56,18 @@ def sign(
     Example:
         >>> from btclib_secp256k1 import ssa, xonly, mult
         >>> msg, prvkey = bytes(32), 1
-        >>> pubkey, _ = xonly.from_pubkey(mult.mult_(prvkey))
+        >>> pubkey, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
         >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
         True
     """
-    keypair = _keypair(prvkey)
+    keypair_obj = keypair(prvkey)
     try:
-        return _sign32(msg_bytes, keypair, aux_rand32)
+        return _sign32(msg_bytes, keypair_obj, aux_rand32)
     finally:
         # a keypair carries the private key: overwrite it whether the
         # signature was made, refused, or never attempted, the argument
         # checks inside being able to raise between the two
-        wipe(keypair)
+        wipe(keypair_obj)
 
 
 def sign_custom(
@@ -100,12 +99,12 @@ def sign_custom(
         RuntimeError: if libsecp256k1 fails to sign, which no input can
             make it do.
     """
-    keypair = _keypair(prvkey)
+    keypair_obj = keypair(prvkey)
     try:
-        return _sign_custom(msg_bytes, keypair, aux_rand32)
+        return _sign_custom(msg_bytes, keypair_obj, aux_rand32)
     finally:
         # the keypair carries the private key: see sign
-        wipe(keypair)
+        wipe(keypair_obj)
 
 
 class Signer:
@@ -151,7 +150,7 @@ class Signer:
     Example:
         >>> from btclib_secp256k1 import ssa, xonly, mult
         >>> msg, prvkey = bytes(32), 1
-        >>> pubkey, _ = xonly.from_pubkey(mult.mult_(prvkey))
+        >>> pubkey, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
         >>> with ssa.Signer(prvkey) as signer:
         ...     sig = signer.sign(msg, bytes(32))
         >>> sig == ssa.sign(msg, prvkey, bytes(32))
@@ -165,7 +164,7 @@ class Signer:
     def __init__(self, prvkey: BytesLike | int) -> None:  # noqa: D107
         # None once wiped, which is what tells the two states apart: a
         # wiped keypair is 96 zero octets and looks like any other
-        self._keypair: CData | None = _keypair(prvkey)
+        self._keypair: CData | None = keypair(prvkey)
 
     def sign(self, msg_bytes: BytesLike, aux_rand32: BytesLike | None = None) -> bytes:
         """Create a Schnorr signature of a 32-byte message hash.
@@ -297,16 +296,17 @@ class Signer:
         return self._keypair
 
 
-def verify_(
+def _verify_(
     msg_bytes: BytesLike, xonly_pubkey: CData, signature_bytes: BytesLike
 ) -> bool:
     """Verify a Schnorr signature against an already-parsed x-only key.
 
-    The inner half of `verify`, for a caller who already holds the parsed
-    key -- one that proved 32 bytes to be the x coordinate of a point,
+    The private half of `verify`, for a caller who already holds the
+    parsed key -- one that proved octets the x coordinate of a point,
     which is what `xonly.parse` answers and what this verification would
     ask again, or one checking several signatures against the same key:
-    see `keys.parse` for what the underscore means throughout.
+    see the package docstring for what the two underscores mean
+    throughout.
 
     Args:
         msg_bytes: the message, of any length.
@@ -318,18 +318,19 @@ def verify_(
         True if the signature is valid for that key and message.
 
     Raises:
-        ValueError: if the signature is not 64 bytes. A well-formed
-            signature that simply does not verify is False, not an
-            exception.
+        ValueError: if the signature is not 64 bytes, or if the object is
+            not an x-only public key libsecp256k1 will read; see
+            `context.guarded`, without which an unreadable key would
+            answer False, which is a verdict a caller would believe.
     """
     msg_bytes = octets(msg_bytes, "message")
     signature_bytes = octets(signature_bytes, "signature", 64)
 
-    return bool(
-        lib.secp256k1_schnorrsig_verify(
+    with guarded():
+        verified = lib.secp256k1_schnorrsig_verify(
             ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
         )
-    )
+    return bool(verified)
 
 
 def verify(
@@ -359,11 +360,11 @@ def verify(
             A well-formed signature that simply does not verify is False,
             not an exception.
     """
-    return verify_(msg_bytes, xonly.parse(pubkey_bytes), signature_bytes)
+    return _verify_(msg_bytes, xonly.parse(pubkey_bytes), signature_bytes)
 
 
 def _sign32(
-    msg_bytes: BytesLike, keypair: CData, aux_rand32: BytesLike | None
+    msg_bytes: BytesLike, keypair_obj: CData, aux_rand32: BytesLike | None
 ) -> bytes:
     """Sign a 32-byte message hash with a keypair somebody else owns.
 
@@ -375,7 +376,7 @@ def _sign32(
 
     Args:
         msg_bytes: the 32-byte message hash.
-        keypair: the libsecp256k1 keypair to sign with, wiped by
+        keypair_obj: the libsecp256k1 keypair to sign with, wiped by
             whoever built it and not here.
         aux_rand32: the 32 bytes of auxiliary randomness, or None for
             fresh randomness.
@@ -393,14 +394,14 @@ def _sign32(
 
     sig = ffi.new("char[64]")
     if not lib.secp256k1_schnorrsig_sign32(
-        ctx, sig, msg_bytes, keypair, _aux_rand32(aux_rand32)
+        ctx, sig, msg_bytes, keypair_obj, entropy(aux_rand32)
     ):
         raise RuntimeError("schnorr signing failed")
     return ffi.unpack(sig, ffi.sizeof(sig))
 
 
 def _sign_custom(
-    msg_bytes: BytesLike, keypair: CData, aux_rand32: BytesLike | None
+    msg_bytes: BytesLike, keypair_obj: CData, aux_rand32: BytesLike | None
 ) -> bytes:
     """Sign a message of any length with a keypair somebody else owns.
 
@@ -408,7 +409,7 @@ def _sign_custom(
 
     Args:
         msg_bytes: the message, of any length.
-        keypair: the libsecp256k1 keypair to sign with, wiped by
+        keypair_obj: the libsecp256k1 keypair to sign with, wiped by
             whoever built it and not here.
         aux_rand32: the 32 bytes of auxiliary randomness, or None for
             fresh randomness.
@@ -424,7 +425,7 @@ def _sign_custom(
     msg_bytes = octets(msg_bytes, "message")
 
     sig = ffi.new("char[64]")
-    ndata = ffi.new("char[32]", _aux_rand32(aux_rand32))
+    ndata = ffi.new("char[32]", entropy(aux_rand32))
     extraparams = ffi.new("secp256k1_schnorrsig_extraparams *")
     extraparams.magic = EXTRAPARAMS_MAGIC
     extraparams.noncefp = ffi.NULL
@@ -433,49 +434,7 @@ def _sign_custom(
     extraparams.ndata = ndata
 
     if not lib.secp256k1_schnorrsig_sign_custom(
-        ctx, sig, msg_bytes, len(msg_bytes), keypair, extraparams
+        ctx, sig, msg_bytes, len(msg_bytes), keypair_obj, extraparams
     ):
         raise RuntimeError("schnorr signing failed")
     return ffi.unpack(sig, ffi.sizeof(sig))
-
-
-def _keypair(prvkey: BytesLike | int) -> CData:
-    """Create a keypair from a private key.
-
-    Args:
-        prvkey: the private key, 32 bytes or an int below 2**256.
-
-    Returns:
-        The libsecp256k1 keypair object.
-
-    Raises:
-        ValueError: if the key is not 32 bytes, does not fit in them, or
-            is not in [1, n-1].
-    """
-    keypair = ffi.new("secp256k1_keypair *")
-    if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
-        raise ValueError("invalid private key")
-    return keypair
-
-
-def _aux_rand32(aux_rand32: BytesLike | None) -> bytes:
-    """Check the auxiliary randomness of BIP340 signing.
-
-    It is freshly generated when not provided, BIP340 recommending fresh
-    randomness at every signature; given, it is exactly 32 bytes, being
-    the entropy of a nonce and not a serialization: a shorter value is a
-    caller mistake rather than a small number, and padding it here would
-    turn one into a valid argument.
-
-    Args:
-        aux_rand32: the 32 bytes given by the caller, or None.
-
-    Returns:
-        Those 32 bytes, or 32 freshly generated ones.
-
-    Raises:
-        ValueError: if a value is given and is not 32 bytes.
-    """
-    if aux_rand32 is None:
-        return secrets.token_bytes(32)
-    return octets(aux_rand32, "aux_rand32", 32)
