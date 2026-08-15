@@ -17,10 +17,14 @@ Every operation exercised here is deterministic, ECDSA by RFC6979 and
 BIP340 by a fixed aux_rand32, so a result that differs between threads
 is a shared buffer, not a legitimate difference.
 
-`ssa.Signer` is the one thing that does hold a buffer across calls, and
-the second test is the half of the reasoning that does not follow from
-the paragraph above: what makes a shared signer safe is that
-libsecp256k1 takes a keypair const.
+`ssa.Signer` and `keys.PubkeyTweakChain` are what hold a buffer across
+calls, and the second test is the half of the reasoning that does not
+follow from the paragraph above: what makes a shared signer safe is that
+libsecp256k1 takes a keypair const. A chain is not shared and is not
+tested as if it were: `secp256k1_ec_pubkey_tweak_add` takes its key as
+in and out, so every `tweak_add` writes the point the chain holds, and
+one chain belongs to one thread. What is tested of it here is that a
+chain per thread answers what a chain alone answers.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -72,8 +76,8 @@ def test_concurrent_round_trips() -> None:
 def test_one_signer_signs_from_every_thread() -> None:
     """Eight threads share one keypair and reach the one signature.
 
-    The keypair a signer holds is the one buffer these bindings keep
-    across calls, so it is the one place the module docstring's reasoning
+    The keypair a signer holds is one of the two buffers these bindings
+    keep across calls, so it is a place the module docstring's reasoning
     does not reach: what makes this safe is that libsecp256k1 takes a
     keypair const, and signing does not write to it. What is not safe is
     wiping it while a thread is inside `sign`, which is why the wipe here
@@ -90,3 +94,32 @@ def test_one_signer_signs_from_every_thread() -> None:
         list(pool.map(sign_through, range(WORKERS * ROUNDS)))
 
     signer.wipe()
+
+
+def test_a_chain_per_thread_walks_the_same_path() -> None:
+    """Eight threads each build a chain, and all eight reach one path.
+
+    The other buffer held across calls, and the one that is written by
+    the calls that use it: `secp256k1_ec_pubkey_tweak_add` takes its key
+    as in and out, so a chain shared between threads would be two writers
+    of one point rather than two walkers of one path. A chain per thread
+    is what a caller builds, and this is that: what each thread pays for
+    it is the parse the chain then saves at every step after the first.
+    """
+    pubkey_bytes = mult.mult_bytes(prvkey)
+    tweaks = (tweak, prvkey, tweak)
+    expected = [
+        keys.pubkey_tweak_add(pubkey_bytes, tweaks[0]),
+        keys.pubkey_tweak_add(
+            keys.pubkey_tweak_add(pubkey_bytes, tweaks[0]), tweaks[1]
+        ),
+    ]
+    expected.append(keys.pubkey_tweak_add(expected[-1], tweaks[2]))
+
+    def walk(_: int) -> None:
+        chain = keys.PubkeyTweakChain(pubkey_bytes)
+        assert [chain.tweak_add(each) for each in tweaks] == expected
+        assert chain.pubkey() == expected[-1]
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        list(pool.map(walk, range(WORKERS * ROUNDS)))

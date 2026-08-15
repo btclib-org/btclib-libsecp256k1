@@ -408,6 +408,61 @@ release-notes length in the first place, and are still in
   which `tests/test_core.py` asserts along with the round trip through
   `to_der` and `to_compact` and the `normalize` flag on either form.
 
+### Documentation
+
+- **`ssa.Signer` and `keys.PubkeyTweakChain` are presented as what they
+  are**, which is the one thing the README had no name for: an outpost
+  past the boundary. The private halves hand an object from one call to
+  the next; these two hold one across many, for the caller that crosses
+  again and again with the same key — a signer signing message after
+  message, a wallet walking a BIP32 path one index at a time. Each
+  crossing used to pay the conversion at its far end, a point
+  multiplication for the keypair and a field square root for the
+  compressed key, on a key it had already converted.
+
+  The chain was in no section at all before this, so it now has one, with
+  the walk it is for: five steps are 65.61 microseconds through
+  `pubkey_tweak_add` and 56.58 through a chain, which is the 2.39 of a
+  compressed parse saved four times. The signer's own numbers move from
+  the section that described the trade to the one that describes the
+  saving: 15.82 against 8.27, of which the keypair is 7.55
+- **and the two answer differently under threads, which nothing said.**
+  `ssa.Signer` is safe to share, libsecp256k1 taking a keypair const, and
+  the README and `tests/test_concurrency.py` both said so — while also
+  saying a signer was "the one thing here holding a buffer across calls",
+  which `PubkeyTweakChain` had made untrue. A chain is the exception and
+  is one by construction: `secp256k1_ec_pubkey_tweak_add` takes its key
+  as in and out, so every `tweak_add` writes the point the chain holds,
+  and two threads sharing one are two writers of a point rather than two
+  walkers of a path. One chain belongs to one thread, and
+  `test_a_chain_per_thread_walks_the_same_path` is that usage held to the
+  answer of a chain alone
+- **why there is no `dsa.Signer` is now the reason rather than the
+  mechanism.** The README said `secp256k1_ecdsa_sign` takes the private
+  key itself, which is true and is the shape of the C function, not the
+  argument. The argument is the equation: BIP340 challenges with
+  `e = H(R || P || m)`, so the public key is an input to every signature
+  and has to be derived — a point multiplication, kept in the keypair
+  with the parity that decides between `d` and `n - d`. ECDSA signs
+  `s = k^-1(z + r*d)`, in which `P` does not appear, so there is no
+  object derived from the key to hold across calls.
+
+  Measured, because the question is "what would it save": on an Apple M5,
+  macOS 26.6, arm64, CPython 3.14.6, minimum of 7 rounds of 20 000 calls,
+  microseconds per call, `dsa.sign` is 12.93 and the C call inside it is
+  11.43. Of the 1.51 that leaves, `serialize_der` is 0.757, `octets` of
+  the message hash 0.081 and the `ffi.new` of the signature 0.078 — all
+  of them per signature — and `scalar` of the private key is 0.117, which
+  is the whole of what is per key and so the whole of what a signer could
+  hoist. `ssa.Signer` hoists 7.55 of 15.82 for comparison, and what
+  either costs is the same: a second copy of the secret, alive as long as
+  the signer. Worth it for half a signature, not for a hundredth of one.
+
+  The README also now says what *does* cost in `dsa.sign`, and that it is
+  the entry above rather than a signer that spares it: the DER
+  serialization is 0.757 of those microseconds, and `compact=True`
+  answers the 64 octets without writing it
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**
