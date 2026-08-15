@@ -372,8 +372,26 @@ any other, and
 [SECURITY.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/SECURITY.md)
 records why that copy cannot be taken back.
 
-ECDSA has no counterpart and needs none: `secp256k1_ecdsa_sign` takes the
-private key itself, so `dsa.sign` has no object to build once.
+ECDSA has no counterpart, and the reason is in the equation rather than
+in the C signature. BIP340 challenges with `e = H(R ‖ P ‖ m)`, so the
+*public* key is an input to every signature: it has to be derived, which
+is a point multiplication, and the keypair is where it is kept — with
+the parity that decides whether the signature is made with `d` or with
+`n - d`. ECDSA signs `s = k⁻¹(z + r·d)`, and `P` appears nowhere in it.
+There is no object derived from the key, and so nothing to hold across
+calls.
+
+What a `dsa.Signer` could save is the argument check `scalar` makes of
+the private key: 0.117 microseconds of the 12.93 a signature costs, where
+`ssa.Signer` saves the 7.55 of 15.82. What it would cost is the lifetime
+the paragraph above describes, a second copy of the secret held for as
+long as the signer is. That trade is worth making for half a signature
+and not for a hundredth of one.
+
+What does cost in `dsa.sign` is the DER serialization, 0.757
+microseconds, and a caller who wanted the other form never has to pay it:
+`compact=True` answers the 64 octets of `r ‖ s` directly, where reaching
+them through `to_compact` writes the DER and parses it straight back.
 
 ## Wrapped modules
 

@@ -408,6 +408,34 @@ release-notes length in the first place, and are still in
   which `tests/test_core.py` asserts along with the round trip through
   `to_der` and `to_compact` and the `normalize` flag on either form.
 
+### Documentation
+
+- **why there is no `dsa.Signer` is now the reason rather than the
+  mechanism.** The README said `secp256k1_ecdsa_sign` takes the private
+  key itself, which is true and is the shape of the C function, not the
+  argument. The argument is the equation: BIP340 challenges with
+  `e = H(R || P || m)`, so the public key is an input to every signature
+  and has to be derived — a point multiplication, kept in the keypair
+  with the parity that decides between `d` and `n - d`. ECDSA signs
+  `s = k^-1(z + r*d)`, in which `P` does not appear, so there is no
+  object derived from the key to hold across calls.
+
+  Measured, because the question is "what would it save": on an Apple M5,
+  macOS 26.6, arm64, CPython 3.14.6, minimum of 7 rounds of 20 000 calls,
+  microseconds per call, `dsa.sign` is 12.93 and the C call inside it is
+  11.43. Of the 1.51 that leaves, `serialize_der` is 0.757, `octets` of
+  the message hash 0.081 and the `ffi.new` of the signature 0.078 — all
+  of them per signature — and `scalar` of the private key is 0.117, which
+  is the whole of what is per key and so the whole of what a signer could
+  hoist. `ssa.Signer` hoists 7.55 of 15.82 for comparison, and what
+  either costs is the same: a second copy of the secret, alive as long as
+  the signer. Worth it for half a signature, not for a hundredth of one.
+
+  The README also now says what *does* cost in `dsa.sign`, and that it is
+  the entry above rather than a signer that spares it: the DER
+  serialization is 0.757 of those microseconds, and `compact=True`
+  answers the 64 octets without writing it
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**
