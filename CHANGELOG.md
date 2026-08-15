@@ -348,6 +348,21 @@ release-notes length in the first place, and are still in
   it refuses a `float`, which `recid not in (0, 1, 2, 3)` accepted as
   `0.0`. `_cdata.array` is the borrowed-pointer array `keys` built inline
   and `silentpayments` had a helper for
+- **`keys.pubkey_verify` and `keys.parse` are one parse now** (#164,
+  landed while this was open). Both are `secp256k1_ec_pubkey_parse` and
+  they differ in what they do with it: `parse` keeps the object and
+  raises when there is none, `pubkey_verify` keeps nothing and answers
+  the verdict. `_parsed` is that call, answering the key or None, and the
+  two are a line of policy each. It costs `parse` a python call, measured
+  on an Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 7 rounds
+  of 300 000 calls: 0.269 microseconds against 0.256 on the uncompressed
+  serialization, 2.326 against 2.310 on the compressed one, where the
+  field square root is what is being paid for. The docstrings quoting
+  those two numbers are re-measured with it. The other spelling was
+  measured too — `pubkey_verify` catching `parse`'s own `ValueError`
+  leaves `parse` untouched and costs 0.15 on a refusal — and it was not
+  taken: an exception is what this package answers a caller with, not
+  how it decides something it already knows
 - **the entropy argument is `aux_rand32` in all five**, BIP340's name for
   what libsecp256k1 spells `ndata` in one place and `rnd32` in another.
   What omitting it means still differs, and the difference is what the

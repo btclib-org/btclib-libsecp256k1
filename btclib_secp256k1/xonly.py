@@ -23,9 +23,9 @@ it because a caller converting a key it holds may want to know which of
 the two forms it was handed, not because the two are different keys.
 
 Which serialization to hand in is a question of cost and not of meaning:
-`keys.parse` reads the uncompressed form for 0.256 us, both coordinates
+`keys.parse` reads the uncompressed form for 0.269 us, both coordinates
 being there, where the compressed form and the 32-byte one are a field
-square root at 2.343.
+square root at 2.326.
 """
 
 from __future__ import annotations
@@ -381,8 +381,8 @@ def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
     Every entry point of this module that takes a public key reaches it,
     which is what makes them all take any of the three serializations.
     Which one costs what: the 32-byte form is `secp256k1_xonly_pubkey_parse`,
-    a field square root at 2.343 us, and so is the compressed form; the
-    uncompressed form is 0.256, both coordinates being there to read, and
+    a field square root at 2.326 us, and so is the compressed form; the
+    uncompressed form is 0.269, both coordinates being there to read, and
     the x-only conversion that follows it reads the y rather than lifting
     one.
 
