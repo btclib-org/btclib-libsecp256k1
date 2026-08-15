@@ -216,13 +216,17 @@ and decides nothing else.
 - **nothing is normalized into validity.** An argument of the wrong size
   raises, and is never padded: the 32 bytes of nonce entropy (`ndata`,
   `aux_rand32`, `rnd32`) are 32 bytes or omitted, a shorter value being a
-  caller mistake rather than a small number. BIP340 verification
-  (`ssa.verify`) and taproot tweaking (`xonly.tweak_add`,
-  `xonly.tweak_add_check`) take the 32-byte x-only key and only it: a
-  full public key with odd y would be verified or tweaked as a point the
-  caller did not pass, so `xonly.from_pubkey` is where a y coordinate
-  gets dropped, in the caller's own code. A leniency is a guess at what
-  the caller meant, and that decision is theirs to make.
+  caller mistake rather than a small number. Taking a public key in any
+  of its three serializations is not a leniency of that kind and is worth
+  the distinction: BIP340 verification (`ssa.verify`) and taproot
+  tweaking (`xonly.tweak_add`, `xonly.tweak_add_check`) take 32, 33 or 65
+  octets because `02 || x`, `03 || x` and `04 || x || y` are one key —
+  `lift_x` is the even-y point whatever form the x arrived in, and a
+  signer whose point has odd y signs with `n - d` for that reason. The y
+  is not consulted rather than guessed at, and `xonly.from_pubkey`
+  answers which form was handed in for a caller that wants to know. A
+  leniency is a guess at what the caller meant, and that decision is
+  theirs to make.
   `dsa.verify(..., normalize=True)` is that decision made, rather than an
   exception to it: ECDSA signatures are malleable, which of the two forms
   one carries was the signer's choice, and a caller checking signatures

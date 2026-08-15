@@ -188,23 +188,33 @@ release-notes length in the first place, and are still in
   the root once and leaves every later call at the price of reading it.
   Measured as the entries above, median of seven alternating rounds of
   20 000 calls, `mult.mult_` control within 0.04.
-- **`xonly.tweak_add_from_pubkey` is the outer half `tweak_add_` was
-  merged without.** The rule stated right above — the outer half is the
-  inner one with a `parse` in front of it — is what says it was missing:
-  `tweak_add` is not it, taking the 32-byte x-only form and lifting it.
-  From the uncompressed form the whole call is **4.11 us against 5.92**,
-  the x-only conversion reading the y it is given where 32 octets are a
-  square root. The discard is in the name and not in an argument check,
-  which is this module's rule: `ssa.verify` refuses a full public key for
-  the same reason, and there is no BIP340 spelling of this one — BIP341's
-  internal key is x-only by definition, a BIP340 verification against the
-  wrong point is not.
+- **Every entry point taking a public key takes any of its three
+  serializations**, and `xonly.parse` is where that is written: 32, 33 or
+  65 octets, all of them the same BIP340 key. `02 || x`, `03 || x` and
+  `04 || x || y` name one point as far as BIP340 and BIP341 are
+  concerned — `lift_x` is the even-y point whatever form the x arrived
+  in, and a signer whose point has odd y signs with `n - d` for exactly
+  that reason — so the parity is a property of the serialization and not
+  of the key. `ssa.verify` and `xonly.tweak_add` used to refuse the 33-
+  and 65-byte forms, on the reasoning that a key with odd y "verifies as
+  the point that is not the one passed": it is not another point, it is
+  the same key, and what the refusal cost was a lift. Which form to hand
+  in is now a question of cost alone — the uncompressed one is read
+  rather than lifted, so `tweak_add` on it is **4.11 us against the 5.92**
+  of the 32-byte form, whose parse is a field square root like the
+  compressed one's.
 
-  These two are what
-  <https://github.com/btclib-org/btclib-secp256k1/issues/161> proposes to
-  build on: with them a caller validates, converts and operates in
-  octets, and the parsed key stops being something an API has to hand
-  around.
+  `xonly.from_pubkey` answers the parity for a caller that wants to know
+  which form it held, and 0 for one that arrived x-only. Nothing about
+  the arithmetic moves: `tests/test_parsed_keys.py` holds all four
+  spellings of one key — x-only, compressed, uncompressed, negated — to
+  the same answer from `from_pubkey`, `tweak_add`, `tweak_add_check` and
+  `ssa.verify`.
+
+  This is what <https://github.com/btclib-org/btclib-secp256k1/issues/161>
+  builds on, with `keys.reserialize` above: a caller validates, converts
+  and operates in octets, and the parsed key stops being something an API
+  has to hand around.
 
 ### CI
 

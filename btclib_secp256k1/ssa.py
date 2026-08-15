@@ -335,26 +335,28 @@ def verify_(
 def verify(
     msg_bytes: BytesLike, pubkey_bytes: BytesLike, signature_bytes: BytesLike
 ) -> bool:
-    """Verify a Schnorr signature against a 32-byte x-only public key.
+    """Verify a Schnorr signature against a public key, in any of its forms.
 
-    The public key is the x-only one BIP340 verifies against, and only
-    that: dropping the y coordinate of a full public key is a decision
-    of the caller, `xonly.from_pubkey` being the conversion, because a
-    key with odd y verifies as the point that is not the one passed.
+    BIP340 verifies against an x coordinate, so `02 || x`, `03 || x` and
+    `04 || x || y` are one key and any of the three is accepted: the y is
+    not consulted, a signer whose point has odd y having signed with
+    `n - d` for exactly that reason. Which form to hand in is a question
+    of cost -- the uncompressed one is read rather than lifted, see
+    `xonly.parse`.
 
     Args:
         msg_bytes: the message, of any length. It is the 32-byte hash
             for a signature made by `sign`.
-        pubkey_bytes: the 32-byte x-only public key, and only that.
+        pubkey_bytes: the public key, 32, 33 or 65 bytes.
         signature_bytes: the 64-byte signature.
 
     Returns:
         True if the signature is valid for that key and message.
 
     Raises:
-        ValueError: if the signature is not 64 bytes, if the public key
-            is not 32 bytes, or if it is not a valid x coordinate. A
-            well-formed signature that simply does not verify is False,
+        ValueError: if the signature is not 64 bytes, or if the public
+            key is not a valid point in one of the three serializations.
+            A well-formed signature that simply does not verify is False,
             not an exception.
     """
     return verify_(msg_bytes, xonly.parse(pubkey_bytes), signature_bytes)

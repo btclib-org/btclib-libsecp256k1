@@ -63,11 +63,12 @@ def test_sign_and_verify() -> None:
         dsa.sign(msg, prvkey, b"\x01")
 
     ssa_sig = ssa.sign(msg, prvkey)
-    # BIP340 verification takes the x-only public key, and only it: a
-    # full public key is converted by the caller, through xonly
+    # BIP340 verifies against an x coordinate, so every serialization of
+    # the point names the same key -- the public key of this scalar has
+    # odd y, and verifies as itself
     assert ssa.verify(msg, xonly_bytes, ssa_sig)
-    with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
-        ssa.verify(msg, pubkey_bytes, ssa_sig)
+    assert ssa.verify(msg, pubkey_bytes, ssa_sig)
+    assert ssa.verify(msg, keys.reserialize(pubkey_bytes), ssa_sig)
 
 
 def test_ssa_sign_custom() -> None:
@@ -341,8 +342,9 @@ def test_size_checks_refuse_both_sides() -> None:
     with pytest.raises(ValueError, match="signature"):
         ssa.verify(msg, xonly_bytes, ssa_sig + b"\x01")
 
-    # and one too few, where they pass one too many
-    with pytest.raises(ValueError, match="x-only public key"):
+    # and one too few, where they pass one too many: 31 octets are none
+    # of the three serializations a public key has here
+    with pytest.raises(ValueError, match="invalid public key"):
         ssa.verify(msg, xonly_bytes[:-1], ssa_sig)
 
     # past the top of the scalar range, which 2**256 cannot reach: both
