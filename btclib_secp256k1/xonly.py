@@ -401,15 +401,124 @@ def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
         ValueError: if it is not a valid point, or is not 32, 33 or 65
             bytes.
     """
+    xonly_pubkey = _parsed(pubkey_bytes, name)
+    if xonly_pubkey is None:
+        raise ValueError(f"invalid {name}")
+    return xonly_pubkey
+
+
+def _parsed(pubkey_bytes: BytesLike, name: str) -> CData | None:
+    """Parse a public key into its x, answering None where it is not one.
+
+    What `keys._parsed` is to a full public key, and for the same reason:
+    `parse` raises where this answers None and `pubkey_verify` answers
+    the verdict, and one call is what both are.
+
+    Args:
+        pubkey_bytes: the public key, 32, 33 or 65 bytes.
+        name: what the key is, as an exception should call it.
+
+    Returns:
+        The libsecp256k1 x-only public key object, or None if the octets
+        are not a public key in any of the three serializations.
+
+    Raises:
+        TypeError: if the value is not bytes, which is a malformed
+            argument rather than a key that fails to parse.
+    """
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
     pubkey_bytes = octets(pubkey_bytes, name)
     if len(pubkey_bytes) != _XONLY_SIZE:
-        return _drop_y(keys.parse(pubkey_bytes, name))[0]
+        pubkey = keys._parsed(pubkey_bytes, name)
+        return None if pubkey is None else _drop_y(pubkey)[0]
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
-        raise ValueError(f"invalid {name}")
+        return None
     return xonly_pubkey
+
+
+def pubkey_verify(pubkey_bytes: BytesLike) -> bool:
+    """Return True if the octets are an x-only public key.
+
+    The x-only twin of `keys.pubkey_verify`, and the question a caller
+    holding an x coordinate has: is there a point with this x? A caller
+    with no `xonly` twin to reach for asks it of `keys.pubkey_verify` by
+    writing `0x02 || x` first, which is this call with a concatenation in
+    front of it -- and a compressed key built to be thrown away.
+
+    Args:
+        pubkey_bytes: the public key, 32, 33 or 65 bytes.
+
+    Returns:
+        True if the octets name a point of the curve; False for octets of
+        any other length too, as `keys.pubkey_verify` answers for a key.
+
+    Raises:
+        TypeError: if the value is not bytes at all, which is a malformed
+            argument and not a key to have a verdict on.
+
+    Example:
+        >>> from btclib_secp256k1 import xonly
+        >>> pubkey, _ = xonly.from_prvkey(1)
+        >>> xonly.pubkey_verify(pubkey)
+        True
+        >>> xonly.pubkey_verify(bytes(32))
+        False
+    """
+    return _parsed(pubkey_bytes, "public key") is not None
+
+
+def to_pubkey(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
+    """Return the full public key an x-only one names, i.e. its even-y point.
+
+    The other direction of `from_pubkey`, and the lift a caller has no
+    other call for: an x-only key is an x, the point it names is the one
+    with even y, and reading that y is `secp256k1_ec_pubkey_parse` of
+    `0x02 || x`. libsecp256k1 has no call from an x-only object back to a
+    point, so a caller wanting the y writes those 33 octets itself; this
+    is that, with the concatenation where the rule about it is.
+
+    Args:
+        pubkey_bytes: the public key, 32, 33 or 65 bytes. A key that
+            arrives with an odd y names the same x-only key its negation
+            does, and this answers the even-y point of both.
+        compressed: whether to return 33 bytes rather than 65. The
+            uncompressed form is the one that carries the y a caller
+            asked this for.
+
+    Returns:
+        The serialized even-y point of that x.
+
+    Raises:
+        ValueError: if the key is not a valid point, or is not 32, 33 or
+            65 bytes.
+        RuntimeError: if libsecp256k1 fails to serialize it, which no
+            valid key can make it do.
+
+    Example:
+        >>> from btclib_secp256k1 import keys, xonly
+        >>> pubkey = keys.pubkey_from_prvkey(1)
+        >>> x, parity = xonly.from_pubkey(pubkey)
+        >>> parity
+        0
+        >>> xonly.to_pubkey(x) == pubkey
+        True
+        >>> xonly.to_pubkey(keys.pubkey_negate(pubkey)) == pubkey
+        True
+    """
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    if len(pubkey_bytes) == _XONLY_SIZE:
+        # 0x02 names the even y, which is the point an x-only key is
+        return keys.serialize(keys.parse(b"\x02" + pubkey_bytes), compressed)
+
+    # the point is already lifted, so the y is read rather than found:
+    # an odd one is negated in the field, where reaching the even-y point
+    # through the 32 octets would be a square root of an x in hand
+    pubkey = keys.parse(pubkey_bytes)
+    if _drop_y(pubkey)[1]:
+        keys._pubkey_negate_(pubkey)
+    return keys.serialize(pubkey, compressed)
 
 
 def serialize(xonly_pubkey: CData) -> bytes:

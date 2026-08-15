@@ -595,3 +595,123 @@ def test_pubkey_verify_is_the_parse_with_nothing_kept() -> None:
     # the type check is not relaxed with it: a str is no octets
     with pytest.raises(TypeError, match="public key"):
         keys.pubkey_verify("02" + "00" * 32)  # type: ignore[arg-type]
+
+
+def test_pubkey_sum_answers_the_infinity_combine_refuses() -> None:
+    """`keys.pubkey_sum` is `pubkey_combine` with the identity as a value.
+
+    The two are one call and differ in what they do with the one sum that
+    is no public key: `P + (-P)` is the identity, which a caller doing
+    arithmetic has a use for and which has no serialization to answer
+    with. Everywhere else the two agree, octet for octet and in both
+    forms.
+    """
+    a, b = 3, 5
+    pubkey_a, pubkey_b = mult.mult_bytes(a), mult.mult_bytes(b)
+
+    for compressed in (True, False):
+        assert keys.pubkey_sum([pubkey_a, pubkey_b], compressed) == keys.pubkey_combine(
+            [pubkey_a, pubkey_b], compressed
+        )
+        assert keys.pubkey_sum([pubkey_a], compressed) == keys.pubkey_combine(
+            [pubkey_a], compressed
+        )
+
+    # the one place they part: infinity, which combine refuses
+    negated = keys.pubkey_negate(pubkey_a)
+    assert keys.pubkey_sum([pubkey_a, negated]) is None
+    with pytest.raises(ValueError, match="public key sum"):
+        keys.pubkey_combine([pubkey_a, negated])
+    # and an intermediate sum at infinity is not the same as a final one:
+    # P + (-P) + P is P, libsecp256k1 adding the terms rather than a
+    # running total this side would have to serialize
+    assert keys.pubkey_sum([pubkey_a, negated, pubkey_a]) == compress(pubkey_a)
+
+    # what is refused stays refused: an empty sequence has no sum at all,
+    # and a key that is no point is an argument rather than a verdict
+    with pytest.raises(ValueError, match="at least one public key"):
+        keys.pubkey_sum([])
+    with pytest.raises(ValueError, match="invalid public key"):
+        keys.pubkey_sum([pubkey_a, b"\x02" + bytes(32)])
+
+
+def test_xonly_pubkey_verify_and_to_pubkey_are_the_two_x_only_twins() -> None:
+    """The x-only twins of `keys.pubkey_verify` and of a lift.
+
+    `pubkey_verify` asks whether octets name a point, and `to_pubkey`
+    answers the point they name, which is the even-y one: a caller
+    holding an x had to write `0x02 || x` itself for either question.
+    Both take the module's three serializations, and both answer for the
+    key rather than for the form it arrived in -- a key with odd y names
+    the x-only key its negation does.
+    """
+    prvkey = 11
+    pubkey = keys.pubkey_from_prvkey(prvkey)
+    x_only, parity = xonly.from_pubkey(pubkey)
+    even_y = pubkey if parity == 0 else keys.pubkey_negate(pubkey)
+
+    for form in (x_only, pubkey, mult.mult_bytes(prvkey), keys.pubkey_negate(pubkey)):
+        assert xonly.pubkey_verify(form)
+        assert xonly.to_pubkey(form) == even_y
+        assert xonly.to_pubkey(form, compressed=False) == keys.reserialize(
+            even_y, compressed=False
+        )
+        # the y is what the caller asked for, and it is the even one
+        assert xonly.to_pubkey(form, compressed=False)[64] % 2 == 0
+
+    # the round trip, both ways
+    assert xonly.from_pubkey(xonly.to_pubkey(x_only))[0] == x_only
+
+    # an x that is the x-coordinate of no point at all, and octets of a
+    # length no serialization has: a verdict for the first call and an
+    # exception for the second, as for a full public key
+    for refused in (bytes(32), b"\xff" * 32, b"", x_only[:-1]):
+        assert not xonly.pubkey_verify(refused)
+        with pytest.raises(ValueError, match="invalid public key"):
+            xonly.to_pubkey(refused)
+
+    with pytest.raises(TypeError, match="public key"):
+        xonly.pubkey_verify(11)  # type: ignore[arg-type]
+
+
+def test_signature_verify_is_the_parse_with_nothing_kept() -> None:
+    """`dsa.signature_verify` answers what the two parses prove.
+
+    The signature twin of `keys.pubkey_verify`, and the same shape: True
+    for exactly what parses in the serialization it was told, False for
+    everything else, the lengths included. It says nothing about a key or
+    a message, and nothing about the lower-s form.
+    """
+    prvkey = 7
+    der = dsa.sign(msg, prvkey)
+    compact = dsa.to_compact(der)
+
+    assert dsa.signature_verify(der)
+    assert dsa.signature_verify(compact, compact=True)
+    # each form is refused as the other, which is what the flag is for
+    assert not dsa.signature_verify(compact)
+    assert not dsa.signature_verify(der, compact=True)
+
+    # r or s at or above the group order is what a compact signature has
+    # to be refused for, there being no encoding to malform
+    assert not dsa.signature_verify(N.to_bytes(32, "big") * 2, compact=True)
+    # and a malformed encoding is what a DER one has
+    for refused in (b"", b"\x30\x06", der[:-1], der + b"\x00"):
+        assert not dsa.signature_verify(refused)
+        with pytest.raises(ValueError, match="invalid DER signature"):
+            dsa.parse_der(refused)
+
+    for wrong_size in (b"", compact[:-1], compact + b"\x00"):
+        assert not dsa.signature_verify(wrong_size, compact=True)
+        with pytest.raises(ValueError, match="invalid compact signature"):
+            dsa.parse_compact(wrong_size)
+
+    # the lower-s form is a different question, and this is not it
+    high_s = dsa.to_der(
+        compact[:32] + (N - int.from_bytes(compact[32:], "big")).to_bytes(32, "big")
+    )
+    assert dsa.signature_verify(high_s)
+    assert not dsa.is_low_s(high_s)
+
+    with pytest.raises(TypeError, match="DER signature"):
+        dsa.signature_verify(11)  # type: ignore[arg-type]

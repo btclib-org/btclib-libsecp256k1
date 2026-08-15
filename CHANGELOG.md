@@ -408,6 +408,56 @@ release-notes length in the first place, and are still in
   which `tests/test_core.py` asserts along with the round trip through
   `to_der` and `to_compact` and the `normalize` flag on either form.
 
+### What a caller asks that is not a use
+
+- **`keys.pubkey_sum` answers the point at infinity, where
+  `pubkey_combine` refuses it.** They are one C call and differ in what
+  they make of its 0: a sum that is the identity is no public key, which
+  is an argument error to a caller that wanted a key and a *value* to one
+  doing arithmetic — `P + (-P)` is a point of the group whatever
+  libsecp256k1 can hold. What tells that 0 from the other one, an object
+  the library could not read, is that the second is reported through the
+  illegal callback: `context.guarded` raises it, so what reaches the
+  return is infinity and nothing else. btclib is the caller
+  (<https://github.com/btclib-org/btclib/issues/917>): its
+  `_libsecp256k1_multi_mult_` recognizes an intermediate sum at infinity
+  by comparing coordinates, and combines per term rather than once at the
+  end so that there are coordinates to compare — measured here on eight
+  terms, 64.84 microseconds against the 42.71 of a single combine, and
+  the 33.59 of a sum whose terms never cross the boundary at all
+- **`xonly.pubkey_verify` and `xonly.to_pubkey` are the two x-only twins
+  a caller had to write `0x02 || x` for.** The first is
+  `keys.pubkey_verify` for an x coordinate; the second is the lift, and
+  the lift is that concatenation — libsecp256k1 converts a point to an
+  x-only key and has no call back the other way, so the octets have to be
+  built somewhere and this is where the rule about them lives. A key that
+  arrives with odd y is negated in the field rather than serialized and
+  lifted again, which is the difference between reading a y and finding
+  one. btclib's `curves.curve._compressed_sec` exists for exactly these
+  two questions
+- **`dsa.signature_verify` is the verdict a signature had no way to
+  answer**, where a key has had `pubkey_verify` since v0.8.0.3's own
+  entry above: the same parse, with nothing kept and no exception to
+  catch, and the `compact` flag beside it because the serialization
+  cannot be read off the octets. The length is part of the verdict, as it
+  is for a key: 63 octets are no compact signature, and `False` is what a
+  caller asking whether it holds one wants. `parse_compact` says "invalid
+  compact signature" for a wrong length now, where it used to say "the
+  compact signature must be 64 bytes" — one refusal for one question,
+  which is what a key's parse already did
+- **all three are one parse with two callers**, `keys._parsed`'s shape
+  repeated in `xonly` and `dsa`: the helper answers the object or None,
+  the `parse` raises and the verdict compares. What it costs is the
+  python call that entry measured, and what it buys is that a check
+  cannot move in one spelling and not the other
+- **and the conversion between two serializations keeps two names for a
+  signature and one for a key.** `dsa.reserialize` was considered and not
+  written: `keys.reserialize` reads the input form off the length, and a
+  signature's cannot be read at all — a DER signature of 64 octets exists
+  and may begin with the `0x30` of a compact `r`. `to_der` and
+  `to_compact` name the input form the way `compact` names it on `sign`
+  and `verify`, which is the coherence a third name would have broken
+
 ### Documentation
 
 - **`ssa.Signer` and `keys.PubkeyTweakChain` are presented as what they
