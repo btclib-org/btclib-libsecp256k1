@@ -170,6 +170,41 @@ release-notes length in the first place, and are still in
   sweeps the new entry points that take bytes, through a serializing
   wrapper where what they answer is a cffi object, and excuses the rest
   by name.
+- **`keys.reserialize` is the validation a caller wants, and the
+  conversion nothing here offered.** `serialize(parse(key))` in one call:
+  a library proving a public key at its own boundary has `parse` and
+  nothing to do with what `parse` returns, and now answers octets instead
+  of owning an object's lifetime; a caller holding one serialization and
+  needing the other — an uncompressed key to hash compressed, a
+  compressed key about to be used several times — had no call to make at
+  all, `compressed` being a filter on the form everywhere else rather
+  than a conversion to it.
+
+  What makes it worth a name rather than two calls is which form it is
+  asked for. `parse` is **0.256 us on 65 bytes against 2.343 on 33**:
+  both coordinates are there to read, where a compressed key is a field
+  square root. So the uncompressed serialization is a parsed key that
+  costs nothing to open, and `reserialize(key, compressed=False)` pays
+  the root once and leaves every later call at the price of reading it.
+  Measured as the entries above, median of seven alternating rounds of
+  20 000 calls, `mult.mult_` control within 0.04.
+- **`xonly.tweak_add_from_pubkey` is the outer half `tweak_add_` was
+  merged without.** The rule stated right above — the outer half is the
+  inner one with a `parse` in front of it — is what says it was missing:
+  `tweak_add` is not it, taking the 32-byte x-only form and lifting it.
+  From the uncompressed form the whole call is **4.11 us against 5.92**,
+  the x-only conversion reading the y it is given where 32 octets are a
+  square root. The discard is in the name and not in an argument check,
+  which is this module's rule: `ssa.verify` refuses a full public key for
+  the same reason, and there is no BIP340 spelling of this one — BIP341's
+  internal key is x-only by definition, a BIP340 verification against the
+  wrong point is not.
+
+  These two are what
+  <https://github.com/btclib-org/btclib-secp256k1/issues/161> proposes to
+  build on: with them a caller validates, converts and operates in
+  octets, and the parsed key stops being something an API has to hand
+  around.
 
 ### CI
 

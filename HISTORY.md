@@ -9,9 +9,9 @@ a tag is generated from.
 
 Non-breaking, and additions only: one for a caller that signs more than
 once under one key, one for a caller computing a taproot output key from
-a public key it has validated, and a set for a caller composing two of
-these calls where the second used to parse what the first had just
-serialized.
+a public key it has validated, a set for a caller composing two of these
+calls where the second used to parse what the first had just serialized,
+and two for a caller that would rather hold octets than a parsed key.
 
 `ssa.Signer` is new: it builds the BIP340 keypair once and signs with it
 as often as asked, where `ssa.sign` and `ssa.sign_custom` build one per
@@ -59,6 +59,21 @@ way is 28.2 microseconds through `pubkey_combine(pubkey_sort(...))` and
 14.8 through the two inner halves on keys parsed once, and a labeled
 Silent Payments address is 14.3 against 9.3. CHANGELOG.md states the
 machine and the method.
+
+**`keys.reserialize` and `xonly.tweak_add_from_pubkey` are for the caller
+who wants none of that.** A parsed key is an optimization of a parse, and
+a parse of the *uncompressed* serialization is 0.256 microseconds against
+2.343 for the compressed one — both coordinates are there to read, where
+a compressed key is a field square root. So 65 octets are a parsed key
+that costs nothing to open, and nothing has to own their lifetime.
+`keys.reserialize` is what produces them: `serialize(parse(key))` in one
+call, which is at once the validation a library does at its own boundary
+and the conversion between the two serializations, which nothing here
+offered — `compressed` is a filter on the form everywhere else, not a
+conversion to it. `xonly.tweak_add_from_pubkey` is `tweak_add_` with that
+parse in front of it, the outer half it was published without: 4.11
+microseconds against `tweak_add`'s 5.92, the difference being again the
+square root a 32-byte x-only key costs and 65 octets do not.
 
 **`xonly.from_prvkey` and `ssa.Signer.pubkey` are the two shortcuts
 where the round trip was not worth making at all.** The first is the
