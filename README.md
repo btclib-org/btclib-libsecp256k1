@@ -341,14 +341,24 @@ middle that nothing wanted. `ssa.Signer.pubkey` reads that same key off
 the keypair the signer already holds, which is a read rather than a
 multiplication, and so is cheaper than any composition could be.
 
-## Building the keypair once
+## Two outposts past the boundary
 
-Signing has the same shape and a different object. `ssa.sign` builds a
-`secp256k1_keypair` from the private key, signs with it and overwrites it
-before returning, so a caller signing a second message under the same key
-builds it again — and that keypair is about half of what a BIP340
-signature costs here, being the point multiplication of the public key.
-`ssa.Signer` holds one across signatures:
+The private halves above hand one object from a call to the next. What
+they do not answer is the caller who crosses the boundary again and
+again with the *same* key: a signer signing message after message, a
+wallet walking a BIP32 path one index at a time. Each crossing pays the
+conversion at its far end — a keypair is a point multiplication, a
+compressed key is a field square root — and pays it for a key it had
+already converted.
+
+`ssa.Signer` and `keys.PubkeyTweakChain` are the two outposts on that
+side of the boundary. Each holds the converted object across calls, so
+the conversion happens once and every crossing afterwards carries only
+what changes: a message, a tweak. There are two of them because there
+are two conversions worth not repeating, and there is nothing else in
+these bindings that holds state at all.
+
+`ssa.Signer` holds the keypair:
 
 ```python
 >>> messages = [hashlib.sha256(bytes([index])).digest() for index in range(3)]
@@ -359,16 +369,44 @@ signature costs here, being the point multiplication of the public key.
 
 ```
 
-Where a parsed public key is a public value a caller may hold for as long
-as they like, a keypair is the private key in libsecp256k1's own layout,
-so this hands the caller a lifetime and not only a saving. That is what
-the `with` block is for: on the way out of it the keypair is overwritten,
-whether the block ended in a signature or in an exception, and a wiped
-signer refuses to sign rather than signing with the zeros left behind.
-`signer.wipe()` is the same instruction spelled by hand, for a caller who
-is done before the block is. What none of it changes is the python side:
-the `bytes` or `int` the constructor is handed is a python object like
-any other, and
+`ssa.sign` builds that keypair, signs with it and overwrites it before
+returning, so a caller signing a second message under the same key builds
+it again — and it is about half of what a BIP340 signature costs here,
+15.82 microseconds against the signer's 8.27, of which the keypair is
+7.55. `signer.pubkey()` reads the x-only key off it rather than deriving
+it a second time.
+
+`keys.PubkeyTweakChain` holds the parsed point:
+
+```python
+>>> tweaks = [hashlib.sha256(bytes([index])).digest() for index in range(5)]
+>>> chain = keys.PubkeyTweakChain(pubkey)
+>>> path = [chain.tweak_add(tweak) for tweak in tweaks]
+>>> path[-1] == chain.pubkey()
+True
+
+```
+
+That is a BIP32 path walked one index at a time, and the shape of it is
+what costs: each step needs the previous step's *serialized* key to hash
+into the next tweak, so `pubkey_tweak_add` parses at every step the very
+point the step before had built and serialized. The chain parses once —
+65.61 microseconds against 56.58 for the five steps above, which is the
+2.39 of a compressed parse saved four times. Every step still answers the
+octets its caller needs, and `chain.pubkey()` is the key it has arrived
+at, with `chain._pubkey_()` the point itself for a caller handing it on.
+
+What the two do not share is what they hold. A parsed public key is a
+public value a caller may keep for as long as it likes; a keypair is the
+private key in libsecp256k1's own layout, so the signer hands the caller
+a lifetime and not only a saving. That is what the `with` block is for:
+on the way out of it the keypair is overwritten, whether the block ended
+in a signature or in an exception, and a wiped signer refuses to sign
+rather than signing with the zeros left behind. `signer.wipe()` is the
+same instruction spelled by hand, for a caller who is done before the
+block is. The chain needs none of it, and has none of it. What none of it
+changes is the python side: the `bytes` or `int` the constructor is
+handed is a python object like any other, and
 [SECURITY.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/SECURITY.md)
 records why that copy cannot be taken back.
 
@@ -518,12 +556,21 @@ This matters on a free-threaded interpreter, for which a wheel is built
 (`cp314t`), where those calls are no longer serialized;
 `tests/test_concurrency.py` exercises it.
 
-`ssa.Signer` is the one thing here holding a buffer across calls, and it
-does not cost that guarantee: libsecp256k1 takes a keypair const, so
-several threads may sign through one signer. What is theirs to order is
-the wipe, which overwrites the very memory a concurrent signature is
-reading — the same shape of race as re-randomizing the context below,
-and the reason the `with` block ends where the threads have joined.
+The two outposts above are what hold a buffer across calls, and they
+answer differently. `ssa.Signer` does not cost that guarantee:
+libsecp256k1 takes a keypair const, so several threads may sign through
+one signer. What is theirs to order is the wipe, which overwrites the
+very memory a concurrent signature is reading — the same shape of race as
+re-randomizing the context below, and the reason the `with` block ends
+where the threads have joined.
+
+`keys.PubkeyTweakChain` is the exception, and by construction:
+`secp256k1_ec_pubkey_tweak_add` takes its key as *in and out*, so every
+`tweak_add` writes the point the chain holds. One chain belongs to one
+thread, and a path is a sequence in any case — two threads sharing one
+are not two walkers of it but two writers of the same point. Each thread
+that wants one builds its own, which costs the parse the chain exists to
+pay once.
 
 The one way to lose that guarantee is to re-randomize the shared context
 while it is in use. `context._randomize(context.ctx)` is there for a
