@@ -94,6 +94,82 @@ release-notes length in the first place, and are still in
   `tweak_add_(keys.parse(sec))` against `tweak_add(from_pubkey(sec)[0])`,
   held over both serializations and over the negated key, so the
   odd-y case is not left to the reading of a docstring.
+- **The underscore now means the same thing on the producing side**
+  (#159). It meant "takes the parsed key in place of the bytes", which
+  covers every wrapper whose *first* act is a parse and none of those
+  whose *last* act is a serialization — so a caller composing two of them
+  paid, between the two, for a serialization of a point that was already
+  in hand and a parse of what had just been serialized. The convention
+  reads the same in both directions now, the outer half being the inner
+  one with a `parse` in front of it or a `serialize` behind it, and
+  `keys.parse` states both. `keys.pubkey_from_prvkey_`,
+  `keys.pubkey_combine_`, `keys.pubkey_sort_`, `recovery.recover_`,
+  `ellswift.decode_` and `silentpayments.label_` answer with the object;
+  `ellswift.encode_` and `silentpayments.labeled_spend_pubkey_` take one,
+  the second taking two. Every outer half is unchanged in behaviour and
+  cost, and is now written as its inner half with the missing step around
+  it, so neither can drift into a second spelling of the same call.
+- **Which composition pays what.** Measured as the entries above, on an
+  Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 10 rounds of
+  20 000 calls, microseconds per call. The unit is one round trip of a
+  compressed key: `keys.serialize` 0.35 and `keys.parse` 2.28, against
+  0.24 for the uncompressed form, the difference being the field square
+  root. So: aggregating five keys the BIP67 way, `pubkey_combine(
+  pubkey_sort(keys))` 28.23 against 14.84 for the two inner halves over
+  keys parsed once — it is per key, which is why this one is half the
+  total; a labeled Silent Payments address, 14.28 against 9.25;
+  `xonly.from_pubkey(ellswift.decode(ell))` 7.44 against 4.69; and
+  recovering a key to verify with it, 29.57 against 26.75, the
+  verification being most of that number either way.
+- **`keys.pubkey_combine_` and `keys.pubkey_sort_` were the two v0.8.0.2
+  left out**, on the grounds that their inner halves would take lists of
+  cffi objects and no caller had asked. The caller is their own
+  composition: sorting is what BIP67 and MuSig2 key aggregation do
+  *before* adding, and between the outer halves every key is serialized
+  and parsed again. `pubkey_sort_` hands back the caller's own objects,
+  found by the address each reordered pointer holds — an element of the
+  array libsecp256k1 sorted owns nothing, and would dangle the moment the
+  caller dropped the sequence it points into. `tests/test_keys.py`
+  asserts that identity rather than the value, which is the part a
+  serialization comparison would not catch.
+- **`xonly.from_prvkey` and `ssa.Signer.pubkey` are two shortcuts rather
+  than two halves.** The x-only public key of a private key was
+  `xonly.from_pubkey(keys.pubkey_from_prvkey(k))` — 10.49, of which 2.63
+  is a round trip of the compressed key nobody wanted — and BIP340 and
+  BIP341 want that key and not the point, so the composition is the
+  common case and not an exotic one: `from_prvkey` is 7.90. A signer
+  already holds the keypair, and reading the key off it is
+  `secp256k1_keypair_xonly_pub`: `Signer.pubkey()` is 0.43 against the
+  10.49 of deriving it a second time, and `tests/test_signer.py` holds it
+  to `xonly.from_prvkey` and to the key its own signatures verify
+  against, parity included.
+- **`xonly.from_keypair` is the second wrapper taking a libsecp256k1
+  object rather than bytes**, `keys.serialize` having been the only one.
+  A MuSig2 session driven through `lib` holds a keypair, which is the
+  caller beyond `Signer.pubkey`. There is nothing to check about such an
+  argument before the call, so a violated precondition is reachable
+  through it: like `keys.serialize` it calls `context.check()`, which
+  raises what libsecp256k1 reported *and* takes it off the thread, where
+  it would otherwise surface out of the next `check` a MuSig2 caller
+  makes. A wiped keypair is the reachable mistake and is reported as the
+  zero it holds where the x of a point should be; `tests/
+  test_callbacks.py` drives both it and the NULL pointer.
+- **`silentpayments` had no inner halves at all**, and its round trip is
+  a label: those 33 bytes are a compressed point, so a recipient
+  publishing a labeled address paid a square root between `label` and
+  `labeled_spend_pubkey`. `label_` answers with the object, `parse_label`
+  and `serialize_label` are `keys.parse` and `keys.serialize` for it —
+  public now, having been private — and the 33 bytes are still what a
+  scan cache is keyed on, so `label` is unchanged and is still what a
+  recipient keeping labels as bytes wants.
+- **The tables that hold the convention were widened, not trusted.**
+  `tests/test_parsed_keys.py` gains a `PRODUCERS` table whose equality is
+  `outer(...) == serialize(inner(...))`, and its pairing check now reads
+  `ellswift`, `recovery` and `silentpayments` as well, so a producing
+  half added and left unpaired fails there; `tests/test_bytes_like.py`
+  sweeps the new entry points that take bytes, through a serializing
+  wrapper where what they answer is a cffi object, and excuses the rest
+  by name.
 
 ### CI
 

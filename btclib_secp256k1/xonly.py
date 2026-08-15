@@ -26,7 +26,7 @@ from __future__ import annotations
 from . import BytesLike, CData, ffi, keys, lib
 from ._scalar import octets, scalar
 from ._secret import take, wipe
-from .context import ctx
+from .context import check, ctx
 
 
 def _from_pubkey(pubkey: CData) -> tuple[CData, int]:
@@ -113,6 +113,80 @@ def from_pubkey(pubkey_bytes: BytesLike) -> tuple[bytes, int]:
             which no valid key can make it do.
     """
     return from_pubkey_(keys.parse(pubkey_bytes))
+
+
+def from_prvkey(prvkey: BytesLike | int) -> tuple[bytes, int]:
+    """Return the x-only public key of a private key, and the y parity.
+
+    The BIP340 and BIP341 form of `keys.pubkey_from_prvkey`, and the one
+    to reach for when the 32 bytes are what is wanted: it is that call
+    and `from_pubkey` with neither the serialization nor the parse
+    between them, the point going straight from the multiplication into
+    the conversion that drops its y.
+
+    Args:
+        prvkey: the private key, 32 bytes or an int below 2**256.
+
+    Returns:
+        The 32-byte x coordinate of kG, and the parity of its y: 0 for
+        even, 1 for odd. That parity is what BIP340 signing negates the
+        key for, so a signer wanting only the key it signs under can
+        ignore it.
+
+    Raises:
+        ValueError: if the private key is not 32 bytes, does not fit in
+            them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to convert or serialize the
+            point, which no valid key can make it do.
+
+    Example:
+        >>> from btclib_secp256k1 import keys, xonly
+        >>> pubkey = keys.pubkey_from_prvkey(1)
+        >>> xonly.from_prvkey(1) == xonly.from_pubkey(pubkey)
+        True
+    """
+    return from_pubkey_(keys.pubkey_from_prvkey_(prvkey))
+
+
+def from_keypair(keypair: CData) -> tuple[bytes, int]:
+    """Return the x-only public key of a keypair, and the y parity.
+
+    The keypair already holds the point, so this is a read of it rather
+    than a multiplication: `ssa.Signer.pubkey` is this call on the
+    keypair a signer holds, and a MuSig2 session driven through `lib`
+    holds another. `from_prvkey` is the same answer for a caller holding
+    the private key and no keypair.
+
+    Args:
+        keypair: the libsecp256k1 keypair object, as `ssa.Signer` holds
+            and as `secp256k1_keypair_create` writes.
+
+    Returns:
+        The 32-byte x coordinate, and the parity of y: 0 for even, 1 for
+        odd. The parity is of the point the private key gives, the
+        keypair being the negated key where that y is odd.
+
+    Raises:
+        ValueError: if the object is not a keypair libsecp256k1 will read
+            -- a NULL pointer, or one that has been wiped. This and
+            `keys.serialize` are the two arguments of these bindings that
+            are libsecp256k1 objects rather than bytes, and so the two
+            that cannot be checked before the call.
+        RuntimeError: if libsecp256k1 fails for any other reason, or
+            fails to serialize the result, which a keypair it built
+            cannot make it do.
+    """
+    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
+    parity = ffi.new("int *")
+    if not lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair):
+        # the keypair is the caller's object, so a violated precondition
+        # is reachable here as it is in `keys.serialize`, which says why
+        # raising it is also what takes it off the thread. A wiped
+        # keypair is the reachable way in, and what it is reported as is
+        # the zero it holds where the x of a point should be
+        check()
+        raise RuntimeError("x-only public key conversion failed")
+    return _serialize(xonly_pubkey), parity[0]
 
 
 def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, int]:

@@ -7,9 +7,11 @@ a tag is generated from.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
-Non-breaking, and two additions: one for a caller that signs more than
+Non-breaking, and additions only: one for a caller that signs more than
 once under one key, one for a caller computing a taproot output key from
-a public key it has validated.
+a public key it has validated, and a set for a caller composing two of
+these calls where the second used to parse what the first had just
+serialized.
 
 `ssa.Signer` is new: it builds the BIP340 keypair once and signs with it
 as often as asked, where `ssa.sign` and `ssa.sign_custom` build one per
@@ -36,6 +38,41 @@ second time. The x-only conversion in front of the tweak is
 result is the output key and parity `tweak_add` answers with, the
 negation of an odd-y point included, and `tweak_add` itself is unchanged
 in behaviour and cost.
+
+**The trailing underscore now means the same thing on the producing side
+of the boundary.** It has meant "takes the parsed key in place of the
+bytes" since 0.8.0.2; a wrapper that *answers* with a key had no such
+half, so a caller composing two of them — sorting keys and then adding
+them together, recovering a key and then verifying with it, decoding an
+ElligatorSwift encoding and then tweaking what came out — serialized a
+point libsecp256k1 had just handed over and parsed it straight back,
+which for the compressed form is a field square root. `pubkey_combine_`,
+`pubkey_sort_` and `pubkey_from_prvkey_` in `keys`, `recovery.recover_`,
+`ellswift.decode_` and `encode_`, and `silentpayments.label_`,
+`labeled_spend_pubkey_`, `parse_label` and `serialize_label` are those
+halves. Every outer half is unchanged in behaviour and cost, and is now
+written as its inner half with a `serialize` behind it.
+
+What that saves is the round trip and nothing else, so it is worth what
+the two calls around it are not: aggregating five public keys the BIP67
+way is 28.2 microseconds through `pubkey_combine(pubkey_sort(...))` and
+14.8 through the two inner halves on keys parsed once, and a labeled
+Silent Payments address is 14.3 against 9.3. CHANGELOG.md states the
+machine and the method.
+
+**`xonly.from_prvkey` and `ssa.Signer.pubkey` are the two shortcuts
+where the round trip was not worth making at all.** The first is the
+x-only public key of a private key — `keys.pubkey_from_prvkey` and
+`xonly.from_pubkey` with neither the serialization nor the parse between
+them, 7.9 microseconds against 10.5 — and it is the BIP340 and BIP341
+form of a key derivation this package made every caller spell in two
+steps. The second reads that same key off the keypair a signer already
+holds, which is a read rather than a multiplication: 0.4 microseconds,
+where deriving it again is 10.5. `xonly.from_keypair` is that read for a
+caller holding a keypair of its own, a MuSig2 session through `lib`
+being one, and it is the second wrapper of these bindings taking a
+libsecp256k1 object rather than bytes: like `keys.serialize`, it raises
+what libsecp256k1 reported rather than leaving it on the thread.
 
 ## v0.8.0.2
 

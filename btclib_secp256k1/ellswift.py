@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import secrets
 
-from . import BytesLike, ffi, lib
+from . import BytesLike, CData, ffi, lib
 from ._scalar import octets, scalar
 from ._secret import take
 from .context import ctx
-from .keys import serialize
+from .keys import parse, serialize
 
 
 def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> bytes:
@@ -54,6 +54,37 @@ def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> byte
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
 
 
+def encode_(pubkey: CData, rnd32: BytesLike | None = None) -> bytes:
+    """Encode an already-parsed public key as 64 ElligatorSwift bytes.
+
+    The inner half of `encode`, for a caller who already holds the parsed
+    point -- one encoding a key it has just decoded, or one encoding the
+    same key more than once, which BIP324 does with fresh randomness at
+    every connection: see `keys.parse` for what the underscore means
+    throughout.
+
+    Args:
+        pubkey: the already-parsed public key, as `keys.parse` returns.
+        rnd32: the 32 bytes deciding which of the encodings of that key
+            is produced, or None for fresh randomness.
+
+    Returns:
+        The 64-byte ElligatorSwift encoding.
+
+    Raises:
+        ValueError: if rnd32 is given and is not 32 bytes.
+        RuntimeError: if libsecp256k1 fails to encode, which no valid
+            input can make it do.
+    """
+    # 32 bytes of entropy, or nothing: see the comment in create
+    rnd32 = secrets.token_bytes(32) if rnd32 is None else octets(rnd32, "rnd32", 32)
+
+    ell_bytes = ffi.new("char[64]")
+    if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
+        raise RuntimeError("ElligatorSwift encoding failed")
+    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
+
+
 def encode(pubkey_bytes: BytesLike, rnd32: BytesLike | None = None) -> bytes:
     """Encode a public key as 64 ElligatorSwift bytes.
 
@@ -75,18 +106,38 @@ def encode(pubkey_bytes: BytesLike, rnd32: BytesLike | None = None) -> bytes:
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
-    pubkey_bytes = octets(pubkey_bytes, "public key")
+    return encode_(parse(pubkey_bytes), rnd32)
+
+
+def decode_(ell_bytes: BytesLike) -> CData:
+    """Decode a 64-byte ElligatorSwift public key into a parsed key.
+
+    The inner half of `decode`, and the one that answers with the point
+    rather than with its serialization: see `keys.parse` for what the
+    underscore means throughout. A decoded key that is about to be
+    tweaked, verified against or encoded again is what this is for --
+    libsecp256k1 hands the point over already lifted, and serializing it
+    only to lift it back is a field square root nothing asked for.
+
+    Args:
+        ell_bytes: the 64-byte encoding.
+
+    Returns:
+        The libsecp256k1 public key object. Every 64 bytes decode to a
+        point, which is what makes the encoding indistinguishable from
+        random: there is nothing to reject.
+
+    Raises:
+        ValueError: if the input is not 64 bytes.
+        RuntimeError: if libsecp256k1 fails to decode, which no 64 bytes
+            can make it do.
+    """
+    ell_bytes = octets(ell_bytes, "ElligatorSwift public key", 64)
+
     pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
-        raise ValueError("invalid public key")
-
-    # 32 bytes of entropy, or nothing: see the comment in create
-    rnd32 = secrets.token_bytes(32) if rnd32 is None else octets(rnd32, "rnd32", 32)
-
-    ell_bytes = ffi.new("char[64]")
-    if not lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, rnd32):
-        raise RuntimeError("ElligatorSwift encoding failed")
-    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
+    if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
+        raise RuntimeError("ElligatorSwift decoding failed")
+    return pubkey
 
 
 def decode(ell_bytes: BytesLike, compressed: bool = True) -> bytes:
@@ -106,12 +157,7 @@ def decode(ell_bytes: BytesLike, compressed: bool = True) -> bytes:
         RuntimeError: if libsecp256k1 fails to decode or serialize,
             which no 64 bytes can make it do.
     """
-    ell_bytes = octets(ell_bytes, "ElligatorSwift public key", 64)
-
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
-        raise RuntimeError("ElligatorSwift decoding failed")
-    return serialize(pubkey, compressed)
+    return serialize(decode_(ell_bytes), compressed)
 
 
 def xdh(

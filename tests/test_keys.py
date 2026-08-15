@@ -222,6 +222,69 @@ def test_pubkey_order() -> None:
         keys.pubkey_cmp(compressed[0], b"")
 
 
+def test_sorting_and_adding_the_same_parsed_keys() -> None:
+    """The aggregation the producing halves are for: parse once, sort, add.
+
+    `pubkey_sort` serializes every key it ordered and `pubkey_combine`
+    parses every key it is given, so the two composed pay a serialization
+    and a field square root per key for nothing. The inner halves hand
+    the objects along instead, and the answer is the outer halves' own.
+
+    What `pubkey_sort_` returns is the caller's own objects, and that is
+    asserted by identity rather than by value: an array element would
+    compare equal to one and dangle the moment the list it points into
+    was dropped.
+    """
+    pubkeys_bytes = [mult.mult_(k) for k in (5, 2, 9, 1)]
+    parsed = [keys.parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
+
+    ordered = keys.pubkey_sort_(parsed)
+    assert [keys.serialize(pubkey) for pubkey in ordered] == keys.pubkey_sort(
+        pubkeys_bytes
+    )
+    # the objects handed back are the ones handed in, and all of them
+    assert sorted(id(pubkey) for pubkey in ordered) == sorted(
+        id(pubkey) for pubkey in parsed
+    )
+
+    assert keys.serialize(keys.pubkey_combine_(ordered)) == keys.pubkey_combine(
+        keys.pubkey_sort(pubkeys_bytes)
+    )
+    # sorting no key at all is no key at all here too
+    assert keys.pubkey_sort_([]) == []
+    # and what the outer half refuses, this refuses: an empty sum, and
+    # one that lands on the point at infinity
+    with pytest.raises(ValueError, match="at least one public key"):
+        keys.pubkey_combine_([])
+    with pytest.raises(ValueError, match="invalid public key sum"):
+        keys.pubkey_combine_([
+            keys.parse(mult.mult_(7)),
+            keys.parse(keys.pubkey_negate(mult.mult_(7))),
+        ])
+
+
+def test_xonly_from_prvkey() -> None:
+    """The x-only key of a private key, without the point in between.
+
+    `from_prvkey` is `from_pubkey` of `keys.pubkey_from_prvkey`, and the
+    equality is asserted over an even-y key and an odd-y one, the parity
+    being what the two have to agree on and not only the 32 bytes. The
+    private key is bounded exactly as everywhere else.
+    """
+    for prvkey in (7, 11):
+        assert xonly.from_prvkey(prvkey) == xonly.from_pubkey(
+            keys.pubkey_from_prvkey(prvkey)
+        )
+    # the two keys above are one of each parity, which is what makes the
+    # agreement above worth asserting
+    assert {xonly.from_prvkey(7)[1], xonly.from_prvkey(11)[1]} == {0, 1}
+
+    with pytest.raises(ValueError, match="private key"):
+        xonly.from_prvkey(0)
+    with pytest.raises(ValueError, match="private key must be 32 bytes"):
+        xonly.from_prvkey(b"\x01" * 31)
+
+
 def test_keys_invalid_inputs() -> None:
     """Every argument the keys module bounds is refused out of range.
 

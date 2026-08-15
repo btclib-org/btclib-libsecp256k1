@@ -101,6 +101,59 @@ def signed_custom(prvkey: Any, msg_bytes: Any, aux_rand32: Any) -> bytes:
         return signer.sign_custom(msg_bytes, aux_rand32)
 
 
+def created(prvkey: Any) -> bytes:
+    """Derive a public key through the inner half, and serialize it.
+
+    Args:
+        prvkey: the private key.
+
+    Returns:
+        The compressed public key, which is what the outer half answers.
+    """
+    return keys.serialize(keys.pubkey_from_prvkey_(prvkey))
+
+
+def decoded(ell_bytes: Any) -> bytes:
+    """Decode an ElligatorSwift key through the inner half, and serialize.
+
+    Args:
+        ell_bytes: the 64-byte encoding.
+
+    Returns:
+        The compressed public key.
+    """
+    return keys.serialize(ellswift.decode_(ell_bytes))
+
+
+def recovered(msg_bytes: Any, signature_bytes: Any, recid: int) -> bytes:
+    """Recover a public key through the inner half, and serialize it.
+
+    Args:
+        msg_bytes: the 32-byte message hash.
+        signature_bytes: the 64-byte compact signature.
+        recid: the recovery id.
+
+    Returns:
+        The compressed recovered public key.
+    """
+    return keys.serialize(recovery.recover_(msg_bytes, signature_bytes, recid))
+
+
+def labeled(scan_prvkey: Any, m: int) -> tuple[bytes, bytes]:
+    """Create a label through the inner half, and serialize it.
+
+    Args:
+        scan_prvkey: the recipient's scan private key.
+        m: which label.
+
+    Returns:
+        The 33-byte label and its 32-byte tweak, which is what the outer
+        half answers.
+    """
+    label_obj, tweak = silentpayments.label_(scan_prvkey, m)
+    return silentpayments.serialize_label(label_obj), tweak
+
+
 # every entry point taking an argument that crosses as a bare pointer,
 # with the arguments it takes: the bytes ones are retyped below
 CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
@@ -109,6 +162,11 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("keys.prvkey_tweak_add", keys.prvkey_tweak_add, (PRVKEY, TWEAK), {}),
     ("keys.prvkey_tweak_mul", keys.prvkey_tweak_mul, (PRVKEY, TWEAK), {}),
     ("keys.pubkey_from_prvkey", keys.pubkey_from_prvkey, (PRVKEY,), {}),
+    # the producing inner halves answer with a cffi object, and two of
+    # those are equal to nothing at all: each is driven through a
+    # function above which serializes what it built, so what the sweep
+    # compares is the bytes its outer half would have answered
+    ("keys.pubkey_from_prvkey_", created, (PRVKEY,), {}),
     ("keys.pubkey_negate", keys.pubkey_negate, (PUBKEY,), {}),
     ("keys.pubkey_tweak_add", keys.pubkey_tweak_add, (PUBKEY, TWEAK), {}),
     ("keys.pubkey_tweak_mul", keys.pubkey_tweak_mul, (PUBKEY, TWEAK), {}),
@@ -137,6 +195,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("ssa.verify", ssa.verify, (MSG, XONLY, SSA_SIG), {}),
     ("ssa.verify_", ssa.verify_, (MSG, PARSED_XONLY, SSA_SIG), {}),
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
+    ("xonly.from_prvkey", xonly.from_prvkey, (PRVKEY,), {}),
     ("xonly.tweak_add", xonly.tweak_add, (XONLY, TWEAK), {}),
     # the parsed key is not retyped, being no bytes; the tweak beside it
     # is, and what comes back is 32 bytes and a parity, which compare
@@ -150,12 +209,17 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("xonly.prvkey_tweak_add", xonly.prvkey_tweak_add, (PRVKEY, TWEAK), {}),
     ("recovery.sign", recovery.sign, (MSG, PRVKEY, bytes(32)), {}),
     ("recovery.recover", recovery.recover, (MSG, RECOVERABLE, RECID), {}),
+    ("recovery.recover_", recovered, (MSG, RECOVERABLE, RECID), {}),
     ("recovery.to_der", recovery.to_der, (RECOVERABLE, RECID), {}),
     ("ecdh.shared_secret", ecdh.shared_secret, (PUBKEY, PRVKEY), {}),
     ("ecdh.shared_secret_", ecdh.shared_secret_, (PARSED, PRVKEY), {}),
     ("ellswift.create", ellswift.create, (PRVKEY, bytes(32)), {}),
     ("ellswift.encode", ellswift.encode, (PUBKEY, bytes(32)), {}),
+    # the parsed key is not retyped, being no bytes; the randomness
+    # beside it is, and pinning it is what makes two encodings comparable
+    ("ellswift.encode_", ellswift.encode_, (PARSED, bytes(32)), {}),
     ("ellswift.decode", ellswift.decode, (ELL_A,), {}),
+    ("ellswift.decode_", decoded, (ELL_A,), {}),
     ("ellswift.xdh", ellswift.xdh, (ELL_A, ELL_B, PRVKEY, 0), {}),
     # the silentpayments arguments are passed positionally, keyword
     # defaults though they are: what is retyped below is `args`, so a
@@ -168,6 +232,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
         {},
     ),
     ("silentpayments.label", silentpayments.label, (SCAN_PRVKEY, 0), {}),
+    ("silentpayments.label_", labeled, (SCAN_PRVKEY, 0), {}),
     (
         "silentpayments.labeled_spend_pubkey",
         silentpayments.labeled_spend_pubkey,
@@ -208,10 +273,14 @@ MODULES = {
 }
 
 # the ones that take no argument crossing as a bare pointer, or nothing
-# this sweep has not already exercised. Both `parse` functions take one
-# and are covered through every wrapper above; `serialize`,
-# `pubkey_negate_`, `pubkey_cmp_` and `from_pubkey_` take the
-# libsecp256k1 object a `parse` hands back and no bytes at all. The two
+# this sweep has not already exercised. All three `parse` functions take
+# one and are covered through every wrapper above, `parse_label` through
+# `silentpayments.labeled_spend_pubkey`; `serialize`, `serialize_label`,
+# `pubkey_negate_`, `pubkey_cmp_`, `from_pubkey_`, `from_keypair` and
+# `labeled_spend_pubkey_` take the libsecp256k1 objects a `parse`, a
+# producing inner half or `ssa.Signer` hands back, and no bytes at all --
+# as do `pubkey_combine_` and `pubkey_sort_`, whose sequences hold those
+# same objects and no bytes to retype. The two
 # tweaking inner halves do take a tweak, and it is the retyped one of
 # `keys.pubkey_tweak_add` and `keys.pubkey_tweak_mul` above, which pass
 # theirs straight in: what they answer with is the parsed key they
@@ -228,10 +297,16 @@ NOT_SWEPT = {
     "keys.pubkey_tweak_add_",
     "keys.pubkey_tweak_mul_",
     "keys.pubkey_cmp_",
+    "keys.pubkey_combine_",
+    "keys.pubkey_sort_",
     "keys.PubkeyTweakChain",
     "ssa.Signer",
     "xonly.parse",
     "xonly.from_pubkey_",
+    "xonly.from_keypair",
+    "silentpayments.parse_label",
+    "silentpayments.serialize_label",
+    "silentpayments.labeled_spend_pubkey_",
 }
 
 

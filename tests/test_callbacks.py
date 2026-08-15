@@ -5,9 +5,10 @@
 
 """Tests of what libsecp256k1 reports through the callbacks of the context.
 
-An illegal argument is reachable through `lib`, and through the one
-wrapper that takes a libsecp256k1 object rather than bytes; both are
-driven here. An internal error is not: libsecp256k1 reports through that
+An illegal argument is reachable through `lib`, and through the two
+wrappers that take a libsecp256k1 object rather than bytes -- a public
+key for `keys.serialize`, a keypair for `xonly.from_keypair`; all three
+are driven here. An internal error is not: libsecp256k1 reports through that
 callback what it holds to be unreachable, so the recording function is
 called directly, the way test_extension.py drives the branch of the
 loader that the build it runs on does not have.
@@ -19,7 +20,7 @@ import threading
 
 import pytest
 
-from btclib_secp256k1 import context, ffi, keys, lib
+from btclib_secp256k1 import context, ffi, keys, lib, ssa, xonly
 from btclib_secp256k1.context import ctx
 
 # a public key libsecp256k1 is asked to parse into nowhere: the bindings
@@ -36,9 +37,10 @@ def test_check_with_nothing_reported() -> None:
 def test_illegal_argument() -> None:
     """An illegal argument reaches the caller as ValueError, with its text.
 
-    Driven through `lib`, which all but one of the bindings' wrappers
+    Driven through `lib`, which all but two of the bindings' wrappers
     cannot do: they give libsecp256k1 bytes they have already checked.
-    `keys.serialize` is the exception, and has a test of its own below.
+    `keys.serialize` and `xonly.from_keypair` are the exceptions, and
+    have tests of their own below.
     """
     assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
     with pytest.raises(ValueError, match="illegal argument: pubkey != NULL"):
@@ -84,6 +86,27 @@ def test_serialize_leaves_nothing_on_the_thread() -> None:
     with pytest.raises(ValueError, match="illegal argument"):
         keys.serialize(ffi.new("secp256k1_pubkey *"))
     # raising it took it off the thread: this reports nothing
+    context.check()
+
+
+def test_from_keypair_raises_what_was_reported() -> None:
+    """`xonly.from_keypair` raises the message, as `keys.serialize` does.
+
+    It takes the keypair the caller holds, so the precondition is
+    libsecp256k1's to violate here too. A NULL pointer names itself; a
+    wiped keypair is the reachable mistake, and what libsecp256k1 reports
+    of it is the zero it finds where the x of a point should be. Neither
+    is left on the thread: the `check` after each reports nothing.
+    """
+    with pytest.raises(ValueError, match="illegal argument: keypair != NULL"):
+        xonly.from_keypair(ffi.NULL)
+    context.check()
+
+    signer = ssa.Signer(7)
+    keypair = signer._keypair
+    signer.wipe()
+    with pytest.raises(ValueError, match="illegal argument: !secp256k1_fe_is_zero"):
+        xonly.from_keypair(keypair)
     context.check()
 
 

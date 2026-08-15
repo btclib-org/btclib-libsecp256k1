@@ -141,6 +141,49 @@ def create_outputs(
     return [_serialize_xonly(output) for output in outputs]
 
 
+def label_(scan_prvkey: BytesLike | int, m: int) -> tuple[CData, bytes]:
+    """Create the m-th label of a scan key as a parsed label, and its tweak.
+
+    The inner half of `label`, and the one that answers with the label
+    object rather than with its 33 bytes: see `keys.parse` for what the
+    underscore means throughout. A label is a point, so parsing those 33
+    bytes back is a field square root -- which is what a recipient
+    publishing a labeled address pays between `label` and
+    `labeled_spend_pubkey`, and what this and `labeled_spend_pubkey_`
+    are for. The 33 bytes are still wanted, being what `scan_outputs` is
+    keyed on: `serialize_label` is where they come from.
+
+    Args:
+        scan_prvkey: the recipient's scan private key, 32 bytes or an
+            int below 2**256.
+        m: which label, an int below 2**32. Zero is BIP352's change
+            label.
+
+    Returns:
+        The libsecp256k1 label object, and the 32-byte tweak that spends
+        what was paid to it.
+
+    Raises:
+        ValueError: if m is out of range, or if the scan key is not 32
+            bytes, does not fit in them, or is not in [1, n-1].
+    """
+    scan_prvkey_bytes = scalar(scan_prvkey, "scan private key")
+    # uint32_t: cffi would answer an out of range m with OverflowError,
+    # which is not how this package reports an argument out of domain
+    if not 0 <= m < 2**32:
+        raise ValueError("the label m must fit in 4 bytes")
+
+    label_obj = ffi.new("secp256k1_silentpayments_label *")
+    tweak = ffi.new("char[32]")
+    if not lib.secp256k1_silentpayments_recipient_label_create(
+        ctx, label_obj, tweak, scan_prvkey_bytes, m
+    ):
+        # the hash landing outside [1, n-1] is the other way this fails,
+        # and it has never been reached: it is negligible per evaluation
+        raise ValueError("invalid scan private key")
+    return label_obj, take(tweak)
+
+
 def label(scan_prvkey: BytesLike | int, m: int) -> tuple[bytes, bytes]:
     """Create the m-th label of a scan key, and its tweak.
 
@@ -174,21 +217,40 @@ def label(scan_prvkey: BytesLike | int, m: int) -> tuple[bytes, bytes]:
         >>> len(label), len(tweak)
         (33, 32)
     """
-    scan_prvkey_bytes = scalar(scan_prvkey, "scan private key")
-    # uint32_t: cffi would answer an out of range m with OverflowError,
-    # which is not how this package reports an argument out of domain
-    if not 0 <= m < 2**32:
-        raise ValueError("the label m must fit in 4 bytes")
+    label_obj, tweak = label_(scan_prvkey, m)
+    return serialize_label(label_obj), tweak
 
-    label_obj = ffi.new("secp256k1_silentpayments_label *")
-    tweak = ffi.new("char[32]")
-    if not lib.secp256k1_silentpayments_recipient_label_create(
-        ctx, label_obj, tweak, scan_prvkey_bytes, m
+
+def labeled_spend_pubkey_(spend_pubkey: CData, label_obj: CData) -> CData:
+    """Add an already-parsed label to an already-parsed spend public key.
+
+    The inner half of `labeled_spend_pubkey`, taking both parsed objects
+    and answering with a third: see `keys.parse` for what the underscore
+    means throughout. A recipient publishing a labeled address holds
+    both of them already -- the label from `label_`, the spend key from
+    `keys.parse` -- so this is the pair of C calls BIP352 asks for with
+    no serialization between them, and `keys.serialize` is how what comes
+    out becomes an address.
+
+    Args:
+        spend_pubkey: the recipient's already-parsed unlabeled spend
+            public key, as `keys.parse` returns.
+        label_obj: the parsed label, as `label_` returns and as
+            `parse_label` reads back.
+
+    Returns:
+        The libsecp256k1 public key object of the labeled spend key.
+
+    Raises:
+        ValueError: if the two sum to the point at infinity, which has no
+            serialization and which a label BIP352 made cannot produce.
+    """
+    labeled = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
+        ctx, labeled, spend_pubkey, label_obj
     ):
-        # the hash landing outside [1, n-1] is the other way this fails,
-        # and it has never been reached: it is negligible per evaluation
-        raise ValueError("invalid scan private key")
-    return _serialize_label(label_obj), take(tweak)
+        raise ValueError("invalid labeled spend public key")
+    return labeled
 
 
 def labeled_spend_pubkey(
@@ -225,15 +287,12 @@ def labeled_spend_pubkey(
         >>> len(silentpayments.labeled_spend_pubkey(spend_pubkey, label))
         33
     """
-    spend_pubkey = _pubkey(spend_pubkey_bytes, "spend public key")
-    label_obj = _parse_label(label_bytes)
-
-    labeled = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
-        ctx, labeled, spend_pubkey, label_obj
-    ):
-        raise ValueError("invalid labeled spend public key")
-    return serialize(labeled, compressed)
+    return serialize(
+        labeled_spend_pubkey_(
+            _pubkey(spend_pubkey_bytes, "spend public key"), parse_label(label_bytes)
+        ),
+        compressed,
+    )
 
 
 def prevouts_summary(
@@ -503,7 +562,7 @@ def _found_output(found: CData) -> tuple[bytes, bytes, bytes | None]:
     tweak = bytes(ffi.buffer(found.tweak))
     if not found.found_with_label:
         return pubkey, tweak, None
-    return pubkey, tweak, _serialize_label(ffi.addressof(found, "label"))
+    return pubkey, tweak, serialize_label(ffi.addressof(found, "label"))
 
 
 def _array(cdecl: str, items: list[CData]) -> CData:
@@ -619,8 +678,15 @@ def _serialize_xonly(xonly_pubkey: CData) -> bytes:
     return ffi.unpack(output, ffi.sizeof(output))
 
 
-def _parse_label(label_bytes: BytesLike) -> CData:
-    """Parse a 33-byte label.
+def parse_label(label_bytes: BytesLike) -> CData:
+    """Parse a 33-byte label into its internal representation.
+
+    What `keys.parse` is to a public key, this is to a label, and for the
+    same reason: those 33 bytes are a compressed point, so reading them
+    back is a field square root. A recipient that keeps its labels as
+    bytes -- the cache `scan_outputs` takes is exactly that -- parses one
+    here and hands it to `labeled_spend_pubkey_`, rather than through the
+    outer half which parses it again at every address.
 
     Args:
         label_bytes: the label, as `label` returned it.
@@ -640,11 +706,14 @@ def _parse_label(label_bytes: BytesLike) -> CData:
     return label_obj
 
 
-def _serialize_label(label_obj: CData) -> bytes:
+def serialize_label(label_obj: CData) -> bytes:
     """Serialize a label libsecp256k1 produced.
 
+    What `keys.serialize` is to a public key: the 33 bytes are what a
+    recipient keys its label cache on, and what `label` answers with.
+
     Args:
-        label_obj: the libsecp256k1 label object.
+        label_obj: the libsecp256k1 label object, as `label_` returns.
 
     Returns:
         Its 33 bytes, which are the compressed point it is.

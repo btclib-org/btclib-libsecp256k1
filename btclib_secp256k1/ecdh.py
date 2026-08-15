@@ -57,7 +57,10 @@ def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
     passing through python objects; and it would buy nothing, the point
     being available as keys.pubkey_tweak_mul(pubkey_bytes, prvkey),
     itself constant time. A protocol needing another derivation applies
-    it to that: SHA256 of it is what this function returns.
+    it to that: SHA256 of it is what this function returns. Wanting both
+    of them is where the inner halves earn their keep -- one
+    `keys.parse`, then `shared_secret_` and `keys.pubkey_tweak_mul_` of
+    it -- the two outer halves parsing the same key twice.
 
     Args:
         pubkey_bytes: the other party's public key, 33 or 65 bytes.

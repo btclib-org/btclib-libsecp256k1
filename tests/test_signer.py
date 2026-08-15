@@ -94,6 +94,29 @@ def test_a_signer_signs_more_than_once() -> None:
     signer.wipe()
 
 
+def test_a_signer_answers_the_key_it_signs_under() -> None:
+    """`pubkey()` is the x-only key of the private key, read off the keypair.
+
+    The keypair already holds the point, so this is the derivation the
+    caller would otherwise make a second time -- and it is asserted
+    against both of the ways of making it, `xonly.from_prvkey` and the
+    serialized public key of the same private key. The parity comes with
+    it, and is the one of the point before BIP340's negation, so a
+    signature made here verifies against the 32 bytes whichever it is.
+    """
+    with ssa.Signer(PRVKEY) as signer:
+        assert signer.pubkey() == (XONLY, PARITY)
+        assert signer.pubkey() == xonly.from_prvkey(PRVKEY)
+        assert ssa.verify(MSG, signer.pubkey()[0], signer.sign(MSG))
+
+    # and a wiped signer has no key to answer with, as it has none to
+    # sign with: the keypair is gone, and this refuses before reaching it
+    signer = ssa.Signer(PRVKEY)
+    signer.wipe()
+    with pytest.raises(ValueError, match="wiped"):
+        signer.pubkey()
+
+
 def test_an_int_private_key_is_the_same_signer() -> None:
     """The constructor takes what `sign` takes, the int scalar included."""
     with ssa.Signer(7) as by_int, ssa.Signer(PRVKEY) as by_bytes:

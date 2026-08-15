@@ -117,7 +117,9 @@ class Signer:
     here, being the point multiplication of the public key. This holds
     one across calls instead, so the first signature is the only one
     paying for it, and `sign` and `sign_custom` are the same signatures
-    over it.
+    over it. `pubkey()` is the x-only key those signatures verify
+    against, read off that same keypair rather than derived a second
+    time.
 
     What that hands the caller is the lifetime of a secret, and it is the
     trade this makes deliberately. A keypair is the private key in
@@ -212,6 +214,28 @@ class Signer:
                 can make it do.
         """
         return _sign_custom(msg_bytes, self._held(), aux_rand32)
+
+    def pubkey(self) -> tuple[bytes, int]:
+        """Return the x-only public key this signer signs under.
+
+        The keypair already holds the point, so this is a read of it and
+        not a multiplication: `xonly.from_prvkey` is the same answer
+        derived from the private key, and costs the point multiplication
+        this signer has already paid for.
+
+        Returns:
+            The 32-byte x coordinate BIP340 verifies against, and the
+            parity of the y of the private key's own point: 0 for even,
+            1 for odd. A signature made here verifies against the 32
+            bytes whichever the parity is, which is what the negation
+            BIP340 prescribes is for.
+
+        Raises:
+            ValueError: if this signer has been wiped.
+            RuntimeError: if libsecp256k1 fails to convert or serialize
+                the key, which a keypair it built cannot make it do.
+        """
+        return xonly.from_keypair(self._held())
 
     def wipe(self) -> None:
         """Overwrite the keypair, ending what this signer can do.

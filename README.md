@@ -287,6 +287,38 @@ against a single key. `xonly.parse` is the same thing for the 32-byte
 x-only key BIP340 verifies against, and `keys.serialize` is how a parsed
 key becomes bytes again.
 
+The other side of the boundary is spelled the same way. A wrapper that
+*produces* a key — recovering it from a signature, decoding it,
+deriving it, adding keys together — serializes what libsecp256k1 handed
+it already parsed, and its inner half answers with the object instead:
+
+```python
+>>> from btclib_secp256k1 import recovery
+>>> sig, recid = recovery.sign(msg, prvkey)
+>>> recovered = recovery.recover_(msg, sig, recid)  # the point, not its bytes
+>>> dsa.verify_(msg, recovered, ecdsa_sig)          # used as it stands
+True
+
+```
+
+So the underscore means one thing in both directions: the half that
+speaks in parsed keys, where the outer half speaks in bytes. What it
+buys is what composing two wrappers otherwise pays between them — a
+serialization of a point that was already in hand, and a parse of what
+was just serialized, which for the compressed form is that square root
+again. `keys.pubkey_from_prvkey_`, `keys.pubkey_combine_`,
+`keys.pubkey_sort_`, `recovery.recover_`, `ellswift.decode_` and
+`silentpayments.label_` are the producing halves; sorting keys and then
+adding them together is the composition that pays it per key, and
+`silentpayments.parse_label` is `keys.parse` for the 33 bytes of a
+label, which are a point like any other.
+
+Two shortcuts exist because the round trip is not worth making at all.
+`xonly.from_prvkey` is the x-only public key of a private key, which is
+`keys.pubkey_from_prvkey` and `xonly.from_pubkey` without the bytes in
+the middle; and `ssa.Signer.pubkey` reads that same key off the keypair
+the signer already holds, which is a read rather than a multiplication.
+
 ## Building the keypair once
 
 Signing has the same shape and a different object. `ssa.sign` builds a
@@ -344,8 +376,10 @@ combination, arbitrary point multiplication) underlying BIP32 key
 derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,
 `pubkey_sort`) that BIP67 and MuSig2 key aggregation call for; `xonly`
 provides the BIP341 taproot tweaking of x-only public keys and of their
-private keys; `hashes` provides the BIP340 tagged hash, the domain
-separation the taproot tags are built on.
+private keys, and the x-only public key itself, from a full public key
+(`from_pubkey`) or straight from a private key (`from_prvkey`);
+`hashes` provides the BIP340 tagged hash, the domain separation the
+taproot tags are built on.
 
 `ssa.sign` signs a 32-byte message hash, as bitcoin does; `ssa.sign_custom`
 signs a message of any length, which BIP340 allows and which a protocol
