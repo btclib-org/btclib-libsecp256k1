@@ -60,6 +60,43 @@ def sign(
     return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes)), recid[0]
 
 
+def recover_(msg_bytes: BytesLike, signature_bytes: BytesLike, recid: int) -> CData:
+    """Recover the public key of a recoverable signature, as a parsed key.
+
+    The inner half of `recover`, and the one that answers with the point
+    rather than with its serialization: see `keys.parse` for what the
+    underscore means throughout. Recovery is how a caller gets a key it
+    did not have, so what usually follows is a use of it -- verifying the
+    signature against it, comparing it with an expected key, deriving an
+    address -- and libsecp256k1 hands it over already lifted.
+
+    Args:
+        msg_bytes: the 32-byte hash the signature was made over.
+        signature_bytes: the 64-byte compact signature.
+        recid: the recovery id, 0 to 3.
+
+    Returns:
+        The libsecp256k1 public key object of the recovered key.
+
+    Raises:
+        ValueError: if the message hash is not 32 bytes, if the
+            signature is not 64 bytes or has r or s at or above the
+            group order, if recid is outside 0 to 3, or if no key can be
+            recovered.
+    """
+    msg_bytes = octets(msg_bytes, "message hash", 32)
+    signature_bytes = octets(signature_bytes, "signature", 64)
+    if recid not in (0, 1, 2, 3):
+        raise ValueError("the recovery id must be 0, 1, 2, or 3")
+
+    signature = _parse(signature_bytes, recid)
+
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes):
+        raise ValueError("public key recovery failed")
+    return pubkey
+
+
 def recover(
     msg_bytes: BytesLike,
     signature_bytes: BytesLike,
@@ -87,17 +124,7 @@ def recover(
         RuntimeError: if libsecp256k1 fails to serialize the key, which
             no input can make it do.
     """
-    msg_bytes = octets(msg_bytes, "message hash", 32)
-    signature_bytes = octets(signature_bytes, "signature", 64)
-    if recid not in (0, 1, 2, 3):
-        raise ValueError("the recovery id must be 0, 1, 2, or 3")
-
-    signature = _parse(signature_bytes, recid)
-
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes):
-        raise ValueError("public key recovery failed")
-    return serialize(pubkey, compressed)
+    return serialize(recover_(msg_bytes, signature_bytes, recid), compressed)
 
 
 def to_der(signature_bytes: BytesLike, recid: int) -> bytes:

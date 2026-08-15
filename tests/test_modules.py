@@ -552,8 +552,8 @@ def test_the_prevouts_summary_carries_no_secret() -> None:
 def test_a_label_is_a_point_and_round_trips_through_its_33_bytes() -> None:
     """The 33 bytes of a label parse back into the label they came from.
 
-    `labeled_spend_pubkey` is the only entry point taking one, so the
-    parse is exercised through it: the same 33 bytes have to give the
+    `labeled_spend_pubkey` and `parse_label` are what take one, and the
+    parse is exercised through both: the same 33 bytes have to give the
     same labeled key, and a label is a point rather than an opaque blob
     -- the sum below is what says so.
     """
@@ -565,6 +565,18 @@ def test_a_label_is_a_point_and_round_trips_through_its_33_bytes() -> None:
     assert silentpayments.labeled_spend_pubkey(
         SP_SPEND_PUBKEY, label, compressed=False
     ) == keys.pubkey_combine([SP_SPEND_PUBKEY, label], compressed=False)
+
+    # and the 33 bytes parse back into the label the recipient made,
+    # which is what lets a cache of them be used without going round
+    # through the serialization at every address
+    assert (
+        keys.serialize(
+            silentpayments.labeled_spend_pubkey_(
+                keys.parse(SP_SPEND_PUBKEY), silentpayments.parse_label(label)
+            )
+        )
+        == labeled
+    )
 
 
 def test_a_label_of_a_scan_key_is_the_scan_key_and_m() -> None:

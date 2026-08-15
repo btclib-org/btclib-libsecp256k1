@@ -25,14 +25,28 @@ from typing import Any
 
 import pytest
 
-from btclib_secp256k1 import dsa, ecdh, keys, mult, ssa, xonly
+from btclib_secp256k1 import (
+    dsa,
+    ecdh,
+    ellswift,
+    keys,
+    mult,
+    recovery,
+    silentpayments,
+    ssa,
+    xonly,
+)
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 PRVKEY = 7
 TWEAK = 11
+SCAN_PRVKEY = 13
 MSG = hashlib.sha256(b"btclib_secp256k1").digest()
+# the randomness of an ElligatorSwift encoding, pinned: fresh randomness
+# is what the encoding takes by default, and two of those never agree
+RND32 = bytes(32)
 
 PUBKEY_LONG = mult.mult_(PRVKEY)
 PUBKEY = keys.pubkey_from_prvkey(PRVKEY)
@@ -40,6 +54,21 @@ OTHER = keys.pubkey_from_prvkey(3)
 XONLY, PARITY = xonly.from_pubkey(PUBKEY)
 DER = dsa.sign(MSG, PRVKEY)
 SSA_SIG = ssa.sign(MSG, PRVKEY, bytes(32))
+RECOVERABLE, RECID = recovery.sign(MSG, PRVKEY)
+ELL = ellswift.create(PRVKEY, RND32)
+LABEL, LABEL_TWEAK = silentpayments.label(SCAN_PRVKEY, 0)
+
+
+def label_through_the_inner_half() -> tuple[bytes, bytes]:
+    """Create a label through `label_`, and serialize what it answered.
+
+    Returns:
+        The 33-byte label and its 32-byte tweak, which is the pair
+        `silentpayments.label` answers with.
+    """
+    label_obj, tweak = silentpayments.label_(SCAN_PRVKEY, 0)
+    return silentpayments.serialize_label(label_obj), tweak
+
 
 # every pair of the convention: the name of the outer half, that half as
 # a call of the serialized key alone, and the inner half as a call of the
@@ -80,6 +109,64 @@ PAIRS: list[tuple[str, Callable[[bytes], Any], Callable[[Any], Any]]] = [
         lambda pubkey_bytes: dsa.verify(MSG, pubkey_bytes, DER),
         lambda pubkey: dsa.verify_(MSG, pubkey, DER),
     ),
+    (
+        "ellswift.encode",
+        lambda pubkey_bytes: ellswift.encode(pubkey_bytes, RND32),
+        lambda pubkey: ellswift.encode_(pubkey, RND32),
+    ),
+]
+
+# and the halves on the other side of the boundary: the ones that answer
+# with the key instead of with its bytes, whose outer half is the same
+# call with a `serialize` behind it rather than a `parse` in front. Each
+# is written as the pair of calls it is, the key being what they produce
+# rather than what they take -- so there are no two serializations of an
+# argument to drive them with, and the equality is over the answer alone
+PRODUCERS: list[tuple[str, Callable[[], Any], Callable[[], Any]]] = [
+    (
+        "keys.pubkey_from_prvkey",
+        lambda: keys.pubkey_from_prvkey(PRVKEY),
+        lambda: keys.serialize(keys.pubkey_from_prvkey_(PRVKEY)),
+    ),
+    (
+        "keys.pubkey_combine",
+        lambda: keys.pubkey_combine([PUBKEY, OTHER]),
+        lambda: keys.serialize(
+            keys.pubkey_combine_([keys.parse(PUBKEY), keys.parse(OTHER)])
+        ),
+    ),
+    (
+        "keys.pubkey_sort",
+        lambda: keys.pubkey_sort([PUBKEY, OTHER]),
+        lambda: [
+            keys.serialize(pubkey)
+            for pubkey in keys.pubkey_sort_([keys.parse(PUBKEY), keys.parse(OTHER)])
+        ],
+    ),
+    (
+        "recovery.recover",
+        lambda: recovery.recover(MSG, RECOVERABLE, RECID),
+        lambda: keys.serialize(recovery.recover_(MSG, RECOVERABLE, RECID)),
+    ),
+    (
+        "ellswift.decode",
+        lambda: ellswift.decode(ELL),
+        lambda: keys.serialize(ellswift.decode_(ELL)),
+    ),
+    (
+        "silentpayments.label",
+        lambda: silentpayments.label(SCAN_PRVKEY, 0),
+        label_through_the_inner_half,
+    ),
+    (
+        "silentpayments.labeled_spend_pubkey",
+        lambda: silentpayments.labeled_spend_pubkey(PUBKEY, LABEL),
+        lambda: keys.serialize(
+            silentpayments.labeled_spend_pubkey_(
+                keys.parse(PUBKEY), silentpayments.parse_label(LABEL)
+            )
+        ),
+    ),
 ]
 
 
@@ -105,6 +192,28 @@ def test_the_inner_half_is_the_outer_one_without_the_parse(
         pubkey_bytes: the key, compressed or not.
     """
     assert outer(pubkey_bytes) == inner(keys.parse(pubkey_bytes))
+
+
+@pytest.mark.parametrize(
+    "name,outer,inner", PRODUCERS, ids=[producer[0] for producer in PRODUCERS]
+)
+def test_the_producing_half_is_the_outer_one_without_the_serialize(
+    name: str, outer: Callable[[], Any], inner: Callable[[], Any]
+) -> None:
+    """`outer(...)` is `serialize(inner(...))`, key for key.
+
+    The same equality read the other way round: where the halves above
+    take the key, these produce it, so what the outer half adds is the
+    serialization behind the call rather than the parse in front of it.
+    A caller who hands the key straight to another wrapper -- which is
+    what these are for -- never pays for either.
+
+    Args:
+        name: the outer half, for the test id.
+        outer: it, as a call of its own arguments.
+        inner: the inner half, with what serializes its answer.
+    """
+    assert outer() == inner()
 
 
 def test_the_schnorr_pair_parses_the_x_only_key() -> None:
@@ -217,12 +326,19 @@ def test_every_inner_half_is_paired() -> None:
     modules = {
         "dsa": dsa,
         "ecdh": ecdh,
+        "ellswift": ellswift,
         "keys": keys,
         "mult": mult,
+        "recovery": recovery,
+        "silentpayments": silentpayments,
         "ssa": ssa,
         "xonly": xonly,
     }
-    paired = {f"{name}_" for name, *_ in PAIRS} | {"ssa.verify_", "xonly.tweak_add_"}
+    paired = (
+        {f"{name}_" for name, *_ in PAIRS}
+        | {f"{name}_" for name, *_ in PRODUCERS}
+        | {"ssa.verify_", "xonly.tweak_add_"}
+    )
     inner_halves = {
         f"{module_name}.{name}"
         for module_name, module in modules.items()

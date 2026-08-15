@@ -113,6 +113,31 @@ def prvkey_tweak_mul(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
     return take(prvkey_buffer)
 
 
+def pubkey_from_prvkey_(prvkey: BytesLike | int) -> CData:
+    """Return the public key of a private key, as the parsed point.
+
+    The inner half of `pubkey_from_prvkey`, for a caller who is about to
+    hand the point to another wrapper rather than to hold its bytes:
+    `xonly.from_prvkey` is the one this package makes, and a caller
+    aggregating or tweaking a key it has just derived is the other. See
+    `parse` for what the underscore means throughout.
+
+    Args:
+        prvkey: the private key, 32 bytes or an int below 2**256.
+
+    Returns:
+        The libsecp256k1 public key object of the point kG.
+
+    Raises:
+        ValueError: if the private key is not 32 bytes, does not fit in
+            them, or is not in [1, n-1].
+    """
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_create(ctx, pubkey, scalar(prvkey, "private key")):
+        raise ValueError("invalid private key: not in [1, n-1]")
+    return pubkey
+
+
 def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> bytes:
     """Return the public key of a private key, i.e. the point kG.
 
@@ -141,10 +166,7 @@ def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> byte
         >>> keys.pubkey_from_prvkey(1).hex()[:10]
         '0279be667e'
     """
-    pubkey = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_create(ctx, pubkey, scalar(prvkey, "private key")):
-        raise ValueError("invalid private key: not in [1, n-1]")
-    return serialize(pubkey, compressed)
+    return serialize(pubkey_from_prvkey_(prvkey), compressed)
 
 
 def pubkey_negate_(pubkey: CData) -> CData:
@@ -353,6 +375,39 @@ def pubkey_tweak_mul(
     return serialize(pubkey_tweak_mul_(parse(pubkey_bytes), tweak), compressed)
 
 
+def pubkey_combine_(pubkeys: Sequence[CData]) -> CData:
+    """Add already-parsed public keys together.
+
+    The inner half of `pubkey_combine`, and the one that answers with the
+    sum rather than with its serialization: see `parse` for what the
+    underscore means throughout. `pubkey_sort_` is what hands the keys
+    over in the order BIP67 and MuSig2 ask for, and the two together are
+    an aggregation that parses each key once and serializes once, where
+    the outer halves serialize every sorted key only to parse it back.
+
+    Args:
+        pubkeys: the already-parsed public keys, as `parse` returns. At
+            least one is required.
+
+    Returns:
+        The libsecp256k1 public key object of the sum.
+
+    Raises:
+        ValueError: if the sequence is empty, or if the sum is the point
+            at infinity, which is no public key.
+    """
+    pubkeys = list(pubkeys)
+    if not pubkeys:
+        raise ValueError("at least one public key is required")
+
+    combined = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_combine(
+        ctx, combined, ffi.new("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
+    ):
+        raise ValueError("invalid public key sum")
+    return combined
+
+
 def pubkey_combine(
     pubkeys_bytes: Sequence[BytesLike], compressed: bool = True
 ) -> bytes:
@@ -373,16 +428,10 @@ def pubkey_combine(
         RuntimeError: if libsecp256k1 fails to serialize the result,
             which no valid input can make it do.
     """
-    if not pubkeys_bytes:
-        raise ValueError("at least one public key is required")
-
-    pubkeys = [parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
-    combined = ffi.new("secp256k1_pubkey *")
-    if not lib.secp256k1_ec_pubkey_combine(
-        ctx, combined, ffi.new("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
-    ):
-        raise ValueError("invalid public key sum")
-    return serialize(combined, compressed)
+    return serialize(
+        pubkey_combine_([parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]),
+        compressed,
+    )
 
 
 def pubkey_cmp_(pubkey1: CData, pubkey2: CData) -> int:
@@ -427,6 +476,40 @@ def pubkey_cmp(pubkey1_bytes: BytesLike, pubkey2_bytes: BytesLike) -> int:
     return pubkey_cmp_(parse(pubkey1_bytes), parse(pubkey2_bytes))
 
 
+def pubkey_sort_(pubkeys: Sequence[CData]) -> list[CData]:
+    """Sort already-parsed public keys, in compressed-form order.
+
+    The inner half of `pubkey_sort`, and the one that answers with the
+    keys rather than with their serializations: see `parse` for what the
+    underscore means throughout. Sorting in order to aggregate is this
+    and `pubkey_combine_`, which takes what this returns.
+
+    Args:
+        pubkeys: the already-parsed public keys, as `parse` returns. An
+            empty sequence sorts to an empty list.
+
+    Returns:
+        The same objects that were passed in, in ascending order.
+
+    Raises:
+        RuntimeError: if libsecp256k1 fails to sort them, which no valid
+            key can make it do.
+    """
+    pubkeys = list(pubkeys)
+    # the array holds borrowed pointers, and is what gets reordered: the
+    # list above is what keeps the keys it points to alive
+    array = ffi.new("secp256k1_pubkey *[]", pubkeys)
+    if not lib.secp256k1_ec_pubkey_sort(ctx, array, len(pubkeys)):
+        raise RuntimeError("public key sorting failed")
+    # what comes back are the caller's own objects, found by the address
+    # each reordered pointer holds -- a cffi pointer hashes and compares
+    # as that address. Handing back the array's own elements instead
+    # would hand back pointers that own nothing, and that dangle the
+    # moment the caller drops the sequence they point into
+    owners = {pubkey: pubkey for pubkey in pubkeys}
+    return [owners[pointer] for pointer in array]
+
+
 def pubkey_sort(
     pubkeys_bytes: Sequence[BytesLike], compressed: bool = True
 ) -> list[bytes]:
@@ -449,13 +532,12 @@ def pubkey_sort(
         RuntimeError: if libsecp256k1 fails to sort or serialize, which
             no valid input can make it do.
     """
-    pubkeys = [parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
-    # the array holds borrowed pointers, and is what gets reordered: the
-    # list above is what keeps the keys it points to alive
-    array = ffi.new("secp256k1_pubkey *[]", pubkeys)
-    if not lib.secp256k1_ec_pubkey_sort(ctx, array, len(pubkeys)):
-        raise RuntimeError("public key sorting failed")
-    return [serialize(pubkey, compressed) for pubkey in array]
+    return [
+        serialize(pubkey, compressed)
+        for pubkey in pubkey_sort_([
+            parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes
+        ])
+    ]
 
 
 def parse(pubkey_bytes: BytesLike) -> CData:
@@ -477,6 +559,20 @@ def parse(pubkey_bytes: BytesLike) -> CData:
     buy it twice. Nothing else about the two halves differs: the
     remaining arguments are checked exactly as the outer half checks
     them, a bare pointer's length being what no C return code can report.
+
+    The other side of the boundary is spelled the same way. A wrapper
+    whose last act is to serialize a key libsecp256k1 built for it also
+    has an inner half -- `pubkey_combine_` here, `recovery.recover_` and
+    `ellswift.decode_` elsewhere -- answering with the object where the
+    outer half answers with the bytes, and the outer half is that inner
+    half with a `serialize` behind it. So the underscore means one thing
+    in both directions: the half that speaks in parsed keys, where the
+    outer half speaks in bytes. What it buys is what a composition of two
+    wrappers would otherwise pay between them -- recovering a key and
+    verifying with it, sorting keys and adding them together, decoding an
+    ElligatorSwift encoding and tweaking what came out -- a serialization
+    of a point that was already in hand, and a parse of what was just
+    serialized.
 
     Args:
         pubkey_bytes: the public key, 33 or 65 bytes.
