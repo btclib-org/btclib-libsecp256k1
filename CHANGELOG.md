@@ -381,6 +381,33 @@ release-notes length in the first place, and are still in
   in [1, n-1]" wherever that is the whole of what was wrong, and "the
   {name} must be in [0, {upper}]" for the four small numbers
 
+### The signature's two serializations
+
+- **`dsa.sign` and `dsa.verify` take a `compact` flag**, false by
+  default. A signature is `r` and `s`; DER is what the wire carries, and
+  a caller holding the two scalars had to write an ASN.1 structure around
+  them for a call whose first act is to take it apart again — and read
+  one back the same way on the answer. `parse_compact` and
+  `serialize_compact` have been public since the halves were separated,
+  but they speak in the parsed signature, which is exactly what a caller
+  doing one thing with it does not want to hold.
+
+  btclib is the caller, and pays it at both ends
+  (<https://github.com/btclib-org/btclib/issues/922>): building the DER
+  is 0.712 us against the 0.077 of `r.to_bytes() + s.to_bytes()`, and
+  reading it back 1.250 against 0.320 — the second of those *per grind
+  attempt* under low-r grinding, where the loop parses what it may
+  discard. Its recoverable path never had the problem:
+  `recovery.sign` answers the compact form, and the comment there says
+  why.
+
+- **Which form it is has to be said, and cannot be read off the length.**
+  A DER signature of 64 octets exists — `r` and `s` of 29 bytes each —
+  and it begins with the 0x30 a compact `r` may begin with too. So the
+  flag, rather than a dispatch; and each form is refused as the other,
+  which `tests/test_core.py` asserts along with the round trip through
+  `to_der` and `to_compact` and the `normalize` flag on either form.
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**

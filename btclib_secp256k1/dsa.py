@@ -74,12 +74,22 @@ def _sign_(
 
 
 def sign(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    compact: bool = False,
 ) -> bytes:
     """Create an ECDSA signature.
 
     The nonce is the deterministic RFC6979 one, so the signature is a
     function of the message and the key alone unless aux_rand32 is given.
+
+    Which serialization to answer with is the caller's, as it is
+    everywhere a key is answered: a signature is `r` and `s`, and DER is
+    what the wire carries rather than what a caller holds. Asking for the
+    compact form is `serialize_compact` in place of `serialize_der`, where
+    reaching it through `to_compact` is that DER encoding parsed straight
+    back apart.
 
     Args:
         msg_bytes: the 32-byte hash of the message.
@@ -88,10 +98,11 @@ def sign(
             None for the RFC6979 nonce alone. Never a shorter value:
             entropy is not a serialization, and padding one would make a
             caller mistake a valid argument.
+        compact: whether to answer the 64-byte `r || s` rather than DER.
 
     Returns:
-        The signature in DER encoding, in the lower-s form libsecp256k1
-        always produces.
+        The signature, in the lower-s form libsecp256k1 always produces:
+        DER, or the 64 octets of `r || s` where `compact` asks for them.
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
@@ -107,7 +118,8 @@ def sign(
         >>> dsa.is_low_s(dsa.sign(msg, 1))
         True
     """
-    return serialize_der(_sign_(msg_bytes, prvkey, aux_rand32))
+    signature = _sign_(msg_bytes, prvkey, aux_rand32)
+    return serialize_compact(signature) if compact else serialize_der(signature)
 
 
 def _verify_(
@@ -157,6 +169,7 @@ def verify(
     pubkey_bytes: BytesLike,
     signature_bytes: BytesLike,
     normalize: bool = False,
+    compact: bool = False,
 ) -> bool:
     """Verify a ECDSA signature.
 
@@ -171,18 +184,24 @@ def verify(
     Args:
         msg_bytes: the 32-byte hash of the message.
         pubkey_bytes: the public key, 33 or 65 bytes.
-        signature_bytes: the signature in DER encoding.
+        signature_bytes: the signature, DER encoded or the 64 octets of
+            `r || s`, as `compact` says.
         normalize: whether to verify the lower-s form of the signature
             rather than reject a signature that is not in it.
+        compact: whether the signature is the 64-byte `r || s` rather
+            than DER. Which of the two it is has to be said and cannot be
+            read off the length: a DER signature of 64 octets exists,
+            `r` and `s` of 29 bytes each, and it begins with the 0x30 a
+            compact `r` may begin with too.
 
     Returns:
         True if the signature is valid for that key and message.
 
     Raises:
-        ValueError: if the message hash is not 32 bytes, if the DER
-            signature is malformed, or if the public key is not a valid
-            point. A well-formed signature that simply does not verify
-            is False, not an exception.
+        ValueError: if the message hash is not 32 bytes, if the signature
+            is malformed in the serialization it was said to be in, or if
+            the public key is not a valid point. A well-formed signature
+            that simply does not verify is False, not an exception.
 
     Example:
         >>> import hashlib
@@ -191,8 +210,9 @@ def verify(
         >>> dsa.verify(msg, mult.mult_bytes(1), dsa.sign(msg, 1))
         True
     """
+    parse = parse_compact if compact else parse_der
     return _verify_(
-        msg_bytes, keys.parse(pubkey_bytes), parse_der(signature_bytes), normalize
+        msg_bytes, keys.parse(pubkey_bytes), parse(signature_bytes), normalize
     )
 
 

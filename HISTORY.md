@@ -132,6 +132,17 @@ whatever form the x arrived in, so `ssa.verify`, `xonly.tweak_add` and
 that refusal cost was a lift, and a tweak from the uncompressed form is
 4.11 microseconds against the 5.92 of the 32-byte one.
 
+**`dsa.sign` and `dsa.verify` take a `compact` flag**, false by default,
+so an ECDSA signature crosses in either of its two serializations. A
+signature is `r` and `s`, and DER is what the wire carries: a caller
+holding the two scalars was writing an ASN.1 structure around them for a
+call that takes it apart again, and reading one back on the answer — 0.7
+and 1.3 microseconds of the caller's own time, the second of them per
+attempt where low-r grinding discards what it has just parsed. Which form
+is being handed in has to be said and cannot be read off the length: a
+DER signature of 64 octets exists. Nothing about the default moves, and
+`to_der` and `to_compact` are unchanged.
+
 **`xonly.from_prvkey` and `ssa.Signer.pubkey` are two entry points
 rather than two halves**, and they save different things. The first is
 the x-only public key of a private key: it is `_pubkey_from_prvkey_` and

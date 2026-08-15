@@ -12,6 +12,7 @@ that would take the hosting Python process down with them.
 """
 
 import array
+import hashlib
 import secrets
 
 import pytest
@@ -471,3 +472,46 @@ def test_generated_randomness_is_always_32_octets(
     ellswift.encode(pubkey_bytes)
 
     assert requested == [32, 32, 32, 32]
+
+
+def test_a_signature_crosses_in_either_serialization() -> None:
+    """`compact` decides the form, and the two forms are one signature.
+
+    A signature is `r` and `s`; DER is what the wire carries, and a
+    caller holding the two scalars has no reason to write a structure
+    around them for a call that takes it straight apart again. So `sign`
+    answers either form and `verify` takes either, and what says which is
+    the flag rather than the length: a DER signature of 64 octets exists,
+    and begins with an 0x30 a compact `r` may begin with too.
+    """
+    msg = hashlib.sha256(b"btclib_secp256k1").digest()
+    prvkey = 0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF
+    pubkey = keys.pubkey_from_prvkey(prvkey)
+
+    der = dsa.sign(msg, prvkey)
+    compact = dsa.sign(msg, prvkey, compact=True)
+    assert len(compact) == 64
+    assert compact == dsa.to_compact(der)
+    assert der == dsa.to_der(compact)
+
+    assert dsa.verify(msg, pubkey, der)
+    assert dsa.verify(msg, pubkey, compact, compact=True)
+    # the aux_rand32 argument keeps its place before the flag
+    assert dsa.sign(msg, prvkey, bytes(32), compact=True) == dsa.to_compact(
+        dsa.sign(msg, prvkey, bytes(32))
+    )
+
+    # each form is refused as the other: DER read as compact is the wrong
+    # length, and 64 octets read as DER are no structure
+    with pytest.raises(ValueError, match="compact signature"):
+        dsa.verify(msg, pubkey, der, compact=True)
+    with pytest.raises(ValueError, match="DER"):
+        dsa.verify(msg, pubkey, compact)
+
+    # and normalize is the flag it always was, on either form
+    high_s = dsa.to_compact(der)
+    s = int.from_bytes(high_s[32:], "big")
+    order = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    malleated = high_s[:32] + (order - s).to_bytes(32, "big")
+    assert not dsa.verify(msg, pubkey, malleated, compact=True)
+    assert dsa.verify(msg, pubkey, malleated, normalize=True, compact=True)
