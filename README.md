@@ -317,11 +317,13 @@ adding them together is the composition that pays it per key, and
 `silentpayments.parse_label` is `keys.parse` for the 33 bytes of a
 label, which are a point like any other.
 
-Two shortcuts exist because the round trip is not worth making at all.
-`xonly.from_prvkey` is the x-only public key of a private key, which is
-`keys.pubkey_from_prvkey` and `xonly.from_pubkey` without the bytes in
-the middle; and `ssa.Signer.pubkey` reads that same key off the keypair
-the signer already holds, which is a read rather than a multiplication.
+Two entry points are there instead of two halves. `xonly.from_prvkey` is
+the x-only public key of a private key — the two halves above composed,
+which is what BIP340 and BIP341 ask for and what this package used to
+make every caller spell in two steps, with a full public key in the
+middle that nothing wanted. `ssa.Signer.pubkey` reads that same key off
+the keypair the signer already holds, which is a read rather than a
+multiplication, and so is cheaper than any composition could be.
 
 ## Building the keypair once
 

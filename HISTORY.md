@@ -79,19 +79,21 @@ whatever form the x arrived in, so `ssa.verify`, `xonly.tweak_add` and
 that refusal cost was a lift, and a tweak from the uncompressed form is
 4.11 microseconds against the 5.92 of the 32-byte one.
 
-**`xonly.from_prvkey` and `ssa.Signer.pubkey` are the two shortcuts
-where the round trip was not worth making at all.** The first is the
-x-only public key of a private key — `keys.pubkey_from_prvkey` and
-`xonly.from_pubkey` with neither the serialization nor the parse between
-them, 7.9 microseconds against 10.5 — and it is the BIP340 and BIP341
-form of a key derivation this package made every caller spell in two
-steps. The second reads that same key off the keypair a signer already
-holds, which is a read rather than a multiplication: 0.4 microseconds,
-where deriving it again is 10.5. `xonly.from_keypair` is that read for a
-caller holding a keypair of its own, a MuSig2 session through `lib`
-being one, and it is the second wrapper of these bindings taking a
-libsecp256k1 object rather than bytes: like `keys.serialize`, it raises
-what libsecp256k1 reported rather than leaving it on the thread.
+**`xonly.from_prvkey` and `ssa.Signer.pubkey` are two entry points
+rather than two halves**, and they save different things. The first is
+the x-only public key of a private key: it is `pubkey_from_prvkey_` and
+`from_pubkey_` composed, so the halves above are where its 7.9
+microseconds against 10.5 come from, and what it adds is a name for a
+composition BIP340 and BIP341 make the common case — the full public
+key in the middle being an intermediate step nothing here asked for.
+The second saves what no pair of halves could: a signer holds the
+keypair, and the point with it, so reading the key off it is a read and
+not a multiplication — 0.4 microseconds, where deriving it again is
+10.5. `xonly.from_keypair` is that read for a caller holding a keypair
+of its own, a MuSig2 session through `lib` being one, and it is the
+second wrapper of these bindings taking a libsecp256k1 object rather
+than bytes: like `keys.serialize`, it raises what libsecp256k1 reported
+rather than leaving it on the thread.
 
 ## v0.8.0.2
 
