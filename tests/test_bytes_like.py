@@ -70,6 +70,37 @@ SP_OUTPUTS = silentpayments.create_outputs(
 SP_SUMMARY = silentpayments.prevouts_summary(OUTPOINT, pubkeys=[PUBKEY])
 SP_LABEL, SP_LABEL_TWEAK = silentpayments.label(SCAN_PRVKEY, 0)
 
+
+def signed(prvkey: Any, msg_bytes: Any, aux_rand32: Any) -> bytes:
+    """Sign a 32-byte message hash through a signer, and wipe it.
+
+    Args:
+        prvkey: the private key to build the signer from.
+        msg_bytes: the 32-byte message hash.
+        aux_rand32: the 32 bytes of auxiliary randomness.
+
+    Returns:
+        The 64-byte signature.
+    """
+    with ssa.Signer(prvkey) as signer:
+        return signer.sign(msg_bytes, aux_rand32)
+
+
+def signed_custom(prvkey: Any, msg_bytes: Any, aux_rand32: Any) -> bytes:
+    """Sign a message of any length through a signer, and wipe it.
+
+    Args:
+        prvkey: the private key to build the signer from.
+        msg_bytes: the message.
+        aux_rand32: the 32 bytes of auxiliary randomness.
+
+    Returns:
+        The 64-byte signature.
+    """
+    with ssa.Signer(prvkey) as signer:
+        return signer.sign_custom(msg_bytes, aux_rand32)
+
+
 # every entry point taking an argument that crosses as a bare pointer,
 # with the arguments it takes: the bytes ones are retyped below
 CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
@@ -96,6 +127,13 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("dsa.to_der", dsa.to_der, (COMPACT,), {}),
     ("ssa.sign", ssa.sign, (MSG, PRVKEY, bytes(32)), {}),
     ("ssa.sign_custom", ssa.sign_custom, (b"a message", PRVKEY, bytes(32)), {}),
+    # the signer's own two, which is where its three bytes-like arguments
+    # are: the private key the constructor takes, and the message and aux
+    # of each signature. Driven through the two functions below, so that
+    # what is compared is a signature rather than the object holding the
+    # keypair -- and so that the keypair is wiped, as it is anywhere else
+    ("ssa.Signer.sign", signed, (PRVKEY, MSG, bytes(32)), {}),
+    ("ssa.Signer.sign_custom", signed_custom, (PRVKEY, b"a message", bytes(32)), {}),
     ("ssa.verify", ssa.verify, (MSG, XONLY, SSA_SIG), {}),
     ("ssa.verify_", ssa.verify_, (MSG, PARSED_XONLY, SSA_SIG), {}),
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
@@ -176,7 +214,10 @@ MODULES = {
 # theirs straight in: what they answer with is the parsed key they
 # mutated, and two calls of it are never equal. `PubkeyTweakChain` is the
 # same, calling `parse` on construction and reaching `scalar` through
-# `pubkey_tweak_add_` on every `tweak_add`
+# `pubkey_tweak_add_` on every `tweak_add`. `ssa.Signer` is a class too
+# and its private key does cross as a bare pointer, but it is swept: the
+# two entries above build one and sign through it, which is every
+# argument of the constructor and of both methods
 NOT_SWEPT = {
     "keys.serialize",
     "keys.parse",
@@ -185,6 +226,7 @@ NOT_SWEPT = {
     "keys.pubkey_tweak_mul_",
     "keys.pubkey_cmp_",
     "keys.PubkeyTweakChain",
+    "ssa.Signer",
     "xonly.parse",
     "xonly.from_pubkey_",
 }

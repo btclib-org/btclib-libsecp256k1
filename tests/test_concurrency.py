@@ -16,6 +16,11 @@ interpreter lock.
 Every operation exercised here is deterministic, ECDSA by RFC6979 and
 BIP340 by a fixed aux_rand32, so a result that differs between threads
 is a shared buffer, not a legitimate difference.
+
+`ssa.Signer` is the one thing that does hold a buffer across calls, and
+the second test is the half of the reasoning that does not follow from
+the paragraph above: what makes a shared signer safe is that
+libsecp256k1 takes a keypair const.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -62,3 +67,26 @@ def test_concurrent_round_trips() -> None:
         # map is lazy: the results have to be consumed for an assertion
         # failing in a worker to be raised here
         list(pool.map(round_trip, range(WORKERS * ROUNDS)))
+
+
+def test_one_signer_signs_from_every_thread() -> None:
+    """Eight threads share one keypair and reach the one signature.
+
+    The keypair a signer holds is the one buffer these bindings keep
+    across calls, so it is the one place the module docstring's reasoning
+    does not reach: what makes this safe is that libsecp256k1 takes a
+    keypair const, and signing does not write to it. What is not safe is
+    wiping it while a thread is inside `sign`, which is why the wipe here
+    is after the pool has joined -- the ordering the `with` block gives a
+    caller for free.
+    """
+    expected = ssa.sign(msg, prvkey, aux_rand32)
+    signer = ssa.Signer(prvkey)
+
+    def sign_through(_: int) -> None:
+        assert signer.sign(msg, aux_rand32) == expected
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        list(pool.map(sign_through, range(WORKERS * ROUNDS)))
+
+    signer.wipe()

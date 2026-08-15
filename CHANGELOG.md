@@ -22,6 +22,48 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### Signing under one key
+
+- **`ssa.Signer` builds the BIP340 keypair once** (#153). `ssa.sign` and
+  `ssa.sign_custom` build a `secp256k1_keypair` from the private key and
+  wipe it in a `finally`, so a caller signing several messages under one
+  key pays for it once per signature — and it is about half of what a
+  signature costs, being the point multiplication of the public key.
+  Measured on this tree, on an Apple M5, macOS 26.6, arm64, CPython
+  3.14.6, minimum of 10 rounds of 20 000 calls, microseconds per call:
+  `ssa.sign` 15.7, `Signer.sign` 8.2, `secp256k1_keypair_create` alone
+  7.3 — the saving is the keypair and nothing else, and it puts one
+  signature at the cost the C call itself has. `sign_custom` is the same
+  pair, 16.0 and 8.4. What holds the new path to the old one is not that
+  agreement: `tests/test_vectors.py` signs every BIP340 vector through a
+  signer as well, so both are held against bitcoin/bips' published value
+- **and it hands the caller a lifetime, which is the trade it makes.**
+  A keypair is the private key in libsecp256k1's layout, in memory this
+  package owns and can overwrite, so a signer holds a secret across
+  calls where the two functions hold one for the length of one. The
+  `with` block is what makes the wipe deliberate rather than forgotten:
+  `__exit__` overwrites the keypair whether the block ended in a
+  signature or in an exception, `wipe()` is the same instruction by
+  hand, wiping twice is not an error, and a wiped signer raises rather
+  than signing with the zeros — it cannot be revived, the private key
+  being kept nowhere else here. This is the case #87 declined and the
+  reason it declined it does not cover: that issue asked whether an
+  opaque secret handle buys *assurance*, and the answer was no, the
+  python-side copies at import and export being what they are — an
+  answer this does not disturb, SECURITY.md's limits being unchanged and
+  the constructor still taking a `bytes` or an `int` nothing can zeroize.
+  What is new is a measured cost, and it is paid by every caller signing
+  more than once under one key. BIP340 only: `secp256k1_ecdsa_sign`
+  takes the private key directly, so `dsa.sign` has no keypair to hoist
+- **the two functions are now the signer's two calls with the keypair
+  built and wiped around them**, `_sign32` and `_sign_custom` being the
+  shared body, so neither side can drift into a second spelling of the
+  same checks. One consequence is visible: those checks now happen after
+  the private key is turned into a keypair rather than before, so a call
+  with *both* a bad private key and a bad message names the key where it
+  used to name the message. Each on its own is refused as before, and
+  every wipe that happened still happens
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**
