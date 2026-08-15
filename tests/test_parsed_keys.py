@@ -254,6 +254,45 @@ def test_the_taproot_pair_starts_from_the_point_the_x_belongs_to() -> None:
         )
 
 
+def test_the_taproot_outer_half_is_the_inner_one_behind_a_parse() -> None:
+    """`xonly.tweak_add_from_pubkey` is `tweak_add_` with a `keys.parse`.
+
+    The pair the convention describes, over both serializations: the
+    outer half takes the octets, the inner one the point they parse to,
+    and neither is `tweak_add`, which takes the 32-byte x-only form and
+    lifts it.
+    """
+    for pubkey_bytes in (PUBKEY, PUBKEY_LONG):
+        assert xonly.tweak_add_from_pubkey(pubkey_bytes, TWEAK) == xonly.tweak_add_(
+            keys.parse(pubkey_bytes), TWEAK
+        )
+    # and the y it discards is BIP341's to discard: the negated key is the
+    # same internal key, and answers the same output key
+    negated = keys.pubkey_negate(PUBKEY)
+    assert xonly.tweak_add_from_pubkey(negated, TWEAK) == xonly.tweak_add(XONLY, TWEAK)
+
+
+def test_reserialize_is_the_two_calls_it_replaces() -> None:
+    """`keys.reserialize` is `serialize(parse(key))`, both forms both ways.
+
+    And the refusal is `parse`'s, which is what makes it a validation: a
+    caller proving a key at its own boundary has this and nothing to do
+    with a parsed object.
+    """
+    for pubkey_bytes in (PUBKEY, PUBKEY_LONG):
+        for compressed in (True, False):
+            assert keys.reserialize(pubkey_bytes, compressed) == keys.serialize(
+                keys.parse(pubkey_bytes), compressed
+            )
+    # the round trip in both directions, which is the conversion nothing
+    # else here offers
+    assert keys.reserialize(PUBKEY, compressed=False) == PUBKEY_LONG
+    assert keys.reserialize(PUBKEY_LONG) == PUBKEY
+
+    with pytest.raises(ValueError, match="invalid public key"):
+        keys.reserialize(b"\x02" + bytes(32))
+
+
 def test_a_parsed_key_verifies_more_than_once() -> None:
     """The motivating case: one parse, several signatures.
 

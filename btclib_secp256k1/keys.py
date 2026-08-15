@@ -591,6 +591,51 @@ def parse(pubkey_bytes: BytesLike) -> CData:
     return pubkey
 
 
+def reserialize(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
+    """Prove octets a public key, and answer them in the form asked for.
+
+    `serialize(parse(key))` as one call, which is two things a caller
+    wants separately and always together.
+
+    It is the **validation**: a library proving a key at its own boundary
+    has `parse` and nothing to do with what `parse` returns, and this
+    answers octets instead of an object whose lifetime is the caller's.
+
+    And it is the **conversion**, which nothing else here offers: a caller
+    holding an uncompressed key and needing the compressed one to hash has
+    no other call to make, and one holding a compressed key and about to
+    make several more calls with it has a reason to ask for the other
+    form. The uncompressed serialization is the cheap one to open --
+    `parse` is 0.256 us on 65 bytes against 2.343 on 33, both coordinates
+    being there to read where a compressed key is a field square root --
+    so `reserialize(key, compressed=False)` pays that root once and leaves
+    every later call at the price of reading it.
+
+    Args:
+        pubkey_bytes: the public key, 33 or 65 bytes.
+        compressed: whether to return 33 bytes rather than 65.
+
+    Returns:
+        The same point, serialized as asked.
+
+    Raises:
+        ValueError: if the bytes are not a valid point in either
+            serialization.
+        RuntimeError: if libsecp256k1 fails to serialize it, which no
+            valid key can make it do.
+
+    Example:
+        >>> from btclib_secp256k1 import keys, mult
+        >>> compressed = keys.pubkey_from_prvkey(1)
+        >>> uncompressed = keys.reserialize(compressed, compressed=False)
+        >>> uncompressed == mult.mult_(1)
+        True
+        >>> keys.reserialize(uncompressed) == compressed
+        True
+    """
+    return serialize(parse(pubkey_bytes), compressed)
+
+
 def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     """Serialize an internal public key, in compressed form by default.
 

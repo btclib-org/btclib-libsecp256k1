@@ -171,6 +171,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("keys.pubkey_tweak_add", keys.pubkey_tweak_add, (PUBKEY, TWEAK), {}),
     ("keys.pubkey_tweak_mul", keys.pubkey_tweak_mul, (PUBKEY, TWEAK), {}),
     ("keys.pubkey_combine", keys.pubkey_combine, ([PUBKEY, PUBKEY_LONG],), {}),
+    ("keys.reserialize", keys.reserialize, (PUBKEY,), {}),
     ("keys.pubkey_cmp", keys.pubkey_cmp, (PUBKEY, PUBKEY_LONG), {}),
     ("keys.pubkey_sort", keys.pubkey_sort, ([PUBKEY, PUBKEY_LONG],), {}),
     ("mult.mult_", mult.mult_, (PRVKEY,), {}),
@@ -197,6 +198,12 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
     ("xonly.from_prvkey", xonly.from_prvkey, (PRVKEY,), {}),
     ("xonly.tweak_add", xonly.tweak_add, (XONLY, TWEAK), {}),
+    (
+        "xonly.tweak_add_from_pubkey",
+        xonly.tweak_add_from_pubkey,
+        (PUBKEY, TWEAK),
+        {},
+    ),
     # the parsed key is not retyped, being no bytes; the tweak beside it
     # is, and what comes back is 32 bytes and a parity, which compare
     ("xonly.tweak_add_", xonly.tweak_add_, (PARSED, TWEAK), {}),
