@@ -7,7 +7,45 @@ a tag is generated from.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
-Non-breaking, and additions only: one for a caller that signs more than
+**Breaking, and every break is a rename.** The public surface of these
+bindings speaks in octets; the half of each call that speaks in
+libsecp256k1 objects is now private, and spelled `_foo_` where it was
+`foo_`. Nothing was removed and no behaviour changed with the names, so
+a caller using the octets API has nothing to do; a caller holding parsed
+keys renames what it calls.
+
+| module | was | is |
+| --- | --- | --- |
+| `keys` | `pubkey_from_prvkey_` | `_pubkey_from_prvkey_` |
+| `keys` | `pubkey_negate_` | `_pubkey_negate_` |
+| `keys` | `pubkey_tweak_add_` | `_pubkey_tweak_add_` |
+| `keys` | `pubkey_tweak_mul_` | `_pubkey_tweak_mul_` |
+| `keys` | `pubkey_combine_` | `_pubkey_combine_` |
+| `keys` | `pubkey_cmp_` | `_pubkey_cmp_` |
+| `keys` | `pubkey_sort_` | `_pubkey_sort_` |
+| `xonly` | `from_pubkey_` | `_from_pubkey_` |
+| `xonly` | `tweak_add_` | `_tweak_add_` |
+| `dsa` | `verify_` | `_verify_` |
+| `ssa` | `verify_` | `_verify_` |
+| `ecdh` | `shared_secret_` | `_shared_secret_` |
+| `recovery` | `recover_` | `_recover_` |
+| `ellswift` | `encode_`, `decode_` | `_encode_`, `_decode_` |
+| `silentpayments` | `label_` | `_label_` |
+| `silentpayments` | `labeled_spend_pubkey_` | `_labeled_spend_pubkey_` |
+| `mult` | `mult_` | `mult_bytes` |
+
+Three of them take a different argument as well, the object having
+replaced the octets there too: `dsa._verify_` takes the parsed signature
+`dsa.parse_der` returns, and `recovery._recover_` the parsed pair
+`recovery.parse_compact` returns, in place of a signature and a recovery
+id. And four argument names changed: the 32 bytes of nonce entropy are
+`aux_rand32` everywhere, where `dsa.sign` and `recovery.sign` called
+them `ndata` and `ellswift.encode` called them `rnd32`, and
+`silentpayments.prevouts_summary` takes `taproot_pubkeys_bytes` and
+`pubkeys_bytes`. All four are keyword names; a positional call is
+unaffected.
+
+What the rest of the release adds: one for a caller that signs more than
 once under one key, one for a caller computing a taproot output key from
 a public key it has validated, a set for a caller composing two of these
 calls where the second used to parse what the first had just serialized,
@@ -31,28 +69,38 @@ to sign rather than signing with what the wipe left. The private key
 handed to the constructor is a python `bytes` or `int` and is no more
 zeroizable than before: SECURITY.md's limits are unchanged.
 
-`xonly.tweak_add_` is the inner half of `xonly.tweak_add`: it takes the
-parsed point `keys.parse` returns, rather than the 32-byte x-only form,
-and so tweaks a key that is already lifted instead of lifting its x a
-second time. The x-only conversion in front of the tweak is
+`xonly._tweak_add_` is the private half of `xonly.tweak_add`: it takes
+the parsed point `keys.parse` returns, rather than the x-only form, and
+so tweaks a key that is already lifted instead of lifting its x a second
+time. The x-only conversion in front of the tweak is
 `secp256k1_xonly_pubkey_from_pubkey`, which reads the y it is given; the
 result is the output key and parity `tweak_add` answers with, the
 negation of an odd-y point included, and `tweak_add` itself is unchanged
 in behaviour and cost.
 
-**The trailing underscore now means the same thing on the producing side
-of the boundary.** It has meant "takes the parsed key in place of the
-bytes" since 0.8.0.2; a wrapper that *answers* with a key had no such
-half, so a caller composing two of them — sorting keys and then adding
-them together, recovering a key and then verifying with it, decoding an
+**The convention now runs in both directions, and over every kind of
+object.** It has meant "takes the parsed key in place of the bytes"
+since 0.8.0.2; a wrapper that *answers* with a key had no such half, so
+a caller composing two of them — sorting keys and then adding them
+together, recovering a key and then verifying with it, decoding an
 ElligatorSwift encoding and then tweaking what came out — serialized a
 point libsecp256k1 had just handed over and parsed it straight back,
-which for the compressed form is a field square root. `pubkey_combine_`,
-`pubkey_sort_` and `pubkey_from_prvkey_` in `keys`, `recovery.recover_`,
-`ellswift.decode_` and `encode_`, and `silentpayments.label_`,
-`labeled_spend_pubkey_`, `parse_label` and `serialize_label` are those
-halves. Every outer half is unchanged in behaviour and cost, and is now
-written as its inner half with a `serialize` behind it.
+which for the compressed form is a field square root. And a signature, a
+label or the summary of a transaction's inputs is an object like a key:
+`dsa.parse_der`, `dsa.parse_compact`, `recovery.parse_compact` and
+`xonly.serialize` join the `parse`/`serialize` pairs, so `dsa._sign_`,
+`_normalize_`, `_is_low_s_`, `recovery._sign_`, `_to_der_` and the three
+of `silentpayments` — `_create_outputs_`, `_prevouts_summary_`,
+`_scan_outputs_` — have something to take and something to hand back.
+Every public half is unchanged in behaviour and cost, and is now written
+as its private half with a `parse` in front of it, a `serialize` behind
+it, or both.
+
+The Silent Payments three are the ones a wallet feels: scanning block
+after block, `scan_outputs` parses the spend key and every transaction
+output at every transaction, where `_scan_outputs_` takes them parsed
+once and takes the summary object `_prevouts_summary_` built rather than
+octets to be written back into a struct.
 
 What that saves is the round trip and nothing else, so it is worth what
 the two calls around it are not: aggregating five public keys the BIP67
@@ -86,8 +134,8 @@ that refusal cost was a lift, and a tweak from the uncompressed form is
 
 **`xonly.from_prvkey` and `ssa.Signer.pubkey` are two entry points
 rather than two halves**, and they save different things. The first is
-the x-only public key of a private key: it is `pubkey_from_prvkey_` and
-`from_pubkey_` composed, so the halves above are where its 7.9
+the x-only public key of a private key: it is `_pubkey_from_prvkey_` and
+`_from_pubkey_` composed, so the halves above are where its 7.9
 microseconds against 10.5 come from, and what it adds is a name for a
 composition BIP340 and BIP341 make the common case — the full public
 key in the middle being an intermediate step nothing here asked for.
@@ -95,10 +143,24 @@ The second saves what no pair of halves could: a signer holds the
 keypair, and the point with it, so reading the key off it is a read and
 not a multiplication — 0.4 microseconds, where deriving it again is
 10.5. `xonly.from_keypair` is that read for a caller holding a keypair
-of its own, a MuSig2 session through `lib` being one, and it is the
-second wrapper of these bindings taking a libsecp256k1 object rather
-than bytes: like `keys.serialize`, it raises what libsecp256k1 reported
-rather than leaving it on the thread.
+of its own, a MuSig2 session through `lib` being one.
+
+**And a wrong object is now told to the caller, wherever one is taken.**
+`keys.serialize` and `xonly.from_keypair` raised what libsecp256k1
+reported of an argument no python check can prove; every other call
+taking such an object did not, which was measured rather than assumed:
+a wiped or unwritten key made `dsa._verify_` answer `False`,
+`keys._pubkey_cmp_` answer `0` — the answer for two equal keys — and
+`ecdh._shared_secret_` answer success and 32 bytes that are a shared
+secret with nobody, each leaving libsecp256k1's reason on the thread for
+the next `context.check()` to raise about a call that did not produce
+it, a MuSig2 caller's own being the one that would. All of them raise a
+`ValueError` carrying that reason now. A caller passing the objects
+these calls are meant to take sees no difference in what it gets back,
+and 0.48 microseconds a call in what it costs: nothing on a
+verification, which is 12.9 microseconds against 12.1, and most of the
+call on `keys._pubkey_cmp_`, which is 0.57 against a C comparison of
+0.087. `lib` is exported for a caller who counts that.
 
 ## v0.8.0.2
 

@@ -15,7 +15,7 @@ from ._scalar import octets
 from .context import ctx
 
 
-def tagged_sha256(tag: BytesLike, msg: BytesLike) -> bytes:
+def tagged_sha256(tag_bytes: BytesLike, msg_bytes: BytesLike) -> bytes:
     """Return the BIP340 tagged hash of a message.
 
     That is SHA256(SHA256(tag) || SHA256(tag) || msg): the tag separates
@@ -24,8 +24,8 @@ def tagged_sha256(tag: BytesLike, msg: BytesLike) -> bytes:
     BIP341 taproot tags (TapLeaf, TapBranch, TapTweak) are built with it.
 
     Args:
-        tag: the domain separation tag, of any length.
-        msg: the message to hash, of any length.
+        tag_bytes: the domain separation tag, of any length.
+        msg_bytes: the message to hash, of any length.
 
     Returns:
         The 32-byte tagged hash.
@@ -39,9 +39,11 @@ def tagged_sha256(tag: BytesLike, msg: BytesLike) -> bytes:
         >>> hashes.tagged_sha256(b"TapLeaf", b"").hex()
         '5212c288a377d1f8164962a5a13429f9ba6a7b84e59776a52c6637df2106facb'
     """
-    tag = octets(tag, "tag")
-    msg = octets(msg, "message")
+    tag_bytes = octets(tag_bytes, "tag")
+    msg_bytes = octets(msg_bytes, "message")
     output = ffi.new("char[32]")
-    if not lib.secp256k1_tagged_sha256(ctx, output, tag, len(tag), msg, len(msg)):
+    if not lib.secp256k1_tagged_sha256(
+        ctx, output, tag_bytes, len(tag_bytes), msg_bytes, len(msg_bytes)
+    ):
         raise RuntimeError("tagged hashing failed")
     return ffi.unpack(output, ffi.sizeof(output))

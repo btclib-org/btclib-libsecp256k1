@@ -238,6 +238,134 @@ release-notes length in the first place, and are still in
   and operates in octets, and the parsed key stops being something an API
   has to hand around.
 
+### The half that speaks in objects is private, and is spelled `_foo_`
+
+- **`foo_` is now `_foo_`, everywhere, and the API break is the point.**
+  The trailing underscore said "takes the parsed object in place of the
+  octets"; what it did not say is that such a call is past the boundary
+  that proves anything. An object is a promise no argument check can hold
+  a caller to — `ffi.NULL`, a `secp256k1_pubkey` nothing wrote to, a
+  keypair already wiped are all the same to a bare pointer — so these
+  belong with the leading underscore that says so. The trailing one stays
+  and now says which kind of private: `_verify_` takes a parsed object
+  where `_parse_der` is an ordinary helper, and
+  `tests/test_parsed_keys.py` reads the modules for names spelled that
+  way and fails on one no table pairs. The renamed are
+  `keys._pubkey_from_prvkey_`, `_pubkey_negate_`, `_pubkey_tweak_add_`,
+  `_pubkey_tweak_mul_`, `_pubkey_combine_`, `_pubkey_cmp_`,
+  `_pubkey_sort_`, `xonly._from_pubkey_`, `_tweak_add_`, `dsa._verify_`,
+  `ssa._verify_`, `ecdh._shared_secret_`, `recovery._recover_`,
+  `ellswift._encode_`, `_decode_`, `silentpayments._label_` and
+  `_labeled_spend_pubkey_`
+- **`mult.mult_` is `mult.mult_bytes`**, for the same underscore and
+  nothing it does: it is a public function answering octets, and it was
+  the one name in the package whose trailing underscore meant something
+  else — the serialized point against the pair of coordinates `mult`
+  answers with. `_bytes` is what the rest of this package calls the
+  octets of a thing
+- **the convention is stated once, in the package docstring**, where a
+  rule about every module belongs; `keys.parse` used to carry it and now
+  points at it
+- **every kind of object has a public `parse`/`serialize` pair now**, so
+  the private halves have something to take and something to hand back:
+  `dsa.parse_der`, `dsa.parse_compact`, `dsa.serialize_der`,
+  `dsa.serialize_compact`, `recovery.parse_compact`,
+  `recovery.serialize_compact` and `xonly.serialize` join `keys.parse`,
+  `keys.serialize`, `xonly.parse`, `silentpayments.parse_label` and
+  `silentpayments.serialize_label`. `dsa.to_der` and `dsa.to_compact` are
+  now the compositions they always were, and `xonly.parse`'s "there is no
+  `serialize` beside it, and that is not an omission" is gone with the
+  omission it excused — `silentpayments` had copied that serialization
+  rather than call it
+- **and every wrapper with a parse or a serialize to save has a private
+  half**, which is what "symmetric" means here: `dsa._sign_`,
+  `_normalize_`, `_is_low_s_`, `recovery._sign_`, `_to_der_`,
+  `silentpayments._create_outputs_`, `_prevouts_summary_` and
+  `_scan_outputs_` are new. The Silent Payments three are the ones that
+  pay: a wallet scanning block after block parses its own spend key once
+  rather than once per transaction, and `_prevouts_summary_` hands
+  `_scan_outputs_` the summary object where the public halves write those
+  octets out of one struct and back into another. `dsa._verify_` takes
+  the parsed signature too, so asking `_is_low_s_` and then verifying is
+  one parse rather than two
+- **`keys.PubkeyTweakChain` hands out the point it holds**, `pubkey()` in
+  octets and `_pubkey_()` as the object: a caller reaching the end of a
+  BIP32 path had no way to ask the chain what it had arrived at except by
+  the last `tweak_add`, and none at all to hand the point on
+
+### What answers for an argument that cannot be checked
+
+- **`context.guarded` is that answer, and it is now every such call's.**
+  Three docstrings and a test claimed a violated precondition was
+  reachable through "two" wrappers, `keys.serialize` and
+  `xonly.from_keypair`. It was reachable through every private half, and
+  what came back was measured rather than reasoned about: through
+  `keys._pubkey_negate_` a bare `RuntimeError` with libsecp256k1's reason
+  left on the thread, through `dsa._verify_` a plain `False`, through
+  `keys._pubkey_cmp_` a `0` that reads as "equal", and through
+  `ecdh._shared_secret_` a success and 32 bytes that are a shared secret
+  with nobody. The message left behind is the misattribution the
+  `check()` in `keys.serialize` already existed to prevent: the next
+  `check()` — a MuSig2 caller's, about a call of their own — inherited it
+- **so the guard clears the thread before the call and checks after it,
+  whatever the call answered.** Both halves are needed and either alone
+  is a bug: without the clearing an older message is raised out of this
+  call, without the check a refusal that shows in no return value is
+  believed. It is a context manager because the pair has to be
+  inseparable, which is the argument `_secret.take` makes for its own
+  pair. The eight failures above are eight `ValueError`s now, each
+  carrying libsecp256k1's own text, and `tests/test_callbacks.py` no
+  longer counts the exceptions to a rule that has none
+- **and it costs 0.48 microseconds a call**, which is worth writing down
+  because on the cheapest call it is most of the call. Measured on an
+  Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 5 rounds of
+  300 000 calls: `secp256k1_ec_pubkey_cmp` through `lib` is 0.087
+  microseconds and `keys._pubkey_cmp_` is 0.57, where a verification is
+  12.1 against 12.9 — the same 0.5 on a call that does real work. Two
+  cheaper spellings were measured and not taken: the pair written out at
+  each call site is 0.23 and a hand-written context manager class 0.30,
+  and what the second buys over `@contextmanager` is 0.27 microseconds
+  against three methods and their docstrings. The clearing and the check
+  are one thing, and the generator is the shortest way to say so; a
+  caller counting microseconds on a comparison has `lib`, which is
+  exported for exactly that
+
+### One statement of each thing
+
+- **the duplications are gone**, each of them two spellings of one
+  call that could drift apart. `_secret.keypair` is the
+  `secp256k1_keypair_create` that `ssa`, `xonly` and `silentpayments`
+  each carried verbatim, and it lives beside the `wipe` its caller owes
+  it. `xonly.serialize` is the x-only serialization `silentpayments` had
+  copied. `keys.parse` and `xonly.parse` take the name the exception
+  should use, which is what `silentpayments._pubkey` and `_xonly_pubkey`
+  existed for. `dsa.serialize_der` is the DER writer `recovery.to_der`
+  had inlined, comment pointing at the original included.
+  `_scalar.entropy` and `_scalar.optional_entropy` are the "32 bytes or
+  none" of `ssa`, `ellswift.create`, `ellswift.encode`, `dsa.sign` and
+  `recovery.sign`. `_scalar.in_range` is the small-int check of a
+  recovery id, a parity, an ElligatorSwift party and a label index — and
+  it refuses a `float`, which `recid not in (0, 1, 2, 3)` accepted as
+  `0.0`. `_cdata.array` is the borrowed-pointer array `keys` built inline
+  and `silentpayments` had a helper for
+- **the entropy argument is `aux_rand32` in all five**, BIP340's name for
+  what libsecp256k1 spells `ndata` in one place and `rnd32` in another.
+  What omitting it means still differs, and the difference is what the
+  two helpers are named for
+- **the octets of a thing end in `_bytes`**: `hashes.tagged_sha256` takes
+  `tag_bytes` and `msg_bytes`, and `silentpayments` takes
+  `recipients_bytes`, `taproot_pubkeys_bytes`, `pubkeys_bytes` and
+  `tx_outputs_bytes` where its private halves take the parsed objects
+  under the same names without the suffix
+- **`ffi.unpack` is not `bytes(ffi.buffer(...))`, and the vectors said
+  so**: unifying the two idioms turned the `unsigned char[32]` tweak of a
+  found Silent Payments output into a list of 32 ints, which
+  `tests/test_vectors.py` caught in every BIP352 receiving case. The
+  reason it is the exception is now written where it is made
+- **the messages of a refusal are one shape**: "invalid private key: not
+  in [1, n-1]" wherever that is the whole of what was wrong, and "the
+  {name} must be in [0, {upper}]" for the four small numbers
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**

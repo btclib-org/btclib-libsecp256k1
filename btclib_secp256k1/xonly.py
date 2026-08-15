@@ -31,20 +31,20 @@ square root at 2.343.
 from __future__ import annotations
 
 from . import BytesLike, CData, ffi, keys, lib
-from ._scalar import octets, scalar
-from ._secret import take, wipe
-from .context import check, ctx
+from ._scalar import in_range, octets, scalar
+from ._secret import keypair, take, wipe
+from .context import ctx, guarded
 
 # the x-only serialization, which is the whole of the key: the other
 # two lengths this module takes are a full public key, whose x it is
 _XONLY_SIZE = 32
 
 
-def _from_pubkey(pubkey: CData) -> tuple[CData, int]:
+def _drop_y(pubkey: CData) -> tuple[CData, int]:
     """Convert a parsed public key into a parsed x-only key and the parity.
 
     The conversion itself, which is where the y is dropped, without the
-    serialization that follows it in `from_pubkey_`: `tweak_add_` wants
+    serialization that follows it in `_from_pubkey_`: `_tweak_add_` wants
     the object and not the 32 bytes, having a tweak to add to it.
 
     Args:
@@ -55,41 +55,28 @@ def _from_pubkey(pubkey: CData) -> tuple[CData, int]:
         y that was dropped: 0 for even, 1 for odd.
 
     Raises:
-        RuntimeError: if libsecp256k1 fails to convert it, which no valid
-            key can make it do.
+        ValueError: if the object is not a public key libsecp256k1 will
+            read; see `context.guarded`.
+        RuntimeError: if libsecp256k1 fails for any other reason, which
+            no valid key can make it do.
     """
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
-    if not lib.secp256k1_xonly_pubkey_from_pubkey(ctx, xonly_pubkey, parity, pubkey):
+    with guarded():
+        converted = lib.secp256k1_xonly_pubkey_from_pubkey(
+            ctx, xonly_pubkey, parity, pubkey
+        )
+    if not converted:
         raise RuntimeError("x-only public key conversion failed")
     return xonly_pubkey, parity[0]
 
 
-def _serialize(xonly_pubkey: CData) -> bytes:
-    """Return the 32 bytes of a parsed x-only public key.
-
-    Args:
-        xonly_pubkey: the x-only public key object, as `parse` returns.
-
-    Returns:
-        The 32-byte x coordinate.
-
-    Raises:
-        RuntimeError: if libsecp256k1 fails to serialize it, which no
-            valid key can make it do.
-    """
-    output = ffi.new("char[32]")
-    if not lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey):
-        raise RuntimeError("x-only public key serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
-
-
-def from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
+def _from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
     """Convert an already-parsed public key into its x-only form and parity.
 
-    The inner half of `from_pubkey`, for a caller who already holds the
-    parsed point: see `keys.parse` for what the underscore means
-    throughout.
+    The private half of `from_pubkey`, for a caller who already holds the
+    parsed point: see the package docstring for what the two underscores
+    mean throughout.
 
     Args:
         pubkey: the already-parsed public key, as `keys.parse` returns.
@@ -99,11 +86,13 @@ def from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
         odd.
 
     Raises:
+        ValueError: if the object is not a public key libsecp256k1 will
+            read; see `context.guarded`.
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
-    xonly_pubkey, parity = _from_pubkey(pubkey)
-    return _serialize(xonly_pubkey), parity
+    xonly_pubkey, parity = _drop_y(pubkey)
+    return serialize(xonly_pubkey), parity
 
 
 def from_pubkey(pubkey_bytes: BytesLike) -> tuple[bytes, int]:
@@ -128,8 +117,8 @@ def from_pubkey(pubkey_bytes: BytesLike) -> tuple[bytes, int]:
     pubkey_bytes = octets(pubkey_bytes, "public key")
     if len(pubkey_bytes) == _XONLY_SIZE:
         # already the x, and the conversion is the proof that it is one
-        return _serialize(parse(pubkey_bytes)), 0
-    return from_pubkey_(keys.parse(pubkey_bytes))
+        return serialize(parse(pubkey_bytes)), 0
+    return _from_pubkey_(keys.parse(pubkey_bytes))
 
 
 def from_prvkey(prvkey: BytesLike | int) -> tuple[bytes, int]:
@@ -162,10 +151,10 @@ def from_prvkey(prvkey: BytesLike | int) -> tuple[bytes, int]:
         >>> xonly.from_prvkey(1) == xonly.from_pubkey(pubkey)
         True
     """
-    return from_pubkey_(keys.pubkey_from_prvkey_(prvkey))
+    return _from_pubkey_(keys._pubkey_from_prvkey_(prvkey))
 
 
-def from_keypair(keypair: CData) -> tuple[bytes, int]:
+def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
     """Return the x-only public key of a keypair, and the y parity.
 
     The keypair already holds the point, so this is a read of it rather
@@ -175,8 +164,8 @@ def from_keypair(keypair: CData) -> tuple[bytes, int]:
     the private key and no keypair.
 
     Args:
-        keypair: the libsecp256k1 keypair object, as `ssa.Signer` holds
-            and as `secp256k1_keypair_create` writes.
+        keypair_obj: the libsecp256k1 keypair object, as `ssa.Signer`
+            holds and as `secp256k1_keypair_create` writes.
 
     Returns:
         The 32-byte x coordinate, and the parity of y: 0 for even, 1 for
@@ -185,25 +174,56 @@ def from_keypair(keypair: CData) -> tuple[bytes, int]:
 
     Raises:
         ValueError: if the object is not a keypair libsecp256k1 will read
-            -- a NULL pointer, or one that has been wiped. This and
-            `keys.serialize` are the two arguments of these bindings that
-            are libsecp256k1 objects rather than bytes, and so the two
-            that cannot be checked before the call.
+            -- a NULL pointer, or one that has been wiped, which is
+            reported as the zero it holds where the x of a point should
+            be; see `context.guarded`.
         RuntimeError: if libsecp256k1 fails for any other reason, or
             fails to serialize the result, which a keypair it built
             cannot make it do.
     """
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
-    if not lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair):
-        # the keypair is the caller's object, so a violated precondition
-        # is reachable here as it is in `keys.serialize`, which says why
-        # raising it is also what takes it off the thread. A wiped
-        # keypair is the reachable way in, and what it is reported as is
-        # the zero it holds where the x of a point should be
-        check()
+    with guarded():
+        converted = lib.secp256k1_keypair_xonly_pub(
+            ctx, xonly_pubkey, parity, keypair_obj
+        )
+    if not converted:
         raise RuntimeError("x-only public key conversion failed")
-    return _serialize(xonly_pubkey), parity[0]
+    return serialize(xonly_pubkey), parity[0]
+
+
+def _tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
+    """Add the generator multiplied by the tweak, to an already-parsed key.
+
+    The private half of `tweak_add`, for a caller who already holds the
+    parsed point: see the package docstring for what the two underscores
+    mean throughout. The parsed point is a full public key, and the
+    x-only form of it is `secp256k1_xonly_pubkey_from_pubkey`, which
+    lifts nothing; reaching `tweak_add` from there instead means
+    serializing the x and parsing it back, and that parse is a field
+    square root -- of an x whose y the caller is holding.
+
+    The point is taken as BIP341 takes an internal key, x-only: an odd-y
+    key is tweaked as its negation, and answers the output key
+    `tweak_add` answers for the same 32 bytes. `_from_pubkey_` is where
+    that parity is read, and takes the same object.
+
+    Args:
+        pubkey: the already-parsed public key, as `keys.parse` returns.
+        tweak: the tweak, 32 bytes or an int below 2**256.
+
+    Returns:
+        The 32-byte tweaked x-only key, and the parity of its y.
+
+    Raises:
+        ValueError: if the tweak is not 32 bytes or does not fit in them,
+            if the tweak or the resulting key is invalid, or if the
+            object is not a public key libsecp256k1 will read; see
+            `context.guarded`.
+        RuntimeError: if libsecp256k1 fails to convert or serialize the
+            result, which no valid input can make it do.
+    """
+    return _tweak_xonly(_drop_y(pubkey)[0], tweak)
 
 
 def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, int]:
@@ -229,50 +249,18 @@ def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, i
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             result, which no valid input can make it do.
     """
-    return _tweak_add(parse(pubkey_bytes), tweak)
+    return _tweak_xonly(parse(pubkey_bytes), tweak)
 
 
-def tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
-    """Add the generator multiplied by the tweak, to an already-parsed key.
-
-    The inner half of `tweak_add`, for a caller who already holds the
-    parsed point: see `keys.parse` for what the underscore means
-    throughout. The parsed point is a full public key, and the x-only
-    form of it is `secp256k1_xonly_pubkey_from_pubkey`, which lifts
-    nothing; reaching `tweak_add` from there instead means serializing the
-    x and parsing it back, and that parse is a field square root -- of an
-    x whose y the caller is holding.
-
-    The point is taken as BIP341 takes an internal key, x-only: an odd-y
-    key is tweaked as its negation, and answers the output key
-    `tweak_add` answers for the same 32 bytes. `from_pubkey_` is where
-    that parity is read, and takes the same object.
-
-    Args:
-        pubkey: the already-parsed public key, as `keys.parse` returns.
-        tweak: the tweak, 32 bytes or an int below 2**256.
-
-    Returns:
-        The 32-byte tweaked x-only key, and the parity of its y.
-
-    Raises:
-        ValueError: if the tweak is not 32 bytes or does not fit in them,
-            or if the tweak or the resulting key is invalid.
-        RuntimeError: if libsecp256k1 fails to convert or serialize the
-            result, which no valid input can make it do.
-    """
-    return _tweak_add(_from_pubkey(pubkey)[0], tweak)
-
-
-def _tweak_add(internal_pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
+def _tweak_xonly(internal_pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
     """Add the generator multiplied by the tweak to a parsed x-only key.
 
     What the two halves above share, once each has reached the x-only key
-    its own way: `parse` from the 32 bytes, or `_from_pubkey` from the
-    point.
+    its own way: `parse` from the octets, or `_drop_y` from the point.
 
     Args:
-        internal_pubkey: the x-only public key object.
+        internal_pubkey: the x-only public key object, which this module
+            made and not the caller.
         tweak: the tweak, 32 bytes or an int below 2**256.
 
     Returns:
@@ -291,7 +279,7 @@ def _tweak_add(internal_pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, i
         ctx, tweaked_pubkey, internal_pubkey, tweak_bytes
     ):
         raise ValueError("invalid tweak or resulting public key")
-    return from_pubkey_(tweaked_pubkey)
+    return _from_pubkey_(tweaked_pubkey)
 
 
 def tweak_add_check(
@@ -320,15 +308,17 @@ def tweak_add_check(
         over recomputing the tweak comes from.
 
     Raises:
+        TypeError: if the parity is not an int.
         ValueError: if either key is not 32 bytes, if the internal key
             is not a valid x coordinate, if the parity is not 0 or 1, or
             if the tweak is not 32 bytes or does not fit in them. The
             tweaked key is not parsed, and so is never invalid: see
             Returns.
     """
-    tweaked_pubkey_bytes = octets(tweaked_pubkey_bytes, "tweaked x-only public key", 32)
-    if tweaked_parity not in (0, 1):
-        raise ValueError("the parity must be 0 or 1")
+    tweaked_pubkey_bytes = octets(
+        tweaked_pubkey_bytes, "tweaked x-only public key", _XONLY_SIZE
+    )
+    tweaked_parity = in_range(tweaked_parity, "parity", 1)
 
     internal_pubkey = parse(pubkey_bytes)
     tweak_bytes = scalar(tweak, "tweak")
@@ -363,28 +353,28 @@ def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
         RuntimeError: if libsecp256k1 fails to extract the key, which no
             valid input can make it do.
     """
-    keypair = _keypair(prvkey)
+    keypair_obj = keypair(prvkey)
     prvkey_buffer = ffi.new("char[32]")
     try:
         tweak_bytes = scalar(tweak, "tweak")
-        if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair, tweak_bytes):
+        if not lib.secp256k1_keypair_xonly_tweak_add(ctx, keypair_obj, tweak_bytes):
             raise ValueError("invalid tweak or resulting private key")
 
-        if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair):
+        if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair_obj):
             raise RuntimeError("private key extraction failed")
         return take(prvkey_buffer)
     finally:
         # a keypair carries the private key -- the tweaked one here,
         # which is the one that signs -- so it is overwritten on the way
         # out whether that was reached or refused
-        wipe(keypair)
+        wipe(keypair_obj)
 
 
-def parse(pubkey_bytes: BytesLike) -> CData:
+def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
     """Parse a public key, in any of its serializations, into its x.
 
     The x-only counterpart of `keys.parse`, and the argument of
-    `ssa.verify_`: a caller that has proved octets a public key has made
+    `ssa._verify_`: a caller that has proved octets a public key has made
     the call BIP340 verification makes anyway, and can hand the result on
     rather than make it twice.
 
@@ -396,12 +386,13 @@ def parse(pubkey_bytes: BytesLike) -> CData:
     the x-only conversion that follows it reads the y rather than lifting
     one.
 
-    There is no `serialize` beside it, and that is not an omission:
-    nothing here hands back a parsed x-only key except this, `from_pubkey`
-    and `tweak_add` answering with the 32 bytes and the parity instead.
-
     Args:
         pubkey_bytes: the public key, 32, 33 or 65 bytes.
+        name: what the key is, as the exception should call it, for a
+            caller passing more than one kind of x-only key --
+            `silentpayments` passes a taproot input and a transaction
+            output, and which one was refused is the whole of what its
+            caller needs.
 
     Returns:
         The libsecp256k1 x-only public key object.
@@ -411,30 +402,41 @@ def parse(pubkey_bytes: BytesLike) -> CData:
             bytes.
     """
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    pubkey_bytes = octets(pubkey_bytes, "public key")
+    pubkey_bytes = octets(pubkey_bytes, name)
     if len(pubkey_bytes) != _XONLY_SIZE:
-        return _from_pubkey(keys.parse(pubkey_bytes))[0]
+        return _drop_y(keys.parse(pubkey_bytes, name))[0]
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
-        raise ValueError("invalid x-only public key")
+        raise ValueError(f"invalid {name}")
     return xonly_pubkey
 
 
-def _keypair(prvkey: BytesLike | int) -> CData:
-    """Create a keypair from a private key.
+def serialize(xonly_pubkey: CData) -> bytes:
+    """Return the 32 bytes of a parsed x-only public key.
+
+    What `keys.serialize` is to a full public key, and the other half of
+    `parse`: there is no compression flag beside it, an x-only key having
+    one serialization and it being the x.
 
     Args:
-        prvkey: the private key, 32 bytes or an int below 2**256.
+        xonly_pubkey: the libsecp256k1 x-only public key object, as
+            `parse` returns.
 
     Returns:
-        The libsecp256k1 keypair object.
+        The 32-byte x coordinate.
 
     Raises:
-        ValueError: if the key is not 32 bytes, does not fit in them, or
-            is not in [1, n-1].
+        ValueError: if the object is not an x-only public key
+            libsecp256k1 will read -- a NULL pointer, or a
+            `secp256k1_xonly_pubkey` nothing has written to; see
+            `context.guarded`.
+        RuntimeError: if libsecp256k1 fails for any other reason, which
+            a key it produced cannot make it do.
     """
-    keypair = ffi.new("secp256k1_keypair *")
-    if not lib.secp256k1_keypair_create(ctx, keypair, scalar(prvkey, "private key")):
-        raise ValueError("invalid private key")
-    return keypair
+    output = ffi.new(f"char[{_XONLY_SIZE}]")
+    with guarded():
+        serialized = lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey)
+    if not serialized:
+        raise RuntimeError("x-only public key serialization failed")
+    return ffi.unpack(output, ffi.sizeof(output))
