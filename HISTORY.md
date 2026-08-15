@@ -61,15 +61,20 @@ way is 28.2 microseconds through `pubkey_combine(pubkey_sort(...))` and
 Silent Payments address is 14.3 against 9.3. CHANGELOG.md states the
 machine and the method.
 
-**`keys.reserialize` is for the caller who wants none of that.** A
-parsed key is an optimization of a parse, and
-a parse of the *uncompressed* serialization is 0.256 microseconds against
-2.343 for the compressed one — both coordinates are there to read, where
-a compressed key is a field square root. So 65 octets are a parsed key
-that costs nothing to open, and nothing has to own their lifetime.
-`keys.reserialize` is what produces them: `serialize(parse(key))` in one
-call, which is at once the validation a library does at its own boundary
-and the conversion between the two serializations, which nothing here
+**`keys.pubkey_verify` and `keys.reserialize` are for the caller who
+wants none of that.** The first is the public-key twin of
+`prvkey_verify`: the validation a library makes at its own boundary, with
+nothing kept — where `parse` hands back an object to hold and
+`reserialize` the octets the caller already had.
+
+The second is for the caller that wants the *other* serialization. A
+parsed key is an optimization of a parse, and a parse of the
+*uncompressed* form is 0.256 microseconds against 2.343 for the
+compressed one — both coordinates are there to read, where a compressed
+key is a field square root. So 65 octets are a parsed key that costs
+nothing to open, and nothing has to own their lifetime.
+`keys.reserialize` is `serialize(parse(key))` in one call, and it is also
+the conversion between the two serializations, which nothing here
 offered — `compressed` is a filter on the form everywhere else, not a
 conversion to it. And every entry point taking a public key now
 takes any of its three serializations: `02 || x`, `03 || x` and

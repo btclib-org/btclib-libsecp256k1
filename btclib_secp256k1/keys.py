@@ -47,6 +47,37 @@ def prvkey_verify(prvkey: BytesLike | int) -> bool:
     return bool(lib.secp256k1_ec_seckey_verify(ctx, prvkey_bytes))
 
 
+def pubkey_verify(pubkey_bytes: BytesLike) -> bool:
+    """Return True if the octets are a public key libsecp256k1 accepts.
+
+    The public-key twin of `prvkey_verify`, and the call for a library
+    validating a key at its own boundary: `secp256k1_ec_pubkey_parse` is
+    the proof, and this is that proof with nothing kept. `parse` hands
+    back an object whose lifetime becomes the caller's, and `reserialize`
+    hands back octets it already had -- 0.37 us of serialization for an
+    answer that was in the argument.
+
+    A verdict and not an exception, as `prvkey_verify` is: what the octets
+    are wrong about is the caller's to phrase, and a library validating an
+    input has its own word for it.
+
+    Args:
+        pubkey_bytes: the public key, 33 or 65 bytes.
+
+    Returns:
+        True if it is a point of the curve in either serialization; False
+        for octets of any other length too, which is a verdict here where
+        every other entry point taking a key raises: there is nothing to
+        do with such a key either way, and a caller asking whether it has
+        one has asked about the length as well.
+    """
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    pubkey = ffi.new("secp256k1_pubkey *")
+    return bool(
+        lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes))
+    )
+
+
 def prvkey_negate(prvkey: BytesLike | int) -> bytes:
     """Negate a private key.
 
