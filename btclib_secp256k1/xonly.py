@@ -12,13 +12,20 @@ An x-only public key is the 32-byte x coordinate of the point with even
 y; the parity returned along a tweaked key is the one of the tweaked
 point, to be committed to by the taproot output.
 
-`from_pubkey` is the conversion from a full public key, and the only one
-taking its bytes: every other entry point taking bytes takes the 32-byte
-form, so that discarding a y coordinate happens where the caller can see
-it and not inside an argument check. `from_pubkey_` and `tweak_add_` take
-a full public key too, and are that same rule rather than an exception to
-it -- a caller holding what `keys.parse` returns is holding the point,
-and a call that takes it and answers 32 bytes drops the y in plain sight.
+**A public key here is an x coordinate, and `02 || x`, `03 || x` and
+`04 || x || y` all name it.** Every entry point taking a key takes any of
+the three, and none of them consults the y: `lift_x` is the even-y point
+whatever serialization the x arrived in, and a signer whose key is the
+odd-y one signs with `n - d` for exactly that reason. So the parity is a
+property of the serialization and not of the key, and there is no
+discarding for an argument check to make visible -- `from_pubkey` returns
+it because a caller converting a key it holds may want to know which of
+the two forms it was handed, not because the two are different keys.
+
+Which serialization to hand in is a question of cost and not of meaning:
+`keys.parse` reads the uncompressed form for 0.256 us, both coordinates
+being there, where the compressed form and the 32-byte one are a field
+square root at 2.343.
 """
 
 from __future__ import annotations
@@ -27,6 +34,10 @@ from . import BytesLike, CData, ffi, keys, lib
 from ._scalar import octets, scalar
 from ._secret import take, wipe
 from .context import check, ctx
+
+# the x-only serialization, which is the whole of the key: the other
+# two lengths this module takes are a full public key, whose x it is
+_XONLY_SIZE = 32
 
 
 def _from_pubkey(pubkey: CData) -> tuple[CData, int]:
@@ -99,19 +110,25 @@ def from_pubkey(pubkey_bytes: BytesLike) -> tuple[bytes, int]:
     """Convert a public key into its x-only form and y parity.
 
     Args:
-        pubkey_bytes: the public key, 33 or 65 bytes.
+        pubkey_bytes: the public key, 32, 33 or 65 bytes.
 
     Returns:
-        The 32-byte x coordinate, and the parity of y: 0 for even, 1 for
-        odd. The parity is returned rather than dropped because the
-        x-only key of an odd-y point is the key of its negation, which
-        the caller may need to know.
+        The 32-byte x coordinate, and the parity of the y it was handed:
+        0 for even, 1 for odd, and 0 for a key that arrived x-only, an
+        x naming the even-y point. The parity is answered rather than
+        dropped because a caller may want to know which serialization it
+        held, not because the two are different keys.
 
     Raises:
-        ValueError: if the public key is not a valid point.
+        ValueError: if the public key is not a valid point, or is not 32,
+            33 or 65 bytes.
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    if len(pubkey_bytes) == _XONLY_SIZE:
+        # already the x, and the conversion is the proof that it is one
+        return _serialize(parse(pubkey_bytes)), 0
     return from_pubkey_(keys.parse(pubkey_bytes))
 
 
@@ -196,7 +213,8 @@ def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, i
     the TapTweak hash.
 
     Args:
-        pubkey_bytes: the 32-byte x-only internal key.
+        pubkey_bytes: the internal key, 32, 33 or 65 bytes. The
+            uncompressed form is the cheap one to hand in: see `parse`.
         tweak: the tweak, 32 bytes or an int below 2**256.
 
     Returns:
@@ -205,8 +223,8 @@ def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, i
         `tweak_add_check` is given back.
 
     Raises:
-        ValueError: if the key is not 32 bytes or not a valid x
-            coordinate, if the tweak is not 32 bytes or does not fit in
+        ValueError: if the key is not a valid point, or is not 32, 33 or
+            65 bytes, if the tweak is not 32 bytes or does not fit in
             them, or if the tweak or the resulting key is invalid.
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             result, which no valid input can make it do.
@@ -244,44 +262,6 @@ def tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
             result, which no valid input can make it do.
     """
     return _tweak_add(_from_pubkey(pubkey)[0], tweak)
-
-
-def tweak_add_from_pubkey(
-    pubkey_bytes: BytesLike, tweak: BytesLike | int
-) -> tuple[bytes, int]:
-    """Add the generator multiplied by the tweak, to a full public key.
-
-    The outer half of `tweak_add_`: that call with a `keys.parse` in front
-    of it, which is what the underscore means throughout (see
-    `keys.parse`). `tweak_add` is not it -- that one takes the 32-byte
-    x-only form -- and the two differ in what they cost as well as in what
-    they take: 33 or 65 octets are parsed as a point, and the x-only
-    conversion that follows reads the y it is given, where 32 octets are a
-    field square root. From the uncompressed form the whole call is 4.11
-    us against `tweak_add`'s 5.92.
-
-    The y is discarded, as BIP341 discards it: the internal key of a
-    taproot output is x-only, so an odd-y key is tweaked as its negation
-    and answers the output key `tweak_add` answers for the same x. That is
-    in the name rather than in the argument check, which is this module's
-    rule -- `ssa.verify` refuses a full public key for the same reason,
-    and there is no BIP340 spelling of this one.
-
-    Args:
-        pubkey_bytes: the public key, 33 or 65 bytes.
-        tweak: the tweak, 32 bytes or an int below 2**256.
-
-    Returns:
-        The 32-byte tweaked x-only key, and the parity of its y.
-
-    Raises:
-        ValueError: if the public key is not a valid point, if the tweak
-            is not 32 bytes or does not fit in them, or if the tweak or
-            the resulting key is invalid.
-        RuntimeError: if libsecp256k1 fails to convert or serialize the
-            result, which no valid input can make it do.
-    """
-    return tweak_add_(keys.parse(pubkey_bytes), tweak)
 
 
 def _tweak_add(internal_pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
@@ -329,7 +309,7 @@ def tweak_add_check(
         tweaked_pubkey_bytes: the 32-byte x-only key to check.
         tweaked_parity: the parity of its y, 0 or 1, as `tweak_add`
             returned it.
-        pubkey_bytes: the 32-byte x-only internal key.
+        pubkey_bytes: the internal key, 32, 33 or 65 bytes.
         tweak: the tweak, 32 bytes or an int below 2**256.
 
     Returns:
@@ -401,28 +381,39 @@ def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
 
 
 def parse(pubkey_bytes: BytesLike) -> CData:
-    """Parse a 32-byte x-only public key.
+    """Parse a public key, in any of its serializations, into its x.
 
     The x-only counterpart of `keys.parse`, and the argument of
-    `ssa.verify_`: a caller that has proved 32 bytes to be the x
-    coordinate of a point has made the call BIP340 verification makes
-    anyway, and can hand the result on rather than make it twice.
+    `ssa.verify_`: a caller that has proved octets a public key has made
+    the call BIP340 verification makes anyway, and can hand the result on
+    rather than make it twice.
+
+    Every entry point of this module that takes a public key reaches it,
+    which is what makes them all take any of the three serializations.
+    Which one costs what: the 32-byte form is `secp256k1_xonly_pubkey_parse`,
+    a field square root at 2.343 us, and so is the compressed form; the
+    uncompressed form is 0.256, both coordinates being there to read, and
+    the x-only conversion that follows it reads the y rather than lifting
+    one.
 
     There is no `serialize` beside it, and that is not an omission:
     nothing here hands back a parsed x-only key except this, `from_pubkey`
     and `tweak_add` answering with the 32 bytes and the parity instead.
 
     Args:
-        pubkey_bytes: the 32-byte x coordinate.
+        pubkey_bytes: the public key, 32, 33 or 65 bytes.
 
     Returns:
         The libsecp256k1 x-only public key object.
 
     Raises:
-        ValueError: if it is not 32 bytes, or not a valid x coordinate.
+        ValueError: if it is not a valid point, or is not 32, 33 or 65
+            bytes.
     """
     # secp256k1_xonly_pubkey_parse takes a bare pointer to 32 bytes
-    pubkey_bytes = octets(pubkey_bytes, "x-only public key", 32)
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    if len(pubkey_bytes) != _XONLY_SIZE:
+        return _from_pubkey(keys.parse(pubkey_bytes))[0]
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):

@@ -356,13 +356,12 @@ def test_xonly_tweak_add() -> None:
     lifted = keys.pubkey_tweak_add(b"\x02" + xonly_bytes, tweak)
     assert (tweaked_bytes, parity) == xonly.from_pubkey(lifted)
 
-    # a full public key is not accepted: the public key of 11 has odd y,
-    # so tweaking it would tweak a point the caller did not pass, and
-    # from_pubkey is where that lift is asked for
+    # a full public key is accepted and names the same key: the public
+    # key of 11 has odd y, and BIP340 reads it as the x it shares with
+    # its negation rather than as another point
     assert mult.mult_(prvkey)[64] & 1
     for form in (mult.mult_(prvkey), compress(mult.mult_(prvkey))):
-        with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
-            xonly.tweak_add(form, tweak)
+        assert xonly.tweak_add(form, tweak) == (tweaked_bytes, parity)
 
     # the commitment can be checked without recomputing it
     assert xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, tweak)
@@ -412,7 +411,8 @@ def test_xonly_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="invalid x-only public key"):
         # 32 bytes which are not a valid x coordinate
         xonly.tweak_add(b"\xff" * 32, b"\x01" * 32)
-    with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
+    with pytest.raises(ValueError, match="invalid public key"):
+        # 33 octets which are no point either
         xonly.tweak_add(b"\x02" + b"\x00" * 32, b"\x01" * 32)
     with pytest.raises(ValueError, match="tweak must be 32 bytes"):
         xonly.tweak_add(xonly_bytes, b"\x01" * 31)
@@ -543,8 +543,9 @@ def test_size_checks_refuse_both_sides() -> None:
     """
     xonly_bytes, parity = xonly.from_pubkey(mult.mult_(11))
 
-    # parse, reached through both entry points
-    with pytest.raises(ValueError, match="x-only public key must be 32 bytes"):
+    # parse, reached through both entry points: 31 octets are none of the
+    # three serializations, and libsecp256k1 is never handed them
+    with pytest.raises(ValueError, match="invalid public key"):
         xonly.tweak_add(xonly_bytes[:-1], b"\x01" * 32)
 
     # and the tweaked key of the commitment check, one octet too many

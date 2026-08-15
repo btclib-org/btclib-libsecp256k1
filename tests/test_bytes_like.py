@@ -198,12 +198,6 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
     ("xonly.from_prvkey", xonly.from_prvkey, (PRVKEY,), {}),
     ("xonly.tweak_add", xonly.tweak_add, (XONLY, TWEAK), {}),
-    (
-        "xonly.tweak_add_from_pubkey",
-        xonly.tweak_add_from_pubkey,
-        (PUBKEY, TWEAK),
-        {},
-    ),
     # the parsed key is not retyped, being no bytes; the tweak beside it
     # is, and what comes back is 32 bytes and a parity, which compare
     ("xonly.tweak_add_", xonly.tweak_add_, (PARSED, TWEAK), {}),

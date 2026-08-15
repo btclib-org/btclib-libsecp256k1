@@ -11,7 +11,8 @@ Non-breaking, and additions only: one for a caller that signs more than
 once under one key, one for a caller computing a taproot output key from
 a public key it has validated, a set for a caller composing two of these
 calls where the second used to parse what the first had just serialized,
-and two for a caller that would rather hold octets than a parsed key.
+and one for a caller that would rather hold octets than a parsed key at
+all.
 
 `ssa.Signer` is new: it builds the BIP340 keypair once and signs with it
 as often as asked, where `ssa.sign` and `ssa.sign_custom` build one per
@@ -60,8 +61,8 @@ way is 28.2 microseconds through `pubkey_combine(pubkey_sort(...))` and
 Silent Payments address is 14.3 against 9.3. CHANGELOG.md states the
 machine and the method.
 
-**`keys.reserialize` and `xonly.tweak_add_from_pubkey` are for the caller
-who wants none of that.** A parsed key is an optimization of a parse, and
+**`keys.reserialize` is for the caller who wants none of that.** A
+parsed key is an optimization of a parse, and
 a parse of the *uncompressed* serialization is 0.256 microseconds against
 2.343 for the compressed one — both coordinates are there to read, where
 a compressed key is a field square root. So 65 octets are a parsed key
@@ -70,10 +71,13 @@ that costs nothing to open, and nothing has to own their lifetime.
 call, which is at once the validation a library does at its own boundary
 and the conversion between the two serializations, which nothing here
 offered — `compressed` is a filter on the form everywhere else, not a
-conversion to it. `xonly.tweak_add_from_pubkey` is `tweak_add_` with that
-parse in front of it, the outer half it was published without: 4.11
-microseconds against `tweak_add`'s 5.92, the difference being again the
-square root a 32-byte x-only key costs and 65 octets do not.
+conversion to it. And every entry point taking a public key now
+takes any of its three serializations: `02 || x`, `03 || x` and
+`04 || x || y` are one BIP340 key, `lift_x` being the even-y point
+whatever form the x arrived in, so `ssa.verify`, `xonly.tweak_add` and
+`xonly.tweak_add_check` no longer refuse the 33- and 65-byte forms — what
+that refusal cost was a lift, and a tweak from the uncompressed form is
+4.11 microseconds against the 5.92 of the 32-byte one.
 
 **`xonly.from_prvkey` and `ssa.Signer.pubkey` are the two shortcuts
 where the round trip was not worth making at all.** The first is the

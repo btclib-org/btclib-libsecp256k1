@@ -54,6 +54,7 @@ OTHER = keys.pubkey_from_prvkey(3)
 XONLY, PARITY = xonly.from_pubkey(PUBKEY)
 DER = dsa.sign(MSG, PRVKEY)
 SSA_SIG = ssa.sign(MSG, PRVKEY, bytes(32))
+TWEAKED, TWEAKED_PARITY = xonly.tweak_add(XONLY, TWEAK)
 RECOVERABLE, RECID = recovery.sign(MSG, PRVKEY)
 ELL = ellswift.create(PRVKEY, RND32)
 LABEL, LABEL_TWEAK = silentpayments.label(SCAN_PRVKEY, 0)
@@ -254,22 +255,27 @@ def test_the_taproot_pair_starts_from_the_point_the_x_belongs_to() -> None:
         )
 
 
-def test_the_taproot_outer_half_is_the_inner_one_behind_a_parse() -> None:
-    """`xonly.tweak_add_from_pubkey` is `tweak_add_` with a `keys.parse`.
+def test_every_serialization_of_a_key_is_the_same_x_only_key() -> None:
+    """32, 33 and 65 octets are one BIP340 key, and answer alike.
 
-    The pair the convention describes, over both serializations: the
-    outer half takes the octets, the inner one the point they parse to,
-    and neither is `tweak_add`, which takes the 32-byte x-only form and
-    lifts it.
+    The parity is a property of the serialization and not of the key:
+    `lift_x` is the even-y point whatever form the x arrived in, and a
+    signer whose point has odd y signs with n - d for that reason. So the
+    negated key is not another key, and every entry point that takes one
+    has to answer for all four spellings the same way.
     """
-    for pubkey_bytes in (PUBKEY, PUBKEY_LONG):
-        assert xonly.tweak_add_from_pubkey(pubkey_bytes, TWEAK) == xonly.tweak_add_(
-            keys.parse(pubkey_bytes), TWEAK
-        )
-    # and the y it discards is BIP341's to discard: the negated key is the
-    # same internal key, and answers the same output key
     negated = keys.pubkey_negate(PUBKEY)
-    assert xonly.tweak_add_from_pubkey(negated, TWEAK) == xonly.tweak_add(XONLY, TWEAK)
+    forms = (XONLY, PUBKEY, PUBKEY_LONG, negated, keys.pubkey_negate(PUBKEY, False))
+    for pubkey_bytes in forms:
+        assert xonly.from_pubkey(pubkey_bytes)[0] == XONLY
+        assert xonly.tweak_add(pubkey_bytes, TWEAK) == xonly.tweak_add(XONLY, TWEAK)
+        assert ssa.verify(MSG, pubkey_bytes, SSA_SIG)
+        assert xonly.tweak_add_check(TWEAKED, TWEAKED_PARITY, pubkey_bytes, TWEAK)
+
+    # and the parity is answered for what it is: which form was handed in
+    assert xonly.from_pubkey(XONLY)[1] == 0
+    assert xonly.from_pubkey(PUBKEY)[1] == 0
+    assert xonly.from_pubkey(negated)[1] == 1
 
 
 def test_reserialize_is_the_two_calls_it_replaces() -> None:
