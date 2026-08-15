@@ -137,10 +137,16 @@ release-notes length in the first place, and are still in
   `xonly.from_pubkey(keys.pubkey_from_prvkey(k))` — 10.49, of which 2.63
   is a round trip of the compressed key nobody wanted — and BIP340 and
   BIP341 want that key and not the point, so the composition is the
-  common case and not an exotic one: `from_prvkey` is 7.90. A signer
-  already holds the keypair, and reading the key off it is
-  `secp256k1_keypair_xonly_pub`: `Signer.pubkey()` is 0.43 against the
-  10.49 of deriving it a second time, and `tests/test_signer.py` holds it
+  common case and not an exotic one: `from_prvkey` is 7.90. It buys no
+  microsecond the halves had not already bought —
+  `from_pubkey_(pubkey_from_prvkey_(k))` is 7.87, and `from_prvkey` is
+  written as exactly that — which is the whole claim: it is a name for a
+  composition whose intermediate nothing here asked for, and the number
+  beside it is the round trip, not a third algorithm. `Signer.pubkey()`
+  is the one that saves what no pair of halves could: a signer already
+  holds the keypair, and the point with it, so reading the key off it is
+  `secp256k1_keypair_xonly_pub` and not a multiplication — 0.43 against
+  the 10.49 of deriving it a second time. `tests/test_signer.py` holds it
   to `xonly.from_prvkey` and to the key its own signatures verify
   against, parity included.
 - **`xonly.from_keypair` is the second wrapper taking a libsecp256k1
