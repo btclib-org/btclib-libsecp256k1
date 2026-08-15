@@ -114,6 +114,20 @@ wants none of that.** The first is the public-key twin of
 `prvkey_verify`: the validation a library makes at its own boundary, with
 nothing kept — where `parse` hands back an object to hold and
 `reserialize` the octets the caller already had.
+`xonly.pubkey_verify` and `dsa.signature_verify` complete it: the same
+verdict for an x coordinate and for a signature, in either of its
+serializations, so that a library validating input has one shape of
+answer for all four kinds of octets rather than a verdict for two of them
+and an exception for the rest.
+
+**Two more entry points are for the caller doing arithmetic rather than
+holding a key.** `keys.pubkey_sum` is `pubkey_combine` answering `None`
+where the sum is the point at infinity, instead of refusing it: `P + (-P)`
+is a value to a curve library and no public key to libsecp256k1, and the
+two calls are otherwise the same. `xonly.to_pubkey` is the lift — an
+x-only key is an x, the point it names is the one with even y, and
+reading that y meant writing `0x02 || x` yourself, libsecp256k1 having no
+call from an x-only object back to a point.
 
 The second is for the caller that wants the *other* serialization. A
 parsed key is an optimization of a parse, and a parse of the

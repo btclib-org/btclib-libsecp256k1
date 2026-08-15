@@ -371,11 +371,8 @@ def parse_der(signature_bytes: BytesLike) -> CData:
     Raises:
         ValueError: if the DER signature is malformed.
     """
-    signature_bytes = octets(signature_bytes, "DER signature")
-    signature = ffi.new("secp256k1_ecdsa_signature *")
-    if not lib.secp256k1_ecdsa_signature_parse_der(
-        ctx, signature, signature_bytes, len(signature_bytes)
-    ):
+    signature = _parsed(signature_bytes, compact=False)
+    if signature is None:
         raise ValueError("invalid DER signature")
     return signature
 
@@ -398,12 +395,92 @@ def parse_compact(signature_bytes: BytesLike) -> CData:
         ValueError: if the input is not 64 bytes, or if r or s is not
             below the group order.
     """
-    signature_bytes = octets(signature_bytes, "compact signature", 64)
-
-    signature = ffi.new("secp256k1_ecdsa_signature *")
-    if not lib.secp256k1_ecdsa_signature_parse_compact(ctx, signature, signature_bytes):
+    signature = _parsed(signature_bytes, compact=True)
+    if signature is None:
         raise ValueError("invalid compact signature")
     return signature
+
+
+def _parsed(signature_bytes: BytesLike, compact: bool) -> CData | None:
+    """Parse a signature, answering None where it is not one.
+
+    The parse both serializations reach, and the one thing to do with a
+    signature that is not a signature: `parse_der` and `parse_compact`
+    raise where this answers None, `signature_verify` answers the verdict.
+    Written twice, the two would be one call each until a check moved in
+    one of them -- `keys._parsed` is the same helper for a public key,
+    and says what it costs.
+
+    The length is part of what a compact signature is, and is refused
+    like the rest of it: `secp256k1_ecdsa_signature_parse_compact` takes
+    a bare pointer to 64 octets, so it is python that has to count them,
+    and answering False for 63 is what `keys.pubkey_verify` answers for a
+    key of 34. The DER parse is given the length instead, that encoding
+    carrying its own.
+
+    Args:
+        signature_bytes: the signature, in the serialization below.
+        compact: whether it is the 64 octets of `r || s` rather than DER.
+
+    Returns:
+        The libsecp256k1 signature object, or None if the octets are not
+        a signature in that serialization.
+
+    Raises:
+        TypeError: if the value is not bytes, which is a malformed
+            argument rather than a signature that fails to parse.
+    """
+    name = "compact signature" if compact else "DER signature"
+    signature_bytes = octets(signature_bytes, name)
+    signature = ffi.new("secp256k1_ecdsa_signature *")
+    if compact:
+        if len(signature_bytes) != 64:
+            return None
+        parsed = lib.secp256k1_ecdsa_signature_parse_compact(
+            ctx, signature, signature_bytes
+        )
+    else:
+        parsed = lib.secp256k1_ecdsa_signature_parse_der(
+            ctx, signature, signature_bytes, len(signature_bytes)
+        )
+    return signature if parsed else None
+
+
+def signature_verify(signature_bytes: BytesLike, compact: bool = False) -> bool:
+    """Return True if the octets are a signature libsecp256k1 accepts.
+
+    What `keys.pubkey_verify` is to a public key: the proof a `parse`
+    makes, with nothing kept and no exception to catch. A library
+    validating an input at its own boundary has this; what the octets are
+    wrong about is its own to phrase.
+
+    It says nothing about a message or a key, `verify` being that
+    question, and nothing about the lower-s form, which is `is_low_s`: a
+    signature is `r` and `s` below the group order, and that is what this
+    answers for.
+
+    Args:
+        signature_bytes: the signature, in the serialization below.
+        compact: whether it is the 64 octets of `r || s` rather than DER,
+            which cannot be read off the length: see `verify`.
+
+    Returns:
+        True if the octets are a signature in that serialization; False
+        for octets of any other length too, as `keys.pubkey_verify`
+        answers for a key.
+
+    Raises:
+        TypeError: if the value is not bytes at all, which is a malformed
+            argument and not a signature to have a verdict on.
+
+    Example:
+        >>> from btclib_secp256k1 import dsa
+        >>> dsa.signature_verify(dsa.sign(bytes(32), 1))
+        True
+        >>> dsa.signature_verify(bytes.fromhex("3006"))
+        False
+    """
+    return _parsed(signature_bytes, compact) is not None
 
 
 def serialize_der(signature: CData) -> bytes:

@@ -174,6 +174,13 @@ EQUALITIES: list[tuple[str, Callable[[], Any], Callable[[], Any]]] = [
         ),
     ),
     (
+        "keys._pubkey_sum_",
+        lambda: keys.pubkey_sum([PUBKEY, OTHER]),
+        lambda: keys.serialize(
+            keys._pubkey_sum_([keys.parse(PUBKEY), keys.parse(OTHER)])
+        ),
+    ),
+    (
         "keys._pubkey_sort_",
         lambda: keys.pubkey_sort([PUBKEY, OTHER]),
         lambda: [

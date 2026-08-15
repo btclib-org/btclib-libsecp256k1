@@ -213,6 +213,16 @@ and decides nothing else.
   `secp256k1_ecdsa_signature_parse_der`, a tweak by the return value of
   the function applying it; the `ValueError` names what the library
   refused. No wrapper here knows the curve order
+- **and a caller validating its own input gets a verdict, not an
+  exception.** `keys.prvkey_verify`, `keys.pubkey_verify`,
+  `xonly.pubkey_verify` and `dsa.signature_verify` are the four: the same
+  proof the `parse` beside each of them makes, with nothing kept and
+  nothing to catch. A library holding octets at its own boundary has its
+  own word for what is wrong with them, and an exception carrying this
+  package's word for it is a message it would have to translate. The
+  length is part of the verdict — 34 octets are no public key, and
+  answering `False` is what a caller asking "do I have one" wants — where
+  every entry point that goes on to *use* the key raises instead
 - **nothing is normalized into validity.** An argument of the wrong size
   raises, and is never padded: the 32 bytes of nonce entropy are 32 bytes
   or omitted, a shorter value being a caller mistake rather than a small
@@ -458,6 +468,25 @@ private keys, and the x-only public key itself, from a full public key
 (`from_pubkey`) or straight from a private key (`from_prvkey`);
 `hashes` provides the BIP340 tagged hash, the domain separation the
 taproot tags are built on.
+
+Two of those have a second spelling for a caller doing arithmetic rather
+than holding a key. `keys.pubkey_sum` is `pubkey_combine` with the point
+at infinity answered as `None` instead of refused: `P + (-P)` is the
+identity, which a curve library has a value for and which no
+`secp256k1_pubkey` can hold, so the sum that is no public key is the one
+thing the two calls do differently. And `xonly.to_pubkey` is the lift:
+an x-only key is an x, the point it names is the one with even y, and
+reading that y is `secp256k1_ec_pubkey_parse` of `0x02 || x` — octets a
+caller used to write itself, there being no libsecp256k1 call from an
+x-only object back to a point.
+
+Converting between two serializations of the same value is
+`keys.reserialize` for a key and `dsa.to_der` and `dsa.to_compact` for a
+signature. Two names there and one here, because which serialization a
+signature arrived in cannot be read off its octets: a DER signature of 64
+of them exists, and begins with the `0x30` a compact `r` may begin with
+too. So the input form is named by the call, as `compact` names it on
+`dsa.sign` and `dsa.verify`, where a key's is read from its length.
 
 `ssa.sign` signs a 32-byte message hash, as bitcoin does; `ssa.sign_custom`
 signs a message of any length, which BIP340 allows and which a protocol

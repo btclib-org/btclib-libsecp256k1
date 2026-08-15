@@ -486,18 +486,46 @@ def _pubkey_combine_(pubkeys: Sequence[CData]) -> CData:
             infinity, which is no public key, or if any object is not a
             public key libsecp256k1 will read; see `context.guarded`.
     """
+    combined = _pubkey_sum_(pubkeys)
+    if combined is None:
+        raise ValueError("invalid public key sum")
+    return combined
+
+
+def _pubkey_sum_(pubkeys: Sequence[CData]) -> CData | None:
+    """Add already-parsed public keys together, infinity included.
+
+    The private half of `pubkey_sum`, and what `_pubkey_combine_` is
+    built on: see the package docstring for what the two underscores
+    mean throughout.
+
+    Args:
+        pubkeys: the already-parsed public keys, as `parse` returns. At
+            least one is required.
+
+    Returns:
+        The libsecp256k1 public key object of the sum, or None where that
+        sum is the point at infinity.
+
+    Raises:
+        ValueError: if the sequence is empty, or if any object is not a
+            public key libsecp256k1 will read; see `context.guarded`,
+            which is also what tells that from the infinity below.
+    """
     pubkeys = list(pubkeys)
     if not pubkeys:
         raise ValueError("at least one public key is required")
 
     combined = ffi.new("secp256k1_pubkey *")
+    # the guard is what makes the 0 below mean one thing. libsecp256k1
+    # answers 0 both for a key it cannot read and for a sum that is the
+    # point at infinity, and it reports the first through the illegal
+    # callback: raised there, what is left here is the second
     with guarded():
         summed = lib.secp256k1_ec_pubkey_combine(
             ctx, combined, array("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
         )
-    if not summed:
-        raise ValueError("invalid public key sum")
-    return combined
+    return combined if summed else None
 
 
 def pubkey_combine(
@@ -524,6 +552,50 @@ def pubkey_combine(
         _pubkey_combine_([parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]),
         compressed,
     )
+
+
+def pubkey_sum(
+    pubkeys_bytes: Sequence[BytesLike], compressed: bool = True
+) -> bytes | None:
+    """Add public keys together, answering None for the point at infinity.
+
+    `pubkey_combine` with the one sum that is no public key answered
+    rather than refused. A caller doing arithmetic has that sum as a
+    value -- `P + (-P)` is the identity and not a malformed argument --
+    and the two spellings are the same call: what tells a sum at infinity
+    from a key libsecp256k1 could not read is that the second is reported
+    through the illegal callback and raises, which `context.guarded` is
+    what makes true here.
+
+    The infinity has no serialization, which is why it is None and not
+    octets: a `secp256k1_pubkey` is a point of the curve and never the
+    identity, so there is nothing for this to hand back.
+
+    Args:
+        pubkeys_bytes: the public keys, each 33 or 65 bytes. At least
+            one is required.
+        compressed: whether to return 33 bytes rather than 65.
+
+    Returns:
+        The serialized sum of the points, or None where they sum to the
+        point at infinity.
+
+    Raises:
+        ValueError: if the sequence is empty, or if any key is not a
+            valid point.
+        RuntimeError: if libsecp256k1 fails to serialize the result,
+            which no valid input can make it do.
+
+    Example:
+        >>> from btclib_secp256k1 import keys
+        >>> pubkey = keys.pubkey_from_prvkey(7)
+        >>> keys.pubkey_sum([pubkey, keys.pubkey_negate(pubkey)]) is None
+        True
+        >>> keys.pubkey_sum([pubkey]) == pubkey
+        True
+    """
+    summed = _pubkey_sum_([parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes])
+    return None if summed is None else serialize(summed, compressed)
 
 
 def _pubkey_cmp_(pubkey1: CData, pubkey2: CData) -> int:
