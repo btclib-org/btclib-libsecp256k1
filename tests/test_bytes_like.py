@@ -138,6 +138,9 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("ssa.verify_", ssa.verify_, (MSG, PARSED_XONLY, SSA_SIG), {}),
     ("xonly.from_pubkey", xonly.from_pubkey, (PUBKEY,), {}),
     ("xonly.tweak_add", xonly.tweak_add, (XONLY, TWEAK), {}),
+    # the parsed key is not retyped, being no bytes; the tweak beside it
+    # is, and what comes back is 32 bytes and a parity, which compare
+    ("xonly.tweak_add_", xonly.tweak_add_, (PARSED, TWEAK), {}),
     (
         "xonly.tweak_add_check",
         xonly.tweak_add_check,

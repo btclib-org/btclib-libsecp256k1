@@ -7,8 +7,9 @@ a tag is generated from.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
-Non-breaking, and one addition for a caller that signs more than once
-under one key.
+Non-breaking, and two additions: one for a caller that signs more than
+once under one key, one for a caller computing a taproot output key from
+a public key it has validated.
 
 `ssa.Signer` is new: it builds the BIP340 keypair once and signs with it
 as often as asked, where `ssa.sign` and `ssa.sign_custom` build one per
@@ -26,6 +27,15 @@ the way out whether the block ended in a signature or in an exception.
 to sign rather than signing with what the wipe left. The private key
 handed to the constructor is a python `bytes` or `int` and is no more
 zeroizable than before: SECURITY.md's limits are unchanged.
+
+`xonly.tweak_add_` is the inner half of `xonly.tweak_add`: it takes the
+parsed point `keys.parse` returns, rather than the 32-byte x-only form,
+and so tweaks a key that is already lifted instead of lifting its x a
+second time. The x-only conversion in front of the tweak is
+`secp256k1_xonly_pubkey_from_pubkey`, which reads the y it is given; the
+result is the output key and parity `tweak_add` answers with, the
+negation of an odd-y point included, and `tweak_add` itself is unchanged
+in behaviour and cost.
 
 ## v0.8.0.2
 

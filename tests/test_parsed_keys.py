@@ -124,6 +124,27 @@ def test_the_schnorr_pair_parses_the_x_only_key() -> None:
     assert not ssa.verify_(MSG, xonly.parse(XONLY), tampered)
 
 
+def test_the_taproot_pair_starts_from_the_point_the_x_belongs_to() -> None:
+    """`xonly.tweak_add_` is `xonly.tweak_add` of the key's own x.
+
+    The other pair whose parsed key is not the one its outer half makes:
+    `tweak_add` takes 32 bytes and lifts them, `tweak_add_` takes the
+    point those bytes are the x of, which is what a caller that validated
+    a full public key is already holding.
+
+    The odd-y key is the case worth writing down: BIP341's internal key
+    is x-only, so the point is tweaked as its negation and answers the
+    output key of the x it shares with it -- which is the same 32 bytes
+    the even-y key gives, and the assertion below is that equality.
+    """
+    for pubkey_bytes in (PUBKEY, PUBKEY_LONG, keys.pubkey_negate(PUBKEY)):
+        x_only, _ = xonly.from_pubkey(pubkey_bytes)
+        assert x_only == XONLY
+        assert xonly.tweak_add_(keys.parse(pubkey_bytes), TWEAK) == xonly.tweak_add(
+            x_only, TWEAK
+        )
+
+
 def test_a_parsed_key_verifies_more_than_once() -> None:
     """The motivating case: one parse, several signatures.
 
@@ -165,6 +186,8 @@ def test_an_inner_half_still_checks_everything_but_the_key() -> None:
         keys.pubkey_tweak_add_(pubkey, b"\x01" * 31)
     with pytest.raises(ValueError, match="tweak must be 32 bytes"):
         keys.pubkey_tweak_mul_(pubkey, b"\x01" * 33)
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        xonly.tweak_add_(pubkey, b"\x01" * 31)
 
     # and the two verdicts libsecp256k1 gives on a tweak, through the
     # inner halves: the sum that is the point at infinity, and the zero
@@ -184,6 +207,12 @@ def test_every_inner_half_is_paired() -> None:
     exception and is named as one: its underscore is older and means the
     other thing, the serialized point against the pair of coordinates
     `mult` answers with, and there is no key to hand it already parsed.
+
+    `ssa.verify_` and `xonly.tweak_add_` are paired in tests of their own
+    rather than in the table: the parsed key of the first is
+    `xonly.parse`'s and not `keys.parse`'s, and the second takes the point
+    whose x its outer half is given, so neither equality is the one
+    parametrized above.
     """
     modules = {
         "dsa": dsa,
@@ -193,7 +222,7 @@ def test_every_inner_half_is_paired() -> None:
         "ssa": ssa,
         "xonly": xonly,
     }
-    paired = {f"{name}_" for name, *_ in PAIRS} | {"ssa.verify_"}
+    paired = {f"{name}_" for name, *_ in PAIRS} | {"ssa.verify_", "xonly.tweak_add_"}
     inner_halves = {
         f"{module_name}.{name}"
         for module_name, module in modules.items()
