@@ -154,9 +154,11 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
     the length of the message: `ssa.sign` is BIP340's 32-byte signing, and
     `ssa.sign_custom` is the arbitrary-length one, so the four vectors
     added in 2022 -- messages of 0, 1, 17 and 100 octets -- are the only
-    published values `sign_custom` can be held against. A structurally
-    invalid input raises where the vector says false, so the exception is
-    read as that verdict rather than as an error.
+    published values `sign_custom` can be held against. `ssa.Signer` is
+    those same two calls with the keypair hoisted out of them, so it is
+    signed here as well, against the vector rather than against them. A
+    structurally invalid input raises where the vector says false, so
+    the exception is read as that verdict rather than as an error.
     """
     msg = bytes.fromhex(vector["message"])
     pubkey = bytes.fromhex(vector["public key"])
@@ -174,6 +176,13 @@ def test_bip340_vector(vector: dict[str, str]) -> None:
         # returns, which is what makes the two comparable at all
         if len(msg) == 32:
             assert ssa.sign(msg, seckey, aux_rand) == sig
+        # and a signer is those same two calls with the keypair built
+        # once, so the published value is what holds it too rather than
+        # an agreement between two functions of this package
+        with ssa.Signer(seckey) as signer:
+            assert signer.sign_custom(msg, aux_rand) == sig
+            if len(msg) == 32:
+                assert signer.sign(msg, aux_rand) == sig
 
     try:
         result = bool(ssa.verify(msg, pubkey, sig))

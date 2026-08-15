@@ -7,6 +7,26 @@ a tag is generated from.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+Non-breaking, and one addition for a caller that signs more than once
+under one key.
+
+`ssa.Signer` is new: it builds the BIP340 keypair once and signs with it
+as often as asked, where `ssa.sign` and `ssa.sign_custom` build one per
+call and wipe it before returning. That keypair is about half of what a
+signature costs — 15.7 microseconds a signature through `ssa.sign`
+against 8.2 through a signer, on the machine and with the method
+CHANGELOG.md states — so a caller signing a batch under one key roughly
+halves it. Both functions are unchanged in behaviour and cost, and are
+still the right call for a single signature.
+
+What a signer holds is a secret, and it is the caller's for as long as
+they hold it: use it in a `with` block, which overwrites the keypair on
+the way out whether the block ended in a signature or in an exception.
+`signer.wipe()` says the same thing by hand, and a wiped signer refuses
+to sign rather than signing with what the wipe left. The private key
+handed to the constructor is a python `bytes` or `int` and is no more
+zeroizable than before: SECURITY.md's limits are unchanged.
+
 ## v0.8.0.2
 
 Non-breaking, and two additions for a caller that verifies signatures it
