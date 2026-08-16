@@ -855,6 +855,27 @@ release-notes length in the first place, and are still in
   v0.8.0.2 all published clean and none produced a GitHub release,
   recreated by hand from each run's own `sdist` and `attestation`
   artifacts every time
+- **A change to prose no longer rewrites `.secrets.baseline`** (#198). The
+  baseline recorded one finding in `CHANGELOG.md`, and this file grows
+  above it: of the forty commits before this one, forty rewrote the
+  baseline and thirty-three moved nothing in it but that finding's
+  `line_number`. What the rewrite costs is not the command that makes it
+  — it is that every open pull request then conflicts there with every
+  other and with `main`, whatever either of them touches, which is what
+  happened to #183 and #185 within the hour they were both open. The
+  finding is a false positive this file's own entry above records: the
+  `-DSECP256K1_BUILD_BENCHMARK=OFF` it names is quoted there as
+  `cffi_build.py` writes it, and a string in straight quotes is what the
+  base64 detector reads. A
+  `pragma: allowlist secret` beside it takes it out of the baseline
+  without taking the quotes out of the sentence, they being why the
+  detector fires and so what the sentence is about. Measured against the
+  alternatives: dropping the quotes also clears it and says less; the
+  pragma on the previous line does *not* clear it, `is_line_allowlisted`
+  reading `context.previous_line` notwithstanding; and excluding the file
+  from the hook would take the keyword and provider-token detectors off
+  it too. The baseline is now written when a file that has a finding
+  changes, which was 7 of those 40 rather than all of them
 
 ## v0.8.0.2
 
@@ -2300,10 +2321,11 @@ branch has to edit.
   the baseline `--baseline` points at. The newly recorded findings were
   reviewed one by one: hex constants written inline in
   `tests/test_vectors.py` and `tests/test_properties.py`, and
-  `"-DSECP256K1_BUILD_BENCHMARK=OFF"` in `scripts/cffi_build.py`, which
-  the base64 detector reads as a secret. Verified by planting a
-  64-character hex constant in a test module and an AWS access key in a
-  vector file, and watching each hook name its own.
+  `"-DSECP256K1_BUILD_BENCHMARK=OFF"` <!-- pragma: allowlist secret -->
+  in `scripts/cffi_build.py`, which the base64 detector reads as a
+  secret. Verified by planting a 64-character hex constant in a test
+  module and an AWS access key in a vector file, and watching each hook
+  name its own.
 - **The copyright-notice hook reads files at all.** Without
   `--enforce-all` the tool intersects the filenames pre-commit hands it
   with `git diff --staged --name-only --diff-filter=A`: newly *added*
