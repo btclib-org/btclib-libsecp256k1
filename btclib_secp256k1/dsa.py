@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import overload
 
-from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
+from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
 from ._secret import take
 from .context import ctx
@@ -334,6 +334,14 @@ def sign(
         >>> dsa.sign(msg, 1, grind=True, compact=True)[0] < 0x80
         True
     """
+    # composed, where `verify` below is spelled out: the frames this
+    # would save were measured and are not there. Shipped against a
+    # spelling with `_sign_` inlined, with the DER serialization inlined,
+    # and with both, alternated in one process over 9 rounds of 20 000
+    # calls -- an Apple M5, macOS 26.6, arm64, CPython 3.13.14 -- all
+    # three land within 0.03 microseconds of this one and on the wrong
+    # side of it. A signature is 11.9 microseconds of libsecp256k1, and
+    # two python frames do not show against it
     signature = _sign_(msg_bytes, prvkey, aux_rand32, grind)
     return serialize_compact(signature) if compact else serialize_der(signature)
 
@@ -429,10 +437,28 @@ def verify(
         >>> dsa.verify(msg, keys.pubkey_from_prvkey(1), dsa.sign(msg, 1))
         True
     """
-    parse = parse_compact if compact else parse_der
-    return _verify_(
-        msg_bytes, keys.parse(pubkey_bytes), parse(signature_bytes), normalize
-    )
+    # spelled out rather than composed of `keys.parse`, a `parse_` and
+    # `_verify_`: those frames are 0.035 microseconds of the 11.813 this
+    # call costs -- an Apple M5, macOS 26.6, arm64, CPython 3.13.14, the
+    # two spellings alternated in one process over 7 rounds of 20 000
+    # calls, minimum kept for each. `_verify_` makes the same calls for a
+    # caller holding both objects, and tests/test_parsed_keys.py asserts
+    # the two answer alike
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
+        raise ValueError("invalid public key")
+
+    signature = _parsed(signature_bytes, compact)
+    if signature is None:
+        raise ValueError(
+            "invalid compact signature" if compact else "invalid DER signature"
+        )
+    if normalize:
+        _normalize_(signature)
+
+    msg_bytes = octets(msg_bytes, "message hash", 32)
+    return bool(lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey))
 
 
 def _normalize_(signature: CData) -> CData:

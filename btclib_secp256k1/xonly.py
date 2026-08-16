@@ -427,8 +427,19 @@ def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
         ValueError: if it is not a valid point, or is not 32, 33 or 65
             bytes.
     """
-    xonly_pubkey = _parsed(pubkey_bytes, name)
-    if xonly_pubkey is None:
+    # spelled out rather than delegated to `_parsed`, for the reason
+    # `keys.parse` is: this is the parse BIP340 verification begins with.
+    # `_parsed` answers None where this raises, and `pubkey_verify` is
+    # what wants that
+    pubkey_bytes = octets(pubkey_bytes, name)
+    if len(pubkey_bytes) != _XONLY_SIZE:
+        pubkey = keys._parsed(pubkey_bytes, name)
+        if pubkey is None:
+            raise ValueError(f"invalid {name}")
+        return _drop_y(pubkey)[0]
+
+    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
+    if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
         raise ValueError(f"invalid {name}")
     return xonly_pubkey
 
@@ -437,8 +448,9 @@ def _parsed(pubkey_bytes: BytesLike, name: str) -> CData | None:
     """Parse a public key into its x, answering None where it is not one.
 
     What `keys._parsed` is to a full public key, and for the same reason:
-    `parse` raises where this answers None and `pubkey_verify` answers
-    the verdict, and one call is what both are.
+    this answers the verdict `pubkey_verify` wants where `parse` raises.
+    `parse` spells the same statements out rather than delegating, for the
+    reason `keys.parse` does.
 
     Args:
         pubkey_bytes: the public key, 32, 33 or 65 bytes.

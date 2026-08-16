@@ -22,6 +22,52 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### The frames between an entry point and libsecp256k1
+
+- **Five entry points are spelled out rather than composed of their
+  halves**: `keys.parse` and `xonly.parse`, which delegated to their
+  `_parsed`, `keys.pubkey_tweak_add`, which was three calls, and
+  `dsa.verify` and `ssa.verify`, which parsed through one call and
+  verified through another. What a python frame is worth was measured by
+  alternating the two spellings in one process, 7 rounds each and the
+  minimum kept for each -- an Apple M5, macOS 26.6, arm64, CPython
+  3.13.14: `keys.parse` of 65 bytes 0.010 of 0.205 and of 33 bytes 0.013
+  of 2.324, `xonly.parse` of 65 bytes 0.012 of 0.485, `ssa.verify` 0.009
+  of 14.275, `dsa.verify` 0.035 of 11.813, `keys.pubkey_tweak_add` 0.037
+  of 3.403. Small everywhere, and largest where the call is shortest.
+- **`dsa.sign` is composed still, and that is a measured result rather
+  than an omission.** Three spellings were tried -- `_sign_` inlined, the
+  DER serialization inlined, and both -- and all three land within 0.03
+  microseconds of the composed one and on the wrong side of it. A
+  signature is 11.9 microseconds of libsecp256k1; two python frames do
+  not show against it, and a body written twice for nothing is worse
+  than the frames.
+- **Measuring the two spellings one after the other is what made them
+  look bigger.** Run in sequence rather than alternated, the same
+  comparison reported 0.027, 0.083, 0.154 and 0.261 for four of the
+  calls above -- two to four times the alternated figure, and for
+  `dsa.sign` a saving that is not there at all. The machine drifts under
+  a benchmark, and a pair measured in a fixed order gives the drift to
+  one side of it.
+- **Every private half stays, and removing them was measured before it
+  was declined.** They are what a caller holding a parsed object does
+  not pay a parse for, and that is worth 0.558 microseconds per call
+  against a 65-byte key, 2.676 against a 33-byte one -- where the parse
+  is a field square root -- and 2.687 on a tweak applied to its own
+  output. Two orders of magnitude more than the frames are worth, and in
+  the opposite direction: deleting them to save a frame on the octets
+  path would cost the object path a parse at every call. `ssa.Signer`
+  and `keys.PubkeyTweakChain` are the same trade already made.
+- **So five bodies are written twice**, once taking octets and once
+  taking the object, and the equality is asserted rather than assumed:
+  `tests/test_parsed_keys.py` holds every public half to its private
+  one, pair by pair and over both serializations of a public key, and
+  `test_every_private_half_is_paired` makes an unpaired half an absence
+  rather than a test nobody wrote. That test is what makes the
+  duplication survivable, and it is why it was not extended to
+  `recovery`, `ellswift` or `silentpayments`, whose entry points no
+  benchmark reaches and which still compose.
+
 ### What a crossing costs, and what stops being paid for it
 
 - **`context.guarded` is gone, and every call it held is now a bare
