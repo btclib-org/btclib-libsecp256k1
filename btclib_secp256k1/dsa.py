@@ -19,8 +19,87 @@ serialize one of their own.
 from __future__ import annotations
 
 from . import BytesLike, CData, ffi, keys, lib
-from ._scalar import octets, optional_entropy, scalar
+from ._scalar import in_range, octets, optional_entropy, scalar
+from ._secret import take
 from .context import ctx, guarded
+
+
+def nonce_rfc6979(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    attempt: int = 0,
+) -> bytes:
+    """Return the RFC6979 nonce `sign` derives for a message and a key.
+
+    libsecp256k1 exports its nonce function as a callable pointer, and
+    this calls through it with what `secp256k1_ecdsa_sign` passes: the
+    message hash, the key, no algorithm tag, and the extra entropy. That
+    signing call selects the *default* nonce function, which libsecp256k1
+    documents as the same pointer as this one -- an identity
+    `tests/test_nonces.py` asserts rather than assumes. So what comes back
+    is the `k` of the signature `sign` makes of the same arguments: `r` is
+    the x of `k` times the generator, reduced, which is what that same
+    file holds it to.
+
+    It is here because a nonce is the one part of signing these bindings
+    compute and never show, which leaves a python implementation of
+    RFC6979 with published vectors and no oracle. `recovery.sign` derives
+    its nonce the same way and this answers for it too.
+
+    **The nonce is the secret the signature is built on.** Read into
+    python it has left constant-time code, and a caller that signs with
+    one it read here is doing the arithmetic this package delegates
+    precisely so that it is not done in python. What this is for is
+    checking a derivation, not driving one.
+
+    Args:
+        msg_bytes: the 32-byte hash of the message.
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        aux_rand32: the 32 bytes of extra entropy `sign` mixes in, or
+            None for the RFC6979 nonce alone. Whichever was given to
+            `sign` is what reproduces its nonce, `None` included.
+        attempt: which candidate to answer. RFC6979 retries when the one
+            it derives is not a scalar in [1, n-1], and libsecp256k1
+            drives that counter itself; 0 is what it takes first and what
+            every signature this package makes has used.
+
+    Returns:
+        The 32-byte nonce.
+
+    Raises:
+        TypeError: if the attempt is not an int, or an argument is not
+            bytes.
+        ValueError: if the message hash is not 32 bytes, if aux_rand32 is
+            given and is not 32 bytes, if the private key is not 32 bytes
+            or does not fit in them, or if the attempt is out of range.
+        RuntimeError: if libsecp256k1 fails to derive one, which RFC6979
+            answers for every input.
+
+    Example:
+        >>> from btclib_secp256k1 import dsa
+        >>> nonce = dsa.nonce_rfc6979(bytes(32), 1)
+        >>> len(nonce)
+        32
+    """
+    msg_bytes = octets(msg_bytes, "message hash", 32)
+    prvkey_bytes = scalar(prvkey, "private key")
+    # unsigned int, and out of range is out of domain like any other
+    # argument rather than the OverflowError cffi would answer with
+    attempt = in_range(attempt, "attempt", 2**32 - 1)
+    # the entropy has to outlive the call: cffi keeps alive what a
+    # variable points to, and this pointer is read inside it
+    ndata = optional_entropy(aux_rand32)
+
+    nonce = ffi.new("unsigned char[32]")
+    # NULL where the algorithm tag goes, which is what
+    # secp256k1_ecdsa_sign passes: a tag is what tells one derivation
+    # from another, and this is the one ECDSA signing uses
+    if not lib.secp256k1_nonce_function_rfc6979(
+        nonce, msg_bytes, prvkey_bytes, ffi.NULL, ndata, attempt
+    ):
+        raise RuntimeError("RFC6979 nonce derivation failed")
+    return take(nonce)
 
 
 def _sign_(

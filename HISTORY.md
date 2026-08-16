@@ -147,6 +147,16 @@ serializations, so that a library validating input has one shape of
 answer for all four kinds of octets rather than a verdict for two of them
 and an exception for the rest.
 
+**Two entry points answer the nonce a signature was built on.**
+`dsa.nonce_rfc6979` and `ssa.nonce_bip340` call through the function
+pointers libsecp256k1 exports, with what each signer passes them, so what
+comes back is the `k` of the signature the same arguments make -- `r`
+being the x of `k` times the generator. A python implementation of either
+derivation had published vectors and no oracle; this is the C function
+itself. The nonce is the secret the signature is built on, and reading it
+into python takes it out of constant-time code: they are for checking a
+derivation, not for driving one.
+
 **Two more entry points are for the caller doing arithmetic rather than
 holding a key.** `keys.pubkey_sum` is `pubkey_combine` answering `None`
 where the sum is the point at infinity, instead of refusing it: `P + (-P)`

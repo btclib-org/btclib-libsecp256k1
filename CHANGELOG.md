@@ -458,6 +458,61 @@ release-notes length in the first place, and are still in
   `to_compact` name the input form the way `compact` names it on `sign`
   and `verify`, which is the coherence a third name would have broken
 
+### The nonce each signer derives
+
+- **`dsa.nonce_rfc6979` and `ssa.nonce_bip340` are new** (#155).
+  libsecp256k1 exports its two nonce functions as callable pointers --
+  `secp256k1_nonce_function_rfc6979` and
+  `secp256k1_nonce_function_bip340` -- and both headers were already in
+  the parse list, so what was missing was the call through the pointer
+  and nothing else. No callback into python, which is what makes this
+  unlike the ECDH hash function `ecdh.shared_secret` declines to expose
+- **each is called with what its signer passes**, so what comes back is
+  the nonce of the signature the same arguments make, rather than a
+  derivation that resembles it. That is checked rather than asserted:
+  `tests/test_nonces.py` signs and re-derives, `r` being the x of `k`
+  times the generator reduced modulo the group order and BIP340's `R`
+  the same x without the reduction. The four points #155 lists are
+  settled that way -- the algorithm tag is fixed to the signer's (NULL
+  for ECDSA, `BIP0340/nonce` for BIP340), `attempt` is an argument
+  because RFC6979's contract has a counter even though every signature
+  takes the first candidate, `ndata` is the `aux_rand32` every other
+  entry point calls it, and the answer leaves through `_secret.take`
+- **BIP340's key enters negated where the point has odd y**, and the
+  x-only public key with it, because that is the key the signature is
+  made with: a wrapper taking the caller's key unchanged would answer a
+  nonce no signature was built on, which the odd-y parametrization of the
+  test would have caught. Both are derived here rather than asked of the
+  caller for the same reason
+- **and no auxiliary randomness is the aux of 32 zero octets**, which is
+  what libsecp256k1 substitutes and what a python implementation has to
+  choose between, BIP340 leaving the aux optional. Asserted, because it
+  is the kind of fact a reader would otherwise have to read the C for
+- **what they are not is a way to sign in python.** A nonce read out of
+  libsecp256k1 has left constant-time code, and the docstrings say so
+  where a caller meets them: they are an oracle for checking a
+  derivation, which is the gap btclib's `ecc/rfc6979_nonce.py` and
+  `ecc/bip340_nonce.py` have had
+- **and SECURITY.md gains the limit that has an equation.** Its list of
+  what libsecp256k1 writes into a cffi buffer now names the nonce, and
+  beside it the thing the other members do not have: a nonce published
+  beside the signature it made *is* the private key,
+  `d = (s·k - h)/r mod n`. The docstrings warn against signing with one;
+  what they could not say, the enumeration being elsewhere, is that it
+  must not be stored or logged beside a signature either
+- **the identity the oracle rests on is asserted, not assumed**:
+  `dsa.sign` passes NULL where the nonce function goes, which selects
+  `secp256k1_nonce_function_default`, and this wrapper calls
+  `secp256k1_nonce_function_rfc6979`. libsecp256k1's header says they are
+  "currently the same pointer", and `tests/test_nonces.py` says so too —
+  without it, a split upstream would fail the signature comparisons while
+  reporting only that a nonce does not match its signature
+- **and the published vectors are what the RFC6979 entry point answers
+  to.** `tests/test_vectors.py` already carries the RFC6979 cases with
+  their `k`, and now asserts that `nonce_rfc6979` reproduces it: the
+  signature comparison holds the wrapper to this package's own signer,
+  and this holds it to the value RFC6979 publishes
+
 ### The surface and the sentence agree
 
 - **the `mult` module is folded into `keys`** (#173). With `mult.mult`

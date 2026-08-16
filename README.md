@@ -508,6 +508,18 @@ too. So the input form is named by the call, as `compact` names it on
 signs a message of any length, which BIP340 allows and which a protocol
 of its own may define.
 
+`dsa.nonce_rfc6979` and `ssa.nonce_bip340` answer the nonce each signer
+derives, which is the one part of signing these bindings used to compute
+and never show. libsecp256k1 exports both derivations as callable
+pointers, so this is the C function itself rather than a second
+implementation of it, called with what the signer passes it -- and what
+comes back is the `k` of the signature the same arguments produce, which
+is how `tests/test_nonces.py` checks it: `r` is the x of `k` times the
+generator. A python implementation of either derivation has published
+vectors and, until now, no oracle. The nonce is the secret a signature is
+built on, so reading one into python takes it out of constant-time code:
+what these are for is checking a derivation, not driving one.
+
 `ecdh.shared_secret` returns the SHA256 of the compressed shared point,
 the libsecp256k1 default. The hash function is not exposed: libsecp256k1
 takes it as a C callback, and a protocol needing another derivation has

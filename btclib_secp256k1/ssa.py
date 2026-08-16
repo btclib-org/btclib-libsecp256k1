@@ -13,14 +13,96 @@ from __future__ import annotations
 
 from types import TracebackType
 
-from . import BytesLike, CData, ffi, lib, xonly
-from ._scalar import entropy, octets
-from ._secret import keypair, wipe
+from . import BytesLike, CData, ffi, keys, lib, xonly
+from ._scalar import entropy, octets, optional_entropy, scalar
+from ._secret import keypair, take, wipe
 from .context import ctx, guarded
 
 # SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
 # survive the preprocessing of the headers into cffi definitions
 EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
+
+# the tag secp256k1_schnorrsig_sign gives its nonce function, and what
+# makes the derivation BIP340's rather than another protocol's
+_NONCE_ALGO = b"BIP0340/nonce"
+
+
+def nonce_bip340(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+) -> bytes:
+    """Return the BIP340 nonce `sign` derives for a message and a key.
+
+    libsecp256k1 exports its nonce function as a callable pointer, and
+    this calls through it with what `secp256k1_schnorrsig_sign` passes:
+    the message, the key the signature is made with, the x-only public
+    key, the `BIP0340/nonce` tag and the auxiliary randomness. So what
+    comes back is the `k` of the signature `sign` makes of the same
+    arguments -- the first 32 octets of that signature are the x of `k`
+    times the generator, which is what `tests/test_nonces.py` holds it to.
+
+    The key BIP340 signs with is the one of the even-y point, so a
+    private key whose point has odd y enters the derivation negated, and
+    the x-only public key with it. Both are derived here rather than
+    asked of the caller: that is what makes the answer the nonce of the
+    signature rather than of a key nobody signs with.
+
+    It is here for the reason `dsa.nonce_rfc6979` is: a python
+    implementation of BIP340's nonce derivation has published vectors and
+    no oracle, and the aux is where implementations diverge.
+
+    **The nonce is the secret the signature is built on**, and reading it
+    into python takes it out of constant-time code: see
+    `dsa.nonce_rfc6979`, which says what that means.
+
+    Args:
+        msg_bytes: the message, of any length.
+        prvkey: the private key, 32 bytes or an int below 2**256.
+        aux_rand32: the 32 bytes of auxiliary randomness, or None for the
+            derivation libsecp256k1 makes without any -- which answers
+            what 32 zero octets answer, the tagged hash of those zeros
+            being what it substitutes. `sign` given None generates 32
+            fresh octets instead of passing none, so what reproduces a
+            signature's nonce is the aux that signature was made with.
+
+    Returns:
+        The 32-byte nonce.
+
+    Raises:
+        ValueError: if aux_rand32 is given and is not 32 bytes, or if the
+            private key is not 32 bytes, does not fit in them, or is not
+            in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to derive one, which the tag
+            above keeps it from doing.
+
+    Example:
+        >>> from btclib_secp256k1 import ssa
+        >>> nonce = ssa.nonce_bip340(bytes(32), 1, bytes(32))
+        >>> len(nonce)
+        32
+    """
+    msg_bytes = octets(msg_bytes, "message")
+    xonly_pubkey, parity = xonly.from_prvkey(prvkey)
+    # the key that signs, which BIP340 negates where the point has odd y
+    prvkey_bytes = (
+        keys.prvkey_negate(prvkey) if parity else scalar(prvkey, "private key")
+    )
+    aux = optional_entropy(aux_rand32)
+
+    nonce = ffi.new("unsigned char[32]")
+    if not lib.secp256k1_nonce_function_bip340(
+        nonce,
+        msg_bytes,
+        len(msg_bytes),
+        prvkey_bytes,
+        xonly_pubkey,
+        _NONCE_ALGO,
+        len(_NONCE_ALGO),
+        aux,
+    ):
+        raise RuntimeError("BIP340 nonce derivation failed")
+    return take(nonce)
 
 
 def sign(

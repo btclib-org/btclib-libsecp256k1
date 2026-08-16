@@ -272,6 +272,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("keys.pubkey_sort", keys.pubkey_sort, ([PUBKEY, PUBKEY_LONG],), {}),
     ("hashes.tagged_sha256", hashes.tagged_sha256, (b"TapLeaf", MSG), {}),
     ("dsa.sign", dsa.sign, (MSG, PRVKEY, bytes(32)), {}),
+    ("dsa.nonce_rfc6979", dsa.nonce_rfc6979, (MSG, PRVKEY, bytes(32)), {}),
     ("dsa.verify", dsa.verify, (MSG, PUBKEY, DER), {}),
     ("dsa._verify_", dsa._verify_, (MSG, PARSED, PARSED_DER), {}),
     ("dsa._sign_", signed_dsa, (MSG, PRVKEY, bytes(32)), {}),
@@ -281,6 +282,7 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("dsa.to_compact", dsa.to_compact, (DER,), {}),
     ("dsa.to_der", dsa.to_der, (COMPACT,), {}),
     ("ssa.sign", ssa.sign, (MSG, PRVKEY, bytes(32)), {}),
+    ("ssa.nonce_bip340", ssa.nonce_bip340, (MSG, PRVKEY, bytes(32)), {}),
     ("ssa.sign_custom", ssa.sign_custom, (b"a message", PRVKEY, bytes(32)), {}),
     # the signer's own two, which is where its three bytes-like arguments
     # are: the private key the constructor takes, and the message and aux

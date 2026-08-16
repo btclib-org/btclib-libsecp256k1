@@ -72,10 +72,18 @@ These are known and inherent, not vulnerabilities:
     The copy in the middle is not a Python object and is overwritten: a
     private key or a shared secret libsecp256k1 writes into a cffi buffer
     — the output of a tweak or a negation, an ECDH secret, the
-    `secp256k1_keypair` a BIP340 signature is made with — is read out and
-    the buffer zeroed before it is dropped. That is one copy taken back,
+    `secp256k1_keypair` a BIP340 signature is made with, the nonce
+    `dsa.nonce_rfc6979` and `ssa.nonce_bip340` answer with — is read out
+    and the buffer zeroed before it is dropped. That is one copy taken back,
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
+- **a nonce is the private key, given the signature it made.** The two
+    nonce entry points exist so that an implementation of RFC6979 or of
+    BIP340's derivation can be checked against libsecp256k1's own, and
+    what they answer is not a value to publish, log or store beside a
+    signature: `d = (s·k − h)/r mod n` recovers the private key from one
+    of each. Reading a nonce also takes it out of constant-time code,
+    which is the limit above; this is the one that has an equation
 - a scalar passed as an `int` leaks its magnitude. A Python integer is a
     variable-length object, so serializing one — and any arithmetic that
     produced it — takes a time that depends on the value; the argument

@@ -1005,10 +1005,20 @@ def test_rfc6979_ecdsa_vector(
     consistent before it is used to judge anything. libsecp256k1 always
     produces the low-s form, so the expected s is the smaller of s and
     n-s.
+
+    The published k is also what `dsa.nonce_rfc6979` has to answer, which
+    is the only assertion here that holds that entry point to something
+    other than this package: `tests/test_nonces.py` compares it with the
+    signature it made, and this compares it with the value RFC6979
+    publishes.
     """
     msg32 = hashlib.sha256(msg_text.encode()).digest()
     r = int(r_hex, 16)
     s = int(s_hex, 16)
+
+    # the derivation itself, against the published nonce rather than
+    # against a signature of ours
+    assert dsa.nonce_rfc6979(msg32, bytes.fromhex(seckey_hex)) == bytes.fromhex(k_hex)
 
     # vector self-consistency: r is the x coordinate of k*G
     assert (
