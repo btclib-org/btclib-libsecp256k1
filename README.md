@@ -442,10 +442,33 @@ worth stating because it is nearly free: walking the same path in the
 is the chain's 55.14 within the noise. The uncompressed parse is 0.269,
 so there is almost nothing left for holding the point to save — the
 chain's saving is real against the compressed walk and a rounding error
-against that one. What it is unambiguously worth is not having to write
+against that one, where the caller already holds the 65 octets — which
+two paragraphs below is the assumption that turns out to decide it. What
+it is unambiguously worth is not having to write
 `bytes([2 + (sec[64] & 1)]) + sec[1:33]` where BIP32 wants 33 octets to
 hash. `chain.pubkey()` is the key it has arrived at, and
 `chain._pubkey_()` the point itself for a caller handing it on.
+
+The two moves do not compose into a third saving, which is worth saying
+because the shape of them invites it. A chain answers whichever
+serialization it is asked for, but it re-parses nothing in either: the
+point is what it holds. So `chain.tweak_add(compressed=False)` saves no
+parse that `chain.tweak_add()` had been paying, and gives back the line
+above to be written at every step — it measures slightly slower, for the
+serialization and that line, and it is not the spelling to reach for.
+
+What the three numbers do leave unasked is where the walk *starts*. An
+xpub carries the 33 octets, so a caller taking the uncompressed path
+reaches its starting form through `keys.reserialize` — a compressed
+parse, the 2.326 above, and a serialization — before the first step,
+and that is rather more than the 0.39 separating the two walks. Counted
+from the key a BIP32 caller actually holds, the chain is *ahead* of the
+uncompressed walk rather than a rounding error behind it: the parse it
+pays at construction is the one that caller could not have avoided, and
+it pays it once where the compressed walk pays it five times. Which
+does not make the chain's saving arithmetic — this section's distinction
+stands — but it is the parse the caller could not make cheap, which is
+the case the class is for.
 
 What the two do not share is what they hold. A parsed public key is a
 public value a caller may keep for as long as it likes; a keypair is the

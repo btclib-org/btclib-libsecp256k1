@@ -657,6 +657,33 @@ release-notes length in the first place, and are still in
   parsed key is a parse the caller can make cheap by choosing the form it
   carries. That is <https://github.com/btclib-org/btclib-secp256k1/issues/161>'s
   own principle, and it is what the measurement says of the two
+- **and what the three numbers leave unasked is where the walk starts**
+  (#161). The two moves the section describes — hold the point, carry the
+  uncompressed form — look as though they compose into a fourth and
+  faster spelling, `chain.tweak_add(compressed=False)`, and they do not.
+  A chain re-parses nothing in either serialization, the point being what
+  it holds, so asking it for 65 octets saves no parse and pays a
+  serialization and the caller's own compression line at every step.
+  Measured on an Apple M5, macOS 26.6, arm64, CPython 3.14.6, five steps,
+  medians of nine alternating rounds with a sha256 control and absolutes
+  about 5% above this section's: the composition is 59.27 against the
+  chain's 58.62 and the uncompressed walk's 58.26 — a loss of 1.01 where
+  the section's own numbers predict 0.98, one compressed parse in against
+  five uncompressed parses out.
+
+  The comparison that does decide something is the one nothing here
+  asked: the uncompressed walk's 54.75 begins from 65 octets a BIP32
+  caller does not have. An xpub carries the 33, so reaching that form
+  costs `keys.reserialize` once — a compressed parse and a serialization,
+  more than the 0.39 that separated the two walks — and counted, the same
+  run puts the walk at 61.55 against the chain's 58.62. So the chain is
+  ahead of the spelling this section had called it a rounding error
+  behind, on the key its caller actually holds. The README says both now:
+  the composition is not worth reaching for, and the parse the chain pays
+  at construction is the one the caller could not have avoided. What the
+  issue left open is unchanged and rests on that rather than on the cost
+  of breaking a released caller — the chain shipped in v0.8.0.1 and
+  `btclib`'s `bip32.py` adopted it
 - **the outpost section is what the README had no name for**: an outpost
   past the boundary. The private halves hand an object from one call to
   the next; these two hold one across many, for the caller that crosses
