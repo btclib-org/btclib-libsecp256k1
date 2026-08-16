@@ -625,3 +625,73 @@ enable = ["pypy"]
 # (it used to cross-compile it from an x86_64 host) but on the native
 # arm64 runner there is no interpreter to build it with
 skip = "pp*-win* cp310-win_arm64"
+
+# One C compilation per job instead of one per wheel, without giving up
+# the clean CMake tree every build gets.
+#
+# What that costs today is measured rather than assumed: in run
+# 31942556787 the six wheel jobs were 59.5 of the workflow's 81.8
+# runner-minutes, and each of them compiles the whole vendored
+# libsecp256k1 once per wheel it builds -- seven interpreters on macOS
+# and Windows, and twice that on Linux, manylinux and musllinux being
+# separate images. scripts/cffi_build.py deletes the CMake directory
+# before every build, deliberately, a stale CMake cache being a
+# configuration nobody asked for; ccache does not have that failure
+# mode, hashing the preprocessed source and the compiler flags rather
+# than trusting a directory to describe itself. So the delete stays and
+# the compiler stops doing the same work seven times.
+#
+# CMake initializes CMAKE_C_COMPILER_LAUNCHER from the environment
+# variable of the same name, so no build script changes. The value is a
+# command substitution and not the literal `ccache` because cibuildwheel
+# evaluates these in a shell and CMake reads an empty launcher as none:
+# an image where the install below did not work then builds exactly as
+# it did before. That is the whole of the fallback, and it is why
+# before-all may end in `|| true` without hiding anything -- the
+# alternative is a merge gate that goes red when a package index is
+# having a bad morning.
+#
+# Where the cache goes is ccache's own default, and nothing here sets
+# it: on Linux every interpreter of one image builds inside one
+# container, on macOS inside one job, so the default location is already
+# shared by exactly the builds that repeat each other. Nothing persists
+# across runs and nothing is meant to -- the redundancy being removed is
+# inside a single job, and a cache key that has to know what invalidates
+# a C build is a second way to be wrong for a saving already had
+
+[tool.cibuildwheel.linux]
+# the musllinux images are Alpine and the manylinux ones RHEL-derived,
+# where ccache is in EPEL rather than in the base repository and the
+# image itself ships no ccache at all -- so the chain is longer than a
+# package name, and it ends in a passthrough for the reason above
+before-all = '''
+command -v ccache \
+  || apk add ccache \
+  || dnf install -y ccache \
+  || { dnf install -y epel-release && dnf install -y ccache; } \
+  || yum install -y ccache \
+  || { printf '#!/bin/sh\nexec "$@"\n' > /usr/local/bin/ccache \
+       && chmod +x /usr/local/bin/ccache \
+       && echo "no ccache here: the launcher is a passthrough"; }
+ccache --version || true
+'''
+environment = { CMAKE_C_COMPILER_LAUNCHER = "ccache" }
+
+[tool.cibuildwheel.macos]
+# the runner image ships ccache; asking first is what keeps this from
+# costing a brew round trip there, and the install is what makes it true
+# of a laptop as well
+before-all = '''
+command -v ccache \
+  || brew install ccache \
+  || { printf '#!/bin/sh\nexec "$@"\n' > /usr/local/bin/ccache \
+       && chmod +x /usr/local/bin/ccache \
+       && echo "no ccache here: the launcher is a passthrough"; }
+ccache --version || true
+'''
+environment = { CMAKE_C_COMPILER_LAUNCHER = "ccache" }
+
+# Windows is deliberately not here, and it is 18.9 of those 59.5
+# runner-minutes: the compiler is MSVC, whose support in ccache is
+# recent and partial, and sccache is a second tool to install and pin
+# for a saving nothing has measured on that platform yet

@@ -890,6 +890,48 @@ release-notes length in the first place, and are still in
   against a 8.7 and 10.2 baseline — while the macOS images, whose default
   shell is bash, had already dropped to 1.5 and 1.2. A step that is green
   while doing nothing is why the comment above it now carries this
+- **The vendored library is compiled once per wheel job, not once per
+  wheel** (#192). The six wheel jobs were 59.5 of that run's 81.8
+  runner-minutes, and each of them built the whole of libsecp256k1 once
+  per wheel: seven interpreters on macOS and Windows, twice that on
+  Linux, manylinux and musllinux being separate images. The work is
+  identical every time, the library not knowing which interpreter the
+  extension beside it will be built for. `scripts/cffi_build.py` still
+  deletes the CMake directory before every build — a stale CMake cache is
+  a configuration nobody asked for, and that is a different failure from
+  this one — because ccache does not need it reused: it hashes the
+  preprocessed source and the compiler flags, so it cannot serve an object
+  built for another configuration. CMake initializes
+  `CMAKE_C_COMPILER_LAUNCHER` from the environment variable of the same
+  name, so the whole wiring is one `environment` line in
+  `[tool.cibuildwheel.linux]` and `.macos` and a `before-all` that
+  installs ccache. Measured on its own run, the four jobs it touches went
+  from 40.6 runner-minutes to 32.9: 14.4 to 11.1 on macos-26-intel, 9.9 to
+  7.7 on ubuntu-24.04-arm, 10.6 to 9.3 on ubuntu-latest, 5.7 to 4.8 on
+  macos-latest. The two Windows jobs, which this does not touch, moved
+  8.7 to 11.2 and 10.2 to 10.7 in the same run, which is the size of the
+  noise these four are measured against — and that all four moved the
+  same way is what the reading rests on. Windows is deliberately out, and
+  is 18.9 of those 59.5 minutes: ccache's MSVC support is recent and
+  partial, and sccache is a second tool to pin for a saving nothing has
+  measured there
+- **and the fallback lives in `before-all` because `environment` cannot
+  hold one.** The first attempt made the launcher
+  `$(command -v ccache || true)`, so that an image without ccache would
+  configure with an empty launcher and build as before. cibuildwheel does
+  not evaluate `environment` in a shell: it parses the value with bashlex
+  and runs each command through `subprocess` with `check=True`. Measured
+  against that parser rather than argued —
+  `X="$(command -v ccache || true)"` is an `EnvironmentParseError`,
+  `X="$(command -v ccache)"` raises `CalledProcessError` where there is no
+  ccache, and only `X=ccache` survives. So the launcher is the literal,
+  and `before-all`, which *is* a shell, carries the chain: whichever
+  package manager answers — the manylinux images ship no ccache and keep
+  theirs in EPEL — and, if none does, a passthrough of that name written
+  on the PATH, `exec "$@"`, so the launcher always resolves. `ccache
+  --version` at the end is what makes the log say which of the two
+  happened; on every image of that run it was the real one, 3.7.7 on
+  manylinux aarch64, 4.11.3 on musllinux, 4.13.6 from brew on macOS
 - **`github-release` needed `always()` too, not just an explicit `if`.**
   The previous fix (v0.8.0.2's own CHANGELOG entry, right below) added
   `needs.publish-pypi.result == 'success' && needs.attest.result ==
