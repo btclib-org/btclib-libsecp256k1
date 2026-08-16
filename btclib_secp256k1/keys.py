@@ -365,7 +365,13 @@ class PubkeyTweakChain:
 
         Raises:
             ValueError: if the tweak is not 32 bytes or does not fit in
-                them, or if the tweak or the resulting key is invalid.
+                them, or if the tweak or the resulting key is invalid --
+                which ends the chain. libsecp256k1 says of
+                `secp256k1_ec_pubkey_tweak_add` that "pubkey will be set
+                to an invalid value if this function returns 0", and the
+                point this holds is that pubkey: there is nothing left
+                to step from, so a caller catching this builds a chain
+                afresh rather than asking again.
             RuntimeError: if libsecp256k1 fails to serialize the result,
                 which no valid input can make it do.
         """
@@ -596,6 +602,105 @@ def pubkey_sum(
         True
     """
     summed = _pubkey_sum_([parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes])
+    return None if summed is None else serialize(summed, compressed)
+
+
+def pubkey_tweak_mul_sum(
+    pubkeys_bytes: Sequence[BytesLike],
+    tweaks: Sequence[BytesLike | int],
+    compressed: bool = True,
+) -> bytes | None:
+    """Multiply each public key by its tweak and add the products.
+
+    The two names it is spelled with, in that order: a
+    `pubkey_tweak_mul` per pair and one `pubkey_sum` over the products.
+    That is the multi-scalar multiplication a caller writes as a
+    verification equation -- u*H + v*Q of ECDSA and BIP340, MuSig2's
+    aggregate of a key per signer, BIP352's tweak data -- and the whole
+    of what it adds is that no product is serialized: written with the
+    public halves, each `pubkey_tweak_mul` serializes 65 octets that the
+    sum then parses again, and the terms are the only place a caller has
+    to put them.
+
+    The naive form of it, deliberately: a term at a time and one sum,
+    with none of the shared precomputation of Strauss or Pippenger.
+    libsecp256k1 has `secp256k1_ecmult_multi_var`, which is internal and
+    not declared in `include/secp256k1.h`, so this is the only
+    multi-scalar multiplication the public API can be composed of -- and
+    the saving here is the crossing rather than the arithmetic, flat in
+    the number of terms where a batched algorithm would grow with it.
+
+    **This is the second function here that is more than one
+    libsecp256k1 decision**, `xonly.from_prvkey` being the first, and
+    the README's Design section says why the rule is what it is: the
+    boundary computes nothing of its own. Neither does this -- the terms
+    are `secp256k1_ec_pubkey_tweak_mul` and the sum is
+    `secp256k1_ec_pubkey_combine`, in the one order that spells the
+    equation -- and what is saved is a serialization and a parse per
+    term, about a seventh of the call from three terms up and a little
+    less at two.
+    `PubkeyTweakChain` is an exception of the other kind and not of
+    this one: its `tweak_add` is one decision and a serialization like
+    every other, and what it holds is a parsed key across calls the
+    caller makes one at a time.
+
+    The infinity is `pubkey_sum`'s None, for the reason it is there and
+    is more likely here: a verification equation is written to land on
+    it, u*H + v*Q with v*Q the negation of u*H being the accepting case
+    of a check spelled as a difference.
+
+    Args:
+        pubkeys_bytes: the public keys, each 33 or 65 bytes. At least
+            one is required, as the sum requires it.
+        tweaks: the scalar each key is multiplied by, one per key, 32
+            bytes or an int below 2**256.
+        compressed: whether to return 33 bytes rather than 65.
+
+    Returns:
+        The serialized sum of the products, or None where they sum to
+        the point at infinity.
+
+    Raises:
+        ValueError: if the two sequences are of different lengths, if
+            the sequence of keys is empty, if any key is not a valid
+            point, or if any tweak is not 32 bytes, does not fit in
+            them, or multiplies its key to something invalid -- zero and
+            the group order being the two scalars there is no product
+            for.
+        RuntimeError: if libsecp256k1 fails to serialize the result,
+            which no valid input can make it do.
+
+    Example:
+        >>> from btclib_secp256k1 import keys
+        >>> generator = keys.pubkey_from_prvkey(1)
+        >>> pubkey = keys.pubkey_from_prvkey(7)
+        >>> # 2*G + 3*(7*G) is 23*G
+        >>> total = keys.pubkey_tweak_mul_sum([generator, pubkey], [2, 3])
+        >>> total == keys.pubkey_from_prvkey(23)
+        True
+        >>> # and a sum landing on the identity is None, not a refusal
+        >>> negated = keys.pubkey_negate(pubkey)
+        >>> keys.pubkey_tweak_mul_sum([pubkey, negated], [3, 3]) is None
+        True
+    """
+    if len(pubkeys_bytes) != len(tweaks):
+        msg = (
+            f"as many tweaks as public keys are required: "
+            f"{len(tweaks)} tweaks, {len(pubkeys_bytes)} public keys"
+        )
+        raise ValueError(msg)
+
+    # `strict=False` and the check above rather than `strict=True` and
+    # no check: a sequence has a length, so the two are the same guard,
+    # and the one that raises here says which sequence was short and by
+    # how much where zip says only that they differed. A guard no input
+    # can reach is one no test can drive, which this package does not
+    # leave behind
+    products = [
+        _pubkey_tweak_mul_(parse(pubkey_bytes), tweak)
+        for pubkey_bytes, tweak in zip(pubkeys_bytes, tweaks, strict=False)
+    ]
+    summed = _pubkey_sum_(products)
     return None if summed is None else serialize(summed, compressed)
 
 

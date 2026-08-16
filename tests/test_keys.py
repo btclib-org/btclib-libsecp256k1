@@ -674,6 +674,106 @@ def test_pubkey_sum_answers_the_infinity_combine_refuses() -> None:
         keys.pubkey_sum([pubkey_a, b"\x02" + bytes(32)])
 
 
+def test_pubkey_tweak_mul_sum_is_the_arithmetic_it_names() -> None:
+    """The multi-scalar multiplication, against the scalar it comes to.
+
+    Every key here is a known multiple of the generator, so the sum of
+    the products is the generator times the sum of the products of the
+    scalars, modulo the group order. That is an algebraic invariant over
+    derived inputs and not an external vector: the scalar arithmetic is
+    python's, the point either side of the comparison is these bindings'
+    -- it catches a key paired with the wrong scalar, a wrong order
+    and a wrong reduction,
+    and it would not catch a curve that is not secp256k1. The anchor is
+    below and is the one value the equality can be pinned to without
+    computing a point here: the generator SEC 2 v.2 section 2.4.1
+    publishes, which `test_pubkey_from_prvkey` also holds this package
+    to.
+
+    The composition the entry point replaces is asserted too, and
+    separately: it is what the entry point promises to be, and both
+    serializations of it.
+    """
+    # the published generator, written out rather than derived: the sum
+    # of a term and its negation-by-scalar is 1*G, and this is what 1*G
+    # is according to SEC 2 v.2 rather than according to these bindings
+    generator = bytes.fromhex(
+        "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"
+    )
+    assert keys.pubkey_tweak_mul_sum([generator, generator], [N - 1, 2], False) == (
+        generator
+    )
+
+    prvkeys = (3, 5, 7, 11)
+    tweaks = (2, 13, N - 1, 0x123456789ABCDEF)
+    pubkeys = [keys.pubkey_from_prvkey(k, compressed=False) for k in prvkeys]
+
+    total = sum(k * t for k, t in zip(prvkeys, tweaks, strict=True)) % N
+    for compressed in (True, False):
+        assert keys.pubkey_tweak_mul_sum(
+            pubkeys, tweaks, compressed
+        ) == keys.pubkey_from_prvkey(total, compressed)
+        # and the composition it stands for, term by term
+        products = [
+            keys.pubkey_tweak_mul(pubkey, tweak, False)
+            for pubkey, tweak in zip(pubkeys, tweaks, strict=True)
+        ]
+        assert keys.pubkey_tweak_mul_sum(
+            pubkeys, tweaks, compressed
+        ) == keys.pubkey_sum(products, compressed)
+
+    # one term is that term multiplied, the sum having nothing to add
+    assert keys.pubkey_tweak_mul_sum(pubkeys[:1], tweaks[:1]) == keys.pubkey_tweak_mul(
+        pubkeys[0], tweaks[0]
+    )
+
+    # a key given compressed is the same key: what the entry point does
+    # with the octets is parse them, as every other one here does
+    assert keys.pubkey_tweak_mul_sum(
+        [compress(pubkey) for pubkey in pubkeys], tweaks
+    ) == keys.pubkey_tweak_mul_sum(pubkeys, tweaks)
+
+
+def test_pubkey_tweak_mul_sum_answers_infinity_and_refuses_the_rest() -> None:
+    """The identity is a value; a wrong argument is not.
+
+    A verification equation is written to land on infinity, so the sum
+    that has no public key is `pubkey_sum`'s None here too. Everything
+    else the two sequences can be wrong about is a refusal, and the
+    lengths are the one this function has to raise itself: zip would
+    otherwise stop at the shorter of the two and answer a sum of the
+    terms that happened to pair up.
+    """
+    pubkey = keys.pubkey_from_prvkey(7, compressed=False)
+    negated = keys.pubkey_negate(pubkey, compressed=False)
+
+    # None whichever serialization was asked for: the flag is what the
+    # answer would have been written in, and there is no answer
+    for compressed in (True, False):
+        assert keys.pubkey_tweak_mul_sum([pubkey, negated], [3, 3], compressed) is None
+    # an intermediate at infinity is not a total at infinity: the terms
+    # are added by libsecp256k1, not into a running total this side
+    assert keys.pubkey_tweak_mul_sum(
+        [pubkey, negated, pubkey], [3, 3, 3]
+    ) == keys.pubkey_tweak_mul(pubkey, 3)
+
+    with pytest.raises(ValueError, match="as many tweaks as public keys"):
+        keys.pubkey_tweak_mul_sum([pubkey, negated], [3])
+    with pytest.raises(ValueError, match="at least one public key"):
+        keys.pubkey_tweak_mul_sum([], [])
+    with pytest.raises(ValueError, match="invalid public key"):
+        keys.pubkey_tweak_mul_sum([pubkey, b"\x02" + bytes(32)], [3, 3])
+    # zero and the group order are the two scalars with no product, and
+    # a tweak of the wrong width is refused before either is asked
+    with pytest.raises(ValueError, match="invalid tweak"):
+        keys.pubkey_tweak_mul_sum([pubkey, negated], [3, 0])
+    with pytest.raises(ValueError, match="invalid tweak"):
+        keys.pubkey_tweak_mul_sum([pubkey, negated], [3, N])
+    with pytest.raises(ValueError, match="tweak must be 32 bytes"):
+        keys.pubkey_tweak_mul_sum([pubkey, negated], [3, b"\x01"])
+
+
 def test_xonly_pubkey_verify_and_to_pubkey_are_the_two_x_only_twins() -> None:
     """The x-only twins of `keys.pubkey_verify` and of a lift.
 

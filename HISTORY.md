@@ -211,6 +211,22 @@ not a multiplication — 0.4 microseconds, where deriving it again is
 10.5. `xonly.from_keypair` is that read for a caller holding a keypair
 of its own, a MuSig2 session through `lib` being one.
 
+**`keys.pubkey_tweak_mul_sum` multiplies each key by its scalar and adds
+the products**, which is a verification equation, a MuSig2 aggregate key
+and BIP352's tweak data, and which written with the public halves
+serializes every product as 65 octets only for `pubkey_sum` to parse
+them back. Handed over whole, no product crosses: about a seventh of the
+call from three terms up, 64 terms 459.3 microseconds against 536.5, and
+the saving does not shrink with the count -- it is the naive form, one
+term at a time and one sum, libsecp256k1 exporting no batched
+multi-multiplication, so what it saves is the crossing and not the
+arithmetic. Like `xonly.from_prvkey` it
+is a composition rather than one libsecp256k1 call, and for the same
+reason — what it saves is the crossing between its halves, which is the
+caller's cost and not its own choice. The sum at infinity is
+`pubkey_sum`'s `None`, which a verification equation is written to land
+on.
+
 **And a wrong object is now told to the caller, wherever one is taken.**
 `keys.serialize` and `xonly.from_keypair` raised what libsecp256k1
 reported of an argument no python check can prove; every other call

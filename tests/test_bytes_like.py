@@ -268,6 +268,12 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("keys.pubkey_combine", keys.pubkey_combine, ([PUBKEY, PUBKEY_LONG],), {}),
     ("keys.reserialize", keys.reserialize, (PUBKEY,), {}),
     ("keys.pubkey_sum", keys.pubkey_sum, ([PUBKEY, PUBKEY_LONG],), {}),
+    (
+        "keys.pubkey_tweak_mul_sum",
+        keys.pubkey_tweak_mul_sum,
+        ([PUBKEY, PUBKEY_LONG], [TWEAK, TWEAK]),
+        {},
+    ),
     ("keys.pubkey_cmp", keys.pubkey_cmp, (PUBKEY, PUBKEY_LONG), {}),
     ("keys.pubkey_sort", keys.pubkey_sort, ([PUBKEY, PUBKEY_LONG],), {}),
     ("hashes.tagged_sha256", hashes.tagged_sha256, (b"TapLeaf", MSG), {}),

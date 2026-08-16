@@ -126,7 +126,19 @@ bytes, no libsecp256k1 call producing them directly.
 `keys.pubkey_from_prvkey` is `secp256k1_ec_pubkey_create` followed by
 `secp256k1_ec_pubkey_serialize`; every other function returning a key or
 a signature has the same shape, the second call being the serialization
-the first cannot do rather than a second decision. The cryptography —
+the first cannot do rather than a second decision.
+
+A function that does make a second decision is named after both of them
+and is here for one reason: what the composition saves is the crossing
+between its halves, which is the caller's cost and not its own choice.
+`xonly.from_prvkey` is the private key's public key and then the x of
+it; `keys.pubkey_tweak_mul_sum` is a `pubkey_tweak_mul` per term and one
+`pubkey_sum` over them, which is the multi-scalar multiplication a
+verification equation is written as, with no product serialized on its
+way into the sum. Neither computes anything libsecp256k1 does not: the
+arithmetic is upstream's calls in the order the equation names them, and
+*Parsing the key once* below is where the crossing they save is
+measured. The cryptography —
 the algorithms, the constant-time
 implementation, the side-channel hardening — is upstream's, and none of
 it is reimplemented, extended or second-guessed here. Wrappers of the
@@ -343,13 +355,26 @@ pays it per transaction, which is why `silentpayments` has a private
 half for each of its three entry points, the summary of a transaction's
 inputs included.
 
-Two entry points are there instead of two halves. `xonly.from_prvkey` is
-the x-only public key of a private key — the two halves above composed,
+Some compositions are an entry point instead of two halves, where what
+the caller wanted was the composition. `xonly.from_prvkey` is the
+x-only public key of a private key — the two halves above composed,
 which is what BIP340 and BIP341 ask for and what this package used to
 make every caller spell in two steps, with a full public key in the
-middle that nothing wanted. `ssa.Signer.pubkey` reads that same key off
-the keypair the signer already holds, which is a read rather than a
-multiplication, and so is cheaper than any composition could be.
+middle that nothing wanted. `keys.pubkey_tweak_mul_sum` is the other:
+a term per scalar and one sum over them, which is a verification
+equation, a MuSig2 aggregate key and BIP352's tweak data, and where the
+crossing is per term — every product serialized as 65 octets only for
+the sum to parse them again. Handed over whole it is about a seventh of
+the call from three terms up and stays there, 64 terms 459.3 µs against
+536.5; the CHANGELOG entry that added it has the count-by-count table
+and the conditions. It is the naive form and not a batched algorithm:
+`secp256k1_ecmult_multi_var` is internal to libsecp256k1 and not
+declared in its public header, so what is saved here is the crossing,
+which is flat in the number of terms.
+
+`ssa.Signer.pubkey` reads that same key off the keypair the signer
+already holds, which is a read rather than a multiplication, and so is
+cheaper than any composition could be.
 
 ## Two outposts past the boundary
 
@@ -476,7 +501,8 @@ declarations are available through the `lib` and `ffi` cffi objects:
 `keys` provides the public key of a private key (`pubkey_from_prvkey`,
 compressed by default, `compressed=False` for the uncompressed form)
 and the scalar and point algebra (tweaking, negation,
-combination, arbitrary point multiplication) underlying BIP32 key
+combination, arbitrary point multiplication, and the multi-scalar
+multiplication of `pubkey_tweak_mul_sum`) underlying BIP32 key
 derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,
 `pubkey_sort`) that BIP67 and MuSig2 key aggregation call for; `xonly`
 provides the BIP341 taproot tweaking of x-only public keys and of their

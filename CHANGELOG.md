@@ -251,6 +251,62 @@ release-notes length in the first place, and are still in
   and operates in octets, and the parsed key stops being something an API
   has to hand around.
 
+- **`keys.pubkey_tweak_mul_sum` is the multi-scalar multiplication, with
+  no product crossing the boundary.** A term per key and one sum over
+  them is the shape of a verification equation, of a MuSig2 aggregate
+  key and of BIP352's tweak data, and written with the public halves
+  every product is serialized as 65 octets only for `pubkey_sum` to
+  parse them back — the one composition above whose crossing is *per
+  term*, where sorting-then-adding pays per key and the others pay once.
+  Handed over whole, the products stay `secp256k1_pubkey` objects and
+  the boundary is one parse per input and one serialization for the
+  answer. Measured on this tree, on an Apple M5, macOS 26.6, arm64,
+  CPython 3.14.6, best of seven alternating rounds, uncompressed
+  throughout, with `pubkey_from_prvkey` as the noise detector (9.2 µs
+  across every round):
+
+  | terms | `tweak_mul` each, then `pubkey_sum` | `pubkey_tweak_mul_sum` |
+  | --- | --- | --- |
+  | 2 | 19.53 µs | 16.90 µs |
+  | 3 | 27.63 µs | 23.76 µs |
+  | 5 | 43.87 µs | 37.59 µs |
+  | 8 | 68.46 µs | 57.90 µs |
+  | 20 | 166.22 µs | 142.37 µs |
+  | 64 | 536.50 µs | 459.27 µs |
+
+  So about a seventh of the call from three terms up, a little less at
+  two, and it does not shrink with the term count the way the per-term
+  combine `pubkey_sum` replaced did. That flatness is what it is: the
+  naive form, a term at a time and one sum, with none of the shared
+  precomputation of Strauss or Pippenger.
+  `secp256k1_ecmult_multi_var` exists upstream and is internal, declared
+  in `src/ecmult.h` and not in `include/secp256k1.h`, so the public API
+  composes to this shape and no other -- what is saved here is the
+  crossing rather than the arithmetic, which matters most where the
+  caller is BIP340 batch verification and the asymptotic win is the
+  point of the exercise. btclib is that caller
+  (<https://github.com/btclib-org/btclib/issues/917>), whose
+  `curves.curve._libsecp256k1_multi_mult_` is that composition written
+  out and is reached by `mult`, `double_mult_var` and `multi_mult_var`
+  with one, two and many terms, by MuSig2's `key_agg`, and by BIP340
+  batch verification with two terms a signature.
+
+  **It is the second function here that is more than one libsecp256k1
+  decision**, `xonly.from_prvkey` being the first, and the README's
+  Design section states the rule the two answer to rather than leaving
+  them as exceptions: a composition belongs here when what it saves is
+  the crossing between its halves, which is the caller's cost and not
+  its own choice, and it is named after the calls it makes. Nothing is
+  computed here that libsecp256k1 does not: the terms are
+  `secp256k1_ec_pubkey_tweak_mul` and the sum is
+  `secp256k1_ec_pubkey_combine`, in the order the equation names them.
+
+  The sum at infinity is `pubkey_sum`'s None, and is likelier here than
+  there: a verification equation is written to land on it. The two
+  sequences must be of one length, which is the one refusal this
+  function raises itself — `zip` would otherwise stop at the shorter and
+  answer the sum of whatever paired up.
+
 ### The half that speaks in objects is private, and is spelled `_foo_`
 
 - **`foo_` is now `_foo_`, everywhere, and the API break is the point.**
