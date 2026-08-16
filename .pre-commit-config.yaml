@@ -274,7 +274,7 @@ repos:
   # The rule selection (and what each family stands in for) is documented
   # there
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.2
+    rev: v0.16.3
     hooks:
       - id: ruff-check
         name: ruff (lint, in place fixes)
@@ -299,7 +299,7 @@ repos:
         files: ^btclib_secp256k1/.*\.py$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+    rev: v2.3.1
     hooks:
       - id: mypy
         # matching btclib's own mypy hook, which checks btclib, tests and
@@ -333,7 +333,7 @@ repos:
         additional_dependencies:
           - cffi==2.1.1
           - types-cffi==2.0.0.20260518
-          - hatchling==1.31.0
+          - hatchling==1.32.0
           - pytest==9.1.1
   # the workflows are as much a part of this repository as the package,
   # and until now nothing checked them: an expression referring to a
@@ -432,7 +432,7 @@ repos:
   # a dependency added to pyproject.toml from reaching a branch without
   # the lock entry that pins it
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.3
+    rev: 0.12.5
     hooks:
       - id: uv-lock
 
