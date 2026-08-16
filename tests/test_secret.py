@@ -15,10 +15,12 @@ given: the `char[32]` a tweaked private key comes back in, and the
 from __future__ import annotations
 
 import array
+import ast
 import importlib
 import inspect
 import mmap
 import pkgutil
+from types import FunctionType
 
 import pytest
 
@@ -37,6 +39,33 @@ from btclib_secp256k1 import (
 from btclib_secp256k1.context import ctx
 
 SECRET = b"\x07" * 32
+
+
+def _calls(function: FunctionType) -> set[str]:
+    """Return the names a function calls, read off its syntax tree.
+
+    Off the tree and not out of the text, because a mention is not a
+    call: `keys.pubkey_tweak_add`'s docstring writes
+    `prvkey_tweak_add(k, t)` to say what the private-key side does with
+    the same tweak, and a source matched as text answers that a
+    public-key call produces a private key.
+
+    Args:
+        function: the function to read.
+
+    Returns:
+        The bare names, `keys.parse` and `parse` alike: what the walk
+        below asks is which function was called, not through which
+        module it was reached.
+    """
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(inspect.getsource(function))):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+            elif isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+    return names
 
 
 def test_take_reads_the_secret_out_and_zeroes_the_buffer() -> None:
@@ -194,25 +223,26 @@ def test_every_function_that_takes_a_secret_out_offers_into() -> None:
 
     A hardcoded list of the eight cannot notice a ninth, which is what
     this test is for; `_secret.take` is the one thing every producer of
-    a secret has in common, so its call sites are the population. One
-    of them is exempt and named, and naming it here is what keeps
-    SECURITY.md's sentence honest.
+    a secret has in common, so its call sites are the population. They
+    are not the whole of it: a public half answers the secret its
+    private half read out, without calling `take` itself, so whatever
+    calls a producer is asked the same question -- `ecdh.shared_secret`
+    is that shape, and being caught by its own name is what keeps a
+    ninth written that way from being checked by hand. Two names are
+    exempt, and naming them here is what keeps SECURITY.md's sentence
+    honest.
 
-    What the walk does *not* see is either of two shapes, and writing
-    them down here is what keeps the check from being read as more than
-    it is. A secret that never goes through `take`:
-    `silentpayments._found_output` reads the per-output tweak out of the
-    struct as a `bytes` of its own, so no population defined this way
-    can contain it, and SECURITY.md names it for that reason. And a
-    public entry point that delegates to a private producer rather than
-    calling `take` itself: `ecdh.shared_secret` is that shape, caught
-    here only because `_shared_secret_` is, and a ninth producer written
-    that way would need its public half checked by hand.
+    What the walk cannot see is a secret that never goes through `take`
+    at all: `silentpayments._found_output` reads the per-output tweak
+    out of the struct as a `bytes` of its own, so no population defined
+    this way can contain it, and SECURITY.md names it for that reason.
     """
-    # the tweak of a label is one member of a returned tuple, where an
-    # argument could not say which half it names; SECURITY.md says so too
-    exempt = {"_label_"}
-    found: dict[str, set[str]] = {}
+    # the tweak of a label, in both halves that answer it: it is one
+    # member of a returned tuple, where an argument could not say which
+    # it names; SECURITY.md says so too
+    exempt = {"_label_", "label"}
+    functions: dict[tuple[str, str], FunctionType] = {}
+    called: dict[tuple[str, str], set[str]] = {}
     for info in pkgutil.iter_modules(btclib_secp256k1.__path__):
         module = importlib.import_module(f"btclib_secp256k1.{info.name}")
         for name, function in vars(module).items():
@@ -222,24 +252,24 @@ def test_every_function_that_takes_a_secret_out_offers_into() -> None:
             ):
                 continue
             try:
-                source = inspect.getsource(function)
+                called[info.name, name] = _calls(function)
             except OSError:  # pragma: no cover - source ships with the wheel
                 continue
-            if "take(" in source and "def take(" not in source:
-                found.setdefault(info.name, set()).add(name)
+            functions[info.name, name] = function
 
-    callers = {name for names in found.values() for name in names}
-    assert callers, "no call site of _secret.take was found: the walk is broken"
-    for module_name, names in sorted(found.items()):
-        for name in sorted(names - exempt):
-            signature = inspect.signature(
-                getattr(
-                    importlib.import_module(f"btclib_secp256k1.{module_name}"), name
-                )
-            )
-            assert "into" in signature.parameters, f"{module_name}.{name} has no into"
-    assert exempt <= callers, (
-        "an exemption names a function that no longer takes a secret"
+    producers = {key for key, names in called.items() if "take" in names}
+    assert producers, "no call site of _secret.take was found: the walk is broken"
+    forwarders = {
+        key for key, names in called.items() if names & {name for _, name in producers}
+    }
+    for key in sorted(producers | forwarders):
+        if key[1] in exempt:
+            continue
+        assert "into" in inspect.signature(functions[key]).parameters, (
+            f"{key[0]}.{key[1]} has no into"
+        )
+    assert exempt <= {name for _, name in producers | forwarders}, (
+        "an exemption names a function that no longer answers a secret"
     )
 
 

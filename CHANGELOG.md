@@ -483,11 +483,21 @@ release-notes length in the first place, and are still in
   back. SECURITY.md names both rather than claiming every entry point
 - **and what holds the set is a walk rather than a list.** A hardcoded
   tuple of eight cannot notice a ninth, which is the whole point of the
-  test; `tests/test_secret.py` walks the package for functions whose
-  source calls `_secret.take` and requires `into` of each, one
-  exemption named. Its limit is written down beside it: a secret that
-  never goes through `take` is invisible to it, which is exactly how
-  `_found_output` escaped the first draft of that sentence
+  test; `tests/test_secret.py` walks the package for the callers of
+  `_secret.take`, and then for whatever calls one of those, and requires
+  `into` of each. The second pass is what makes the first honest: a
+  public half answers the secret its private half read out without
+  calling `take` itself, so `ecdh.shared_secret` is asked by its own
+  name rather than caught by accident, and a ninth written that way is
+  not left to be checked by hand. The two halves of
+  `silentpayments.label` are exempt and named. What the walk reads are
+  the calls of a syntax tree and not the text of the source, a mention
+  not being a call: `keys.pubkey_tweak_add`'s docstring writes
+  `prvkey_tweak_add(k, t)` to say what the private-key side does with
+  the same tweak, and matched as text it answers that a public-key call
+  produces a private key. The limit that is left is written down beside
+  it: a secret that never goes through `take` is invisible to this, which
+  is exactly how `_found_output` escaped the first draft of that sentence
 - **the cost, which is in the type system rather than at run time.**
   Three `@overload`s per entry point, so that omitting `into` still
   types as `bytes` and a downstream `mypy --strict` sees no change; the
