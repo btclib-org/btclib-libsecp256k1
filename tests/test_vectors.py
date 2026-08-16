@@ -1144,6 +1144,10 @@ def test_bitcoin_core_deterministic_vector(prvkey_hex: str, der_hex: str) -> Non
     assert dsa.sign(msg, prvkey).hex() == der_hex
     assert dsa.sign(msg, prvkey, grind=True).hex() == der_hex
     assert dsa.verify(msg, keys.pubkey_from_prvkey(prvkey), bytes.fromhex(der_hex))
+    # and Core's vector is what `is_low_r` is held to as well: these
+    # octets are low-r because Core says so, not because this package
+    # produced them
+    assert dsa.is_low_r(bytes.fromhex(der_hex))
 
 
 def test_rust_secp256k1_low_r_vector() -> None:
@@ -1161,8 +1165,11 @@ def test_rust_secp256k1_low_r_vector() -> None:
 
     assert dsa.sign(msg, prvkey, compact=True, grind=True).hex() == RUST_LOW_R_SIG
     # what grinding was for: the deterministic signature of this key and
-    # message is the high-r one, so the vector above is not it
+    # message is the high-r one, so the vector above is not it -- which
+    # is the False `is_low_r` has no vector of its own for
     assert dsa.sign(msg, prvkey, compact=True)[0] >= 0x80
+    assert not dsa.is_low_r(dsa.sign(msg, prvkey))
+    assert dsa.is_low_r(dsa.to_der(bytes.fromhex(RUST_LOW_R_SIG)))
     assert dsa.verify(
         msg,
         keys.pubkey_from_prvkey(prvkey),
@@ -1195,6 +1202,9 @@ def test_bitcoin_core_low_r_property() -> None:
         for attempt in range(1, 21)
     ]
     assert any(der[3:5] == b"\x21\x00" for der in high_r)
+    # Core's own reading of those octets is the length of r, and
+    # `is_low_r` has to answer the same way about every one of them
+    assert all(dsa.is_low_r(der) == (der[3] <= 32) for der in high_r)
 
     lengths = set()
     for i in range(256):
@@ -1204,6 +1214,7 @@ def test_bitcoin_core_low_r_property() -> None:
         # der[3] is the length of r, which grinding holds to 32 octets:
         # the leading zero DER spends on a high one is what it is for
         assert der[3] <= 32
+        assert dsa.is_low_r(der)
         lengths.add(len(der))
     assert max(lengths) <= 70
     assert min(lengths) < 70

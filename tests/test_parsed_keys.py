@@ -60,6 +60,11 @@ HIGH_S = dsa.to_der(
     dsa.to_compact(DER)[:32]
     + (N - int.from_bytes(dsa.to_compact(DER)[32:], "big")).to_bytes(32, "big")
 )
+# a signature whose r has its high bit set, which `is_low_r` answers
+# False about: the equality below is what it is worth only if the pair
+# is asked something the two halves could disagree on, and DER above is
+# low-r, where the signature of this message under 1 is not
+HIGH_R = dsa.sign(MSG, 1)
 SSA_SIG = ssa.sign(MSG, PRVKEY, bytes(32))
 TWEAKED, TWEAKED_PARITY = xonly.tweak_add(XONLY, TWEAK)
 RECOVERABLE, RECID = recovery.sign(MSG, PRVKEY)
@@ -201,6 +206,11 @@ EQUALITIES: list[tuple[str, Callable[[], Any], Callable[[], Any]]] = [
         "dsa._is_low_s_",
         lambda: dsa.is_low_s(HIGH_S),
         lambda: dsa._is_low_s_(dsa.parse_der(HIGH_S)),
+    ),
+    (
+        "dsa._is_low_r_",
+        lambda: dsa.is_low_r(HIGH_R),
+        lambda: dsa._is_low_r_(dsa.parse_der(HIGH_R)),
     ),
     (
         "recovery._sign_",

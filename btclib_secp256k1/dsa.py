@@ -12,8 +12,8 @@ them. They are here for the reason `keys.parse` is: a caller doing more
 than one thing with one signature -- asking whether it is low-s and then
 verifying it, verifying it against several keys, storing it in the other
 form -- parses it once and hands the object to the private halves, where
-`normalize`, `is_low_s`, `to_der` and `to_compact` each parse and
-serialize one of their own.
+`normalize`, `is_low_s`, `is_low_r`, `to_der` and `to_compact` each parse
+and serialize one of their own.
 """
 
 from __future__ import annotations
@@ -185,19 +185,20 @@ def _grind(signature: CData, msg_bytes: bytes, prvkey_bytes: bytes) -> None:
     shorter -- which is the whole of the benefit, and why this is a
     signer's policy rather than an operation of the curve.
 
-    The test is on the compact serialization rather than on the DER
-    length, and they are not the same question: DER is 6 + lenR + lenS,
-    so a high r of 33 octets with an s that happens to need only 31
-    encodes to 70 octets too -- about one signature in 500 -- and a
-    length test would take those for low-r. The first octet of the
-    compact form is the top of r, which is what Core's `SigHasLowR`
-    reads.
+    What an attempt is asked is `_is_low_r_`, which is the question
+    `is_low_r` answers for a caller and is written once for both. It
+    serializes per attempt where a compact buffer kept by this loop
+    would be written into, and that costs about 0.2 microseconds of the
+    24.8 a ground signature takes -- the two loops alternated in one
+    process, three runs putting the difference between 0.13 and 0.31,
+    against a noise row that runs the same loop twice and moves 0.1.
+    What it buys is that the predicate a caller can check a signature
+    against is the predicate this loop ground to.
 
-    Both buffers are allocated here and reused across attempts: once per
-    call rather than once per attempt, which is most of what a loop
-    written in C would have saved, and per call rather than at module
-    level, which a package holding one shared context and documenting
-    thread safety cannot do.
+    The entropy buffer is the one thing held across attempts, and it is
+    allocated per call rather than at module level: a package with one
+    shared context and a documented thread-safety story does not get to
+    hold scratch memory anywhere a second thread can reach it.
 
     Args:
         signature: the signature of the first attempt, signed over in
@@ -206,19 +207,15 @@ def _grind(signature: CData, msg_bytes: bytes, prvkey_bytes: bytes) -> None:
         prvkey_bytes: the 32-byte private key, already checked.
 
     Raises:
-        RuntimeError: if libsecp256k1 fails to serialize an attempt,
-            which a signature it has just made cannot do.
+        RuntimeError: propagated from `_is_low_r_`, which serializes
+            every attempt in order to read the top octet of r; a
+            signature libsecp256k1 has just made cannot make it fail.
     """
-    compact = ffi.new("unsigned char[64]")
     # the counter goes in the first 4 octets and the other 28 stay zero,
-    # so the buffer is written once per attempt and not rebuilt
+    # so the buffer is written into rather than rebuilt
     entropy = ffi.new("unsigned char[32]")
     counter = 0
-    while True:
-        if not lib.secp256k1_ecdsa_signature_serialize_compact(ctx, compact, signature):
-            raise RuntimeError("signature serialization failed")
-        if compact[0] < 0x80:
-            return
+    while not _is_low_r_(signature):
         counter += 1
         entropy[0:4] = counter.to_bytes(4, "little")
         _signed(signature, msg_bytes, prvkey_bytes, entropy)
@@ -257,6 +254,8 @@ def _sign_(
             given and is not 32 bytes, if aux_rand32 and grind are given
             together, or if the private key is not 32 bytes, does not fit
             in them, or is not in [1, n-1].
+        RuntimeError: if libsecp256k1 fails to serialize an attempt while
+            grinding, which a signature it has just made cannot do.
     """
     prvkey_bytes = scalar(prvkey, "private key")
     msg_bytes = octets(msg_bytes, "message hash", 32)
@@ -557,6 +556,74 @@ def is_low_s(signature_bytes: BytesLike) -> bool:
         ValueError: if the DER signature is malformed.
     """
     return _is_low_s_(parse_der(signature_bytes))
+
+
+def _is_low_r_(signature: CData) -> bool:
+    """Return True if an already-parsed signature has the low r.
+
+    The private half of `is_low_r`, for a caller who already holds the
+    parsed signature, and the question `_grind` asks of every attempt it
+    makes: see the package docstring for what the two underscores mean
+    throughout.
+
+    It is a serialization and a comparison rather than a libsecp256k1
+    call of its own, there being none that answers this: `r` is the
+    first 32 octets of the compact form, big endian, so its leading
+    octet is the one DER would have to put a zero in front of. Reading
+    it out of the opaque signature object instead is not open to
+    anybody -- those 64 octets are internal scalar representation, in
+    the limb order of whatever built the library.
+
+    Args:
+        signature: the already-parsed signature, as `parse_der` and
+            `parse_compact` return. Not mutated: this asks.
+
+    Returns:
+        True if the high bit of r is clear, which is the form
+        `sign(grind=True)` produces and the one Bitcoin Core's
+        `SigHasLowR` reads.
+
+    Raises:
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to serialize it for any other
+            reason; `serialize_compact` is where that is said, and
+            `context.check` is what tells the two apart. Unlike
+            `_is_low_s_`, an unreadable object does not get an answer
+            here: a serialization that did not happen leaves no octet to
+            read.
+    """
+    return serialize_compact(signature)[0] < 0x80
+
+
+def is_low_r(signature_bytes: BytesLike) -> bool:
+    """Return True if the DER signature has the low r.
+
+    Not a rule of ECDSA, unlike `is_low_s`, and not something `verify`
+    asks: a high-r signature is valid and always was. It is a size
+    policy, and what it says is that this signature is one octet shorter
+    in DER than it might have been -- which is what a caller enforcing
+    it on its own signatures, or measuring how many of somebody else's
+    carry it, is asking about. `sign(grind=True)` is how one is made.
+
+    Args:
+        signature_bytes: the signature in DER encoding.
+
+    Returns:
+        True if the high bit of r is clear.
+
+    Raises:
+        ValueError: if the DER signature is malformed.
+        RuntimeError: if libsecp256k1 fails to serialize it, which no
+            signature it parsed can make it do.
+
+    Example:
+        >>> import hashlib
+        >>> from btclib_secp256k1 import dsa
+        >>> msg = hashlib.sha256(b"hello").digest()
+        >>> dsa.is_low_r(dsa.sign(msg, 1, grind=True))
+        True
+    """
+    return _is_low_r_(parse_der(signature_bytes))
 
 
 def to_compact(signature_bytes: BytesLike) -> bytes:

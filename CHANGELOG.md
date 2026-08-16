@@ -203,32 +203,57 @@ release-notes length in the first place, and are still in
   nonce, until the high bit of `r` is clear and DER therefore spends no
   leading zero octet on it. One octet shorter, about half the time, for
   two signatures' work — measured on this tree, on an Apple M5, macOS
-  26.6, arm64, CPython 3.14.6, 2000 distinct keys signed once each,
-  microseconds per call: `dsa.sign` 12.62 against `dsa.sign(grind=True)`
-  25.23, at 2.09 attempts on the mean and 14 for the worst of those keys.
+  26.6, arm64, CPython 3.14.6, 2000 distinct keys signed once each, the
+  variants alternated in one process, seven rounds with the minimum of
+  each kept, microseconds per call: `dsa.sign` 11.7 against
+  `dsa.sign(grind=True)` 24.9, at 2.09 attempts on the mean and 14 for
+  the worst of those keys. A row running one variant twice is what says
+  what the noise is, and it is 0.1.
   Off by default for that reason, and asked for by a caller who wants the
   octet. `dsa._sign_` takes it too; `s` has no counterpart, libsecp256k1
   having already returned the lower of the two, and `recovery.sign` does
   not get one, a recoverable signature being 65 fixed octets with nothing
   to shorten
-- **the loop is python, and no C was written** — which was measured
-  rather than assumed. In the compact form, which is what the retry
-  tests: 25.90 for a loop calling the wrappers once per attempt, 24.82
-  for what landed, with the key checked once and the two scratch buffers
-  allocated once per call, and 23.82 for the same loop with those buffers
-  held at module level — which one shared context and a documented
-  thread-safety story rule out. A loop compiled in C would have started
-  from that last figure, so the crossing is worth about a microsecond of
-  twenty-five, and it would have been bought with the one property these
-  bindings do not trade: a dynamic build compiles no C at all, so a C
-  helper would be a feature the static wheels have and the dynamic ones
-  do not
+- **the loop is python, and no C was written** — measured rather than
+  assumed, and re-measured on this tree, the first figures published
+  having compared loops that differed in more than where they kept their
+  buffers. Four loops answering the same signature, alternated as above,
+  in the compact form the retry reads: 24.7 for a caller's own loop over
+  the public wrappers once per attempt, 24.8 for what landed, 24.6 for
+  the same keeping one compact buffer per call, 24.5 for the same again
+  with both scratch buffers at module level — which one shared context
+  and a documented thread-safety story rule out anyway. Three tenths
+  separate the four, against a noise row of one tenth, and a caller's own
+  loop is not measurably behind the one inside the package: whatever a
+  loop crossing the boundary once per signature could save lies inside
+  that spread, and most of what is in the spread is the per-attempt
+  serialization the predicate costs rather than the buffer placement,
+  the two buffer rows being 0.1 apart. A loop compiled in C would have
+  started from the last row, and would have been bought with the one
+  property these bindings do not trade: a dynamic build compiles no C at
+  all, so a C helper would be a feature the static wheels have and the
+  dynamic ones do not. Grinding here is worth having for the scheme and
+  the vectors that judge it, not for the microseconds
 - **the retry reads the compact serialization, not the DER length**,
   which is not the same question: DER is `6 + lenR + lenS`, so a high `r`
   of 33 octets with an `s` that needs only 31 encodes to 70 octets too —
   about one signature in 500, measured over 200 000 — and a length test
   would take those for low-r ones. The first octet of the compact form is
   the top of `r`, which is what Core's `SigHasLowR` reads
+- **`dsa.is_low_r` asks that of a signature a caller did not make**
+  (#209), with `dsa._is_low_r_` the half taking the parsed one, as
+  `is_low_s` has had since the beginning. Not a rule, unlike that one:
+  `verify` asks nothing about `r`, a high-r signature being valid and
+  always having been, so what this answers is whether a signature is the
+  octet shorter that `sign(grind=True)` makes it. It is where the
+  grinding loop's own test now lives too — one spelling of the
+  predicate, asked per attempt, which costs about 0.2 microseconds of
+  the 24.8 above against the compact buffer the loop used to keep (three
+  alternated runs put it between 0.13 and 0.31, where the noise row
+  moves 0.1), and buys that what a caller can check is what the loop
+  ground to. Asked once of a signature already made, it is 0.5: a
+  `parse_der` and a `serialize_compact`, 12.2 against the 11.7 of the
+  `dsa.sign` beside it
 - **`aux_rand32` and `grind` are refused together**, with a `ValueError`.
   Grinding writes the very 32 octets that argument is, so a caller asking
   for both is asking for two values of one argument; ignoring one of

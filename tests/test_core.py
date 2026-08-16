@@ -96,8 +96,9 @@ def test_grinding_is_the_signature_the_boundary_would_have_returned() -> None:
     ground = dsa.sign(msg, prvkey, grind=True)
     assert dsa.verify(msg, pubkey_bytes, ground)
     assert dsa.is_low_s(ground)
-    # the high bit of r is what was ground for, and r is the first 32
-    # octets of the compact form
+    # the high bit of r is what was ground for, and `is_low_r` is the
+    # question the loop asked of every attempt, spelled for a caller
+    assert dsa.is_low_r(ground)
     assert dsa.to_compact(ground)[0] < 0x80
     assert dsa.sign(msg, prvkey, compact=True, grind=True) == dsa.to_compact(ground)
     # the private half answers with the object the public one encodes

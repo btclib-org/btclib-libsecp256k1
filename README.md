@@ -590,35 +590,57 @@ way it would answer octets nobody else answers; written this way,
 `tests/test_vectors.py` holds it to Core's own vectors and to
 rust-secp256k1's.
 
-It costs a signature and then some: 25.23 microseconds against the 12.62
-of a plain one, measured beside it over 2000 keys, because half the
-attempts are wasted and the tail is longer than the average — 2.09
-attempts on the mean, and the worst of those 2000 keys took 14. That is
-why it is a parameter and not the default, and why `s` is not mentioned
-in the same breath: libsecp256k1 has already returned the lower of the
-two, so there is nothing there to grind for.
+It costs a signature and then some: 24.9 microseconds against the 11.7 of
+a plain one, measured beside it over 2000 keys, because half the attempts
+are wasted and the tail is longer than the average — 2.09 attempts on the
+mean, and the worst of those 2000 keys took 14. That is why it is a
+parameter and not the default, and why `s` is not mentioned in the same
+breath: libsecp256k1 has already returned the lower of the two, so there
+is nothing there to grind for.
 
-Where the loop is written was measured, not assumed. In the compact form,
-which is what the retry tests: 25.90 microseconds for a loop calling the
-wrappers once per attempt, 24.82 for what is implemented — the key
-checked once, the two scratch buffers allocated once per call — and 23.82
-for the same loop with those buffers held at module level, which a
-package with one shared context and a
-[thread safety](#thread-safety) story does not get to do. A loop compiled
-in C would have started from that last number, so what crossing the
-boundary twice on average actually costs is about a microsecond of
-twenty-five. It buys nothing here, and it would have cost the one thing
-these bindings do not trade: a
+Where the loop is written was measured, not assumed. Four loops answering
+the same signature, alternated in one process — 2000 keys signed once
+each, seven rounds, the minimum of each kept — with the compact form of
+the result, which is what the retry reads, and a last row running the
+implemented loop a second time so that the noise has a figure of its own:
+
+| the loop | microseconds per signature |
+| --- | --- |
+| a caller's own, over the public wrappers, once per attempt | 24.7 |
+| as implemented, asking `is_low_r` per attempt | 24.8 |
+| the same, keeping one compact buffer per call | 24.6 |
+| the same again, with both scratch buffers at module level | 24.5 |
+| the implemented loop, run twice (the noise) | ±0.1 |
+
+The finding is the spread: three tenths of a microsecond separate the
+four, against a noise row of one, and the caller's own loop is not
+measurably behind the one inside the package. So what crossing this
+boundary once per signature could save is somewhere inside that spread —
+and most of what is in it is the per-attempt serialization the predicate
+costs, not where the buffers live, the two buffer rows being 0.1 apart. A
+loop compiled in C would have started from the last row, and it would
+have cost the one thing these bindings do not trade: a
 [dynamic build](#the-vendored-library-is-not-optional) compiles no C at
 all, so a C helper would be a feature the static wheels have and the
-dynamic ones do not.
+dynamic ones do not. Which leaves grinding here worth having for the
+scheme and the vectors that judge it, and not for the microseconds.
 
-What the loop tests is the compact serialization, and not the DER
-length, which is not the same question: DER is `6 + lenR + lenS`, so a
-high `r` of 33 octets with an `s` that happens to need only 31 encodes to
-70 octets too — about one signature in 500 — and a length test would
-take those for low-r ones. The first octet of the compact form is the top
-of `r`, which is exactly what Core's `SigHasLowR` reads.
+Holding the buffers at module level is what the last row costs, and it is
+not available anyway: a package with one shared context and a
+[thread safety](#thread-safety) story does not get to keep scratch memory
+where a second thread reaches it.
+
+What the loop tests is `is_low_r`, which is the compact serialization and
+not the DER length: the two are not the same question, DER being
+`6 + lenR + lenS`, so a high `r` of 33 octets with an `s` that happens to
+need only 31 encodes to 70 octets too — about one signature in 500 — and
+a length test would take those for low-r ones. The first octet of the
+compact form is the top of `r`, which is exactly what Core's
+`SigHasLowR` reads. A caller asks the same question of a signature it did
+not make with `dsa.is_low_r`, and it is a question and not a rule: unlike
+`is_low_s`, nothing rejects a high-r signature, which is valid and always
+was. What it says is that this one is an octet shorter than it might have
+been.
 
 The entropy argument is refused together with it. Grinding writes the
 very 32 octets `aux_rand32` is, so `dsa.sign(msg, key, aux, grind=True)`

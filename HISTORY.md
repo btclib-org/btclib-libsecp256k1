@@ -107,11 +107,18 @@ DER, and the reason Bitcoin Core's `CKey::Sign` does it. It is Core's
 scheme rather than a rephrasing: a `uint32` counter mixed into the nonce,
 so what comes back is what Core and rust-secp256k1 answer for the same
 inputs, held to their own vectors here. It costs two signatures on
-average — 12.62 microseconds against 25.23, on the machine and with the
+average — 11.7 microseconds against 24.9, on the machine and with the
 method CHANGELOG.md states — which is why it is asked for and never done
 by default. `aux_rand32` is refused alongside it, being the same 32
 octets, and `s` needs nothing of the kind: libsecp256k1 has always
 returned the lower of the two.
+
+`dsa.is_low_r` is the same question asked of a signature somebody else
+made, as `is_low_s` is for the other half. It is not a rule and nothing
+rejects a high-r signature: what it answers is whether this one is the
+octet shorter that grinding produces — a caller enforcing that on its own
+signatures, or counting how many of somebody else's carry it, is who it
+is for.
 
 `xonly._tweak_add_` is the private half of `xonly.tweak_add`: it takes
 the parsed point `keys.parse` returns, rather than the x-only form, and

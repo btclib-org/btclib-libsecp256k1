@@ -179,6 +179,21 @@ def test_a_signature_libsecp256k1_cannot_read_is_low_s_like_any_other() -> None:
         context.check()
 
 
+def test_a_signature_libsecp256k1_cannot_read_has_no_low_r_to_read() -> None:
+    """`dsa._is_low_r_` raises where `_is_low_s_` answers True.
+
+    The two are asked the same way and answer differently, which is what
+    the docstring names: `_is_low_s_` reads a return code, and a refused
+    object is reported as unchanged exactly as an already-normalized one
+    is, where this has to serialize first -- and a serialization that did
+    not happen leaves no octet to compare.
+    """
+    with pytest.raises(RuntimeError, match="signature serialization failed"):
+        dsa._is_low_r_(ffi.NULL)
+    with pytest.raises(ValueError, match="illegal argument: sig != NULL"):
+        context.check()
+
+
 def test_ecdh_with_an_unreadable_key_answers_a_secret_with_nobody() -> None:
     """`ecdh._shared_secret_` answers 32 bytes, and they are worth nothing.
 
