@@ -110,6 +110,42 @@ def test_from_keypair_raises_what_was_reported() -> None:
     context.check()
 
 
+def test_guarded_clears_before_the_call_it_holds() -> None:
+    """Entering the block takes an earlier call's message off the thread.
+
+    Without that, the block would raise what something else provoked,
+    which is the misattribution the guard exists to prevent -- and the
+    call it holds need not have failed, or even have happened.
+    """
+    assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
+    with context.guarded():
+        pass
+    # leaving raised nothing, so entering had cleared what was there
+
+
+def test_guarded_does_not_replace_the_exception_of_its_own_block() -> None:
+    """An exception out of the block passes through, and is not the guard's.
+
+    The check is deliberately not in a `finally`: the block holds the
+    guarded call and nothing else, so an exception out of it is some
+    other failure, and raising the violated precondition instead would
+    report the wrong one and lose the right one. What libsecp256k1 said
+    stays on the thread, for the next `__enter__` to clear.
+    """
+
+    def fail_after_libsecp256k1_has_reported() -> None:
+        """Provoke a precondition, then fail for an unrelated reason."""
+        with context.guarded():
+            assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
+            raise KeyError("what actually failed")
+
+    with pytest.raises(KeyError, match="what actually failed"):
+        fail_after_libsecp256k1_has_reported()
+    # the precondition was recorded and left, rather than raised over it
+    with pytest.raises(ValueError, match="pubkey != NULL"):
+        context.check()
+
+
 def test_internal_error() -> None:
     """An internal error reaches the caller as RuntimeError.
 

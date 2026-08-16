@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import secrets
 import threading
-from collections.abc import Iterator
-from contextlib import contextmanager
+from types import TracebackType
 
 from . import CData, ffi, lib
 
@@ -146,8 +145,7 @@ def check() -> None:
         raise ValueError(f"libsecp256k1 illegal argument: {illegal}")
 
 
-@contextmanager
-def guarded() -> Iterator[None]:
+class guarded:
     """Run a libsecp256k1 call whose argument could not be checked first.
 
     Every argument these bindings pass as bytes is proved before the
@@ -167,17 +165,29 @@ def guarded() -> Iterator[None]:
     nothing returns 0 like any other refusal, and the reason it returns
     0 is on the thread and nowhere else.
 
-    And it is called whatever the call answered, not only on a failure,
+    And it is called whatever the call *answered*, not only on a failure,
     because a violated precondition does not always show in the return
     value: `secp256k1_ecdsa_verify` of an unreadable key answers False,
     which is a verdict a caller would believe, and
     `secp256k1_ecdh` of one answers success and 32 bytes that are a
     shared secret with nobody.
 
-    Yields:
-        None: nothing, the block being what this is for. It should hold
-        that call and nothing else -- an exception raised inside it
-        passes through with the thread left as libsecp256k1 set it.
+    A class, and lowercase, because `with guarded():` is what the call
+    sites say and the two halves above are what it has to keep together
+    -- neither of which is a reason to build a generator. A
+    `contextlib.contextmanager` generator costs more than the C call it
+    guards, and the smallest guarded *entry point* is where that shows:
+    `keys.serialize` of a parsed point is 0.582 microseconds this way
+    and 0.847 with one, `keys.pubkey_sort` of twenty keys 21.12 against
+    26.99. The sort is the shape that makes the case, building one guard
+    per key. Smaller still is `keys._pubkey_cmp_`, which is a private
+    half rather than an entry point, and is where CHANGELOG.md measures
+    the guard on its own.
+
+    A shared instance measures 0.567 against the 0.582 of building one
+    per call, which is noise and is why the call sites say `guarded()`:
+    `__slots__` leaves nothing to allocate. An Apple M5, macOS 26.6,
+    arm64, CPython 3.14.6, minimum of 11 rounds.
 
     Raises:
         ValueError: if libsecp256k1 reported a violated precondition.
@@ -189,6 +199,37 @@ def guarded() -> Iterator[None]:
         Traceback (most recent call last):
         ValueError: libsecp256k1 illegal argument: pubkey != NULL
     """
-    _reported.illegal = _reported.error = None
-    yield
-    check()
+
+    # nothing is held between the two halves: what they read and write is
+    # the thread local, so an instance needs no dictionary of its own
+    __slots__ = ()
+
+    def __enter__(self) -> None:
+        """Clear what an earlier call may have left on this thread."""
+        _reported.illegal = _reported.error = None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Raise what libsecp256k1 reported, unless the block already did.
+
+        Not a `finally`, and the difference is the whole of what this
+        method decides. The block should hold the guarded call and
+        nothing else, so an exception out of it is something other than
+        a violated precondition -- and checking anyway would replace
+        that exception with this one, reporting the precondition as the
+        failure and losing the failure that actually happened. So it
+        passes through with the thread left as libsecp256k1 set it, and
+        the next `__enter__` is what clears it.
+
+        Args:
+            exc_type: the class of the exception ending the block, if
+                one is.
+            exc_value: that exception.
+            traceback: its traceback.
+        """
+        if exc_type is None:
+            check()

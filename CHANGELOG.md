@@ -385,19 +385,41 @@ release-notes length in the first place, and are still in
   pair. The eight failures above are eight `ValueError`s now, each
   carrying libsecp256k1's own text, and `tests/test_callbacks.py` no
   longer counts the exceptions to a rule that has none
-- **and it costs 0.48 microseconds a call**, which is worth writing down
-  because on the cheapest call it is most of the call. Measured on an
-  Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 5 rounds of
-  300 000 calls: `secp256k1_ec_pubkey_cmp` through `lib` is 0.087
-  microseconds and `keys._pubkey_cmp_` is 0.57, where a verification is
-  12.1 against 12.9 — the same 0.5 on a call that does real work. Two
-  cheaper spellings were measured and not taken: the pair written out at
-  each call site is 0.23 and a hand-written context manager class 0.30,
-  and what the second buys over `@contextmanager` is 0.27 microseconds
-  against three methods and their docstrings. The clearing and the check
-  are one thing, and the generator is the shortest way to say so; a
-  caller counting microseconds on a comparison has `lib`, which is
-  exported for exactly that
+- **and it costs 0.22 microseconds a call**, which is worth writing
+  down because on the cheapest call it is most of the call. Apple M5,
+  macOS 26.6, arm64, CPython 3.14.6, minimum of 11 rounds:
+  `secp256k1_ec_pubkey_cmp` through `lib` is 0.084 microseconds and
+  `keys._pubkey_cmp_` is 0.300, the difference being the guard and
+  nothing else. Three spellings were measured. The pair written out at
+  each call site is the cheapest, and is not taken: the clearing without
+  the check leaves a message for the next caller to be blamed for, the
+  check without the clearing raises an earlier call's message out of
+  this one, and the two belong in one place. A
+  `contextlib.contextmanager` generator is the dearest, putting the same
+  comparison at 0.567 — so the generator's guard is 0.48 a call, and the
+  0.27 between the two spellings is more than the entire C call on the
+  smallest guarded call in the package. The guard is therefore the
+  class, `__slots__` and `__enter__` and `__exit__`, which says "the
+  clearing and the check are one thing" as well as a `yield` does and
+  costs three method bodies of one line each to say
+- **and a fifth of `keys.pubkey_sort` is what settles it** (#186). A
+  guard is built once per guarded call, so a composed call builds many,
+  and a caller wanting those microseconds back through `lib` is
+  reimplementing the operation rather than making one call — where on a
+  comparison the advice to drop to `lib` costs them nothing, which is
+  why the cheap call is the wrong one to decide on. Same machine and
+  method: `keys.serialize` of a parsed point is 0.582 against a
+  generator's 0.847, and `keys.pubkey_sort` of twenty keys 21.12 against
+  26.99. Sharing one instance rather than building one per call measures
+  0.567 against 0.582, which is noise, and would have cost every
+  `with guarded():` in the package a rewrite to `with guarded:`
+- **the `__exit__` is deliberately not a `finally`,** which is the one
+  thing the spelling could get wrong. The block holds the guarded call
+  and nothing else, so an exception out of it is some other failure, and
+  checking anyway would raise the violated precondition over it —
+  reporting the wrong failure and losing the right one. `if exc_type is
+  None` is what says so, and two tests in `tests/test_callbacks.py` hold
+  the pair, each verified against the mutant it exists to kill
 
 ### One statement of each thing
 
