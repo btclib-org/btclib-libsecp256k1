@@ -6,7 +6,7 @@
 """Tests for the ecdh, recovery, ellswift, and musig libsecp256k1 modules.
 
 Wherever possible the results are cross-checked against the other
-bindings (dsa, ssa, mult) instead of against vendored constants: the
+bindings (dsa, ssa, keys) instead of against vendored constants: the
 ECDH secret is recomputed from the shared point, the recoverable
 signature is compared with the deterministic ECDSA one, and the
 MuSig2 aggregate signature is verified as a plain BIP340 signature.
@@ -32,7 +32,6 @@ from btclib_secp256k1 import (
     ffi,
     keys,
     lib,
-    mult,
     recovery,
     silentpayments,
     ssa,
@@ -58,13 +57,16 @@ def test_ecdh() -> None:
     protocol wanting another derivation applying it to the point.
     """
     prvkey_a, prvkey_b = 3, 5
-    pubkey_a, pubkey_b = mult.mult_bytes(prvkey_a), mult.mult_bytes(prvkey_b)
+    pubkey_a, pubkey_b = (
+        keys.pubkey_from_prvkey(prvkey_a, compressed=False),
+        keys.pubkey_from_prvkey(prvkey_b, compressed=False),
+    )
 
     secret = ecdh.shared_secret(pubkey_b, prvkey_a)
     # both parties compute the same secret
     assert secret == ecdh.shared_secret(pubkey_a, prvkey_b)
     # which is the SHA256 of the compressed shared point
-    shared_point = mult.mult_bytes(prvkey_a * prvkey_b)
+    shared_point = keys.pubkey_from_prvkey(prvkey_a * prvkey_b, compressed=False)
     assert secret == hashlib.sha256(compress(shared_point)).digest()
     # bytes and int private keys are interchangeable
     assert secret == ecdh.shared_secret(pubkey_b, prvkey_a.to_bytes(32, "big"))
@@ -77,7 +79,7 @@ def test_ecdh() -> None:
 
 def test_ecdh_invalid_inputs() -> None:
     """A zero key, a short key and an unparsable public key are refused."""
-    pubkey_bytes = mult.mult_bytes(1)
+    pubkey_bytes = keys.pubkey_from_prvkey(1, compressed=False)
 
     with pytest.raises(ValueError, match="private key"):
         ecdh.shared_secret(pubkey_bytes, 0)
@@ -97,7 +99,7 @@ def test_recovery() -> None:
     still recoverable.
     """
     prvkey = 7
-    pubkey_bytes = compress(mult.mult_bytes(prvkey))
+    pubkey_bytes = compress(keys.pubkey_from_prvkey(prvkey, compressed=False))
 
     signature_bytes, recid = recovery.sign(msg, prvkey)
     assert len(signature_bytes) == 64
@@ -117,7 +119,7 @@ def test_recovery() -> None:
     # the recovered key comes back in either form, this being
     # keys.serialize and the same point either way
     uncompressed = recovery.recover(msg, signature_bytes, recid, compressed=False)
-    assert uncompressed == mult.mult_bytes(prvkey)
+    assert uncompressed == keys.pubkey_from_prvkey(prvkey, compressed=False)
     assert compress(uncompressed) == pubkey_bytes
 
 
@@ -164,7 +166,7 @@ def test_ellswift() -> None:
     naming their own side, and swapping the roles changes it.
     """
     prvkey_a, prvkey_b = 11, 13
-    pubkey_a = compress(mult.mult_bytes(prvkey_a))
+    pubkey_a = compress(keys.pubkey_from_prvkey(prvkey_a, compressed=False))
 
     ell_a = ellswift.create(prvkey_a, b"\x01" * 32)
     assert len(ell_a) == 64
@@ -181,7 +183,9 @@ def test_ellswift() -> None:
     assert ellswift.create(prvkey_a) != ell_a
     # and the decoding comes back in either form, this being
     # keys.serialize and the same point either way
-    assert ellswift.decode(ell_a, compressed=False) == mult.mult_bytes(prvkey_a)
+    assert ellswift.decode(ell_a, compressed=False) == keys.pubkey_from_prvkey(
+        prvkey_a, compressed=False
+    )
 
     # x-only ECDH: both parties agree on the BIP324 shared secret
     ell_b = ellswift.create(prvkey_b)
@@ -210,7 +214,7 @@ def test_ellswift_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="public key"):
         ellswift.encode(b"\x02" + b"\x00" * 32)
     with pytest.raises(ValueError, match="aux_rand32 must be 32 bytes"):
-        ellswift.encode(mult.mult_bytes(11), b"\x01" * 31)
+        ellswift.encode(keys.pubkey_from_prvkey(11, compressed=False), b"\x01" * 31)
     with pytest.raises(ValueError, match="64 bytes"):
         ellswift.decode(ell[1:])
     with pytest.raises(ValueError, match="64 bytes"):
@@ -333,7 +337,7 @@ def test_size_checks_refuse_both_sides() -> None:
     with pytest.raises(ValueError, match="aux_rand32"):
         ellswift.create(prvkey, b"\x01" * 31)
     with pytest.raises(ValueError, match="aux_rand32"):
-        ellswift.encode(mult.mult_bytes(prvkey), b"\x01" * 33)
+        ellswift.encode(keys.pubkey_from_prvkey(prvkey, compressed=False), b"\x01" * 33)
     with pytest.raises(ValueError, match="64 bytes"):
         ellswift.decode(ell + b"\x01")
     with pytest.raises(ValueError, match="64 bytes"):

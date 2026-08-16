@@ -29,7 +29,7 @@ chain per thread answers what a chain alone answers.
 
 from concurrent.futures import ThreadPoolExecutor
 
-from btclib_secp256k1 import dsa, ecdh, keys, mult, ssa, xonly
+from btclib_secp256k1 import dsa, ecdh, keys, ssa, xonly
 
 prvkey = 0xB7331FE4A9F79F4A2B79A5BEE4CCA2C6A0A9DCE05C4EB77C1C8AA1CC1EE47ADD
 tweak = 0x3F2B1C7D8E9F0A1B2C3D4E5F60718293A4B5C6D7E8F901A2B3C4D5E6F708192A
@@ -49,23 +49,32 @@ def test_concurrent_round_trips() -> None:
     deterministic. `map` is consumed rather than discarded, an assertion
     failing in a worker being raised only when its result is read.
     """
-    pubkey_bytes = mult.mult_bytes(prvkey)
+    pubkey_bytes = keys.pubkey_from_prvkey(prvkey, compressed=False)
     xonly_bytes, _ = xonly.from_pubkey(pubkey_bytes)
     dsa_sig = dsa.sign(msg, prvkey)
     ssa_sig = ssa.sign(msg, prvkey, aux_rand32)
     secret = ecdh.shared_secret(pubkey_bytes, tweak)
     tweaked = xonly.tweak_add(xonly_bytes, tweak)
-    combined = keys.pubkey_combine([pubkey_bytes, mult.mult_bytes(tweak)])
+    combined = keys.pubkey_combine([
+        pubkey_bytes,
+        keys.pubkey_from_prvkey(tweak, compressed=False),
+    ])
 
     def round_trip(_: int) -> None:
         assert dsa.sign(msg, prvkey) == dsa_sig
         assert dsa.verify(msg, pubkey_bytes, dsa_sig)
         assert ssa.sign(msg, prvkey, aux_rand32) == ssa_sig
         assert ssa.verify(msg, xonly_bytes, ssa_sig)
-        assert mult.mult_bytes(prvkey) == pubkey_bytes
+        assert keys.pubkey_from_prvkey(prvkey, compressed=False) == pubkey_bytes
         assert ecdh.shared_secret(pubkey_bytes, tweak) == secret
         assert xonly.tweak_add(xonly_bytes, tweak) == tweaked
-        assert keys.pubkey_combine([pubkey_bytes, mult.mult_bytes(tweak)]) == combined
+        assert (
+            keys.pubkey_combine([
+                pubkey_bytes,
+                keys.pubkey_from_prvkey(tweak, compressed=False),
+            ])
+            == combined
+        )
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         # map is lazy: the results have to be consumed for an assertion
@@ -106,7 +115,7 @@ def test_a_chain_per_thread_walks_the_same_path() -> None:
     is what a caller builds, and this is that: what each thread pays for
     it is the parse the chain then saves at every step after the first.
     """
-    pubkey_bytes = mult.mult_bytes(prvkey)
+    pubkey_bytes = keys.pubkey_from_prvkey(prvkey, compressed=False)
     tweaks = (tweak, prvkey, tweak)
     expected = [
         keys.pubkey_tweak_add(pubkey_bytes, tweaks[0]),

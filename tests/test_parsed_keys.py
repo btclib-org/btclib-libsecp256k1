@@ -32,7 +32,6 @@ from btclib_secp256k1 import (
     ellswift,
     ffi,
     keys,
-    mult,
     recovery,
     silentpayments,
     ssa,
@@ -50,7 +49,7 @@ MSG = hashlib.sha256(b"btclib_secp256k1").digest()
 # is what the encoding takes by default, and two of those never agree
 RND32 = bytes(32)
 
-PUBKEY_LONG = mult.mult_bytes(PRVKEY)
+PUBKEY_LONG = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
 PUBKEY = keys.pubkey_from_prvkey(PRVKEY)
 OTHER = keys.pubkey_from_prvkey(3)
 XONLY, PARITY = xonly.from_pubkey(PUBKEY)
@@ -489,7 +488,9 @@ def test_a_private_half_still_checks_everything_but_the_object() -> None:
     # private halves: the sum that is the point at infinity, and the zero
     # multiplier
     with pytest.raises(ValueError, match="tweak or resulting public key"):
-        keys._pubkey_tweak_add_(keys.parse(mult.mult_bytes(7)), N - 7)
+        keys._pubkey_tweak_add_(
+            keys.parse(keys.pubkey_from_prvkey(7, compressed=False)), N - 7
+        )
     with pytest.raises(ValueError, match="invalid tweak"):
         keys._pubkey_tweak_mul_(pubkey, 0)
 
@@ -512,7 +513,6 @@ def test_every_private_half_is_paired() -> None:
         "ecdh": ecdh,
         "ellswift": ellswift,
         "keys": keys,
-        "mult": mult,
         "recovery": recovery,
         "silentpayments": silentpayments,
         "ssa": ssa,

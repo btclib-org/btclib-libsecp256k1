@@ -255,7 +255,7 @@ and decides nothing else.
   only a value — the 32-byte width is the curve's, not a fact the caller
   supplied and got wrong. The set of valid scalars is unchanged; only the
   type spelling them is. What the door is for is the caller who already
-  holds a number: `mult_bytes(3)`, a vector, a tweak just computed.
+  holds a number: a nonce, a vector, a tweak just computed.
   The cost is not in that serialization, which is a loop over nine CPython
   digits and measures as noise. It is that an `int` holding a secret was
   produced by python arithmetic, variable in time with the magnitude of
@@ -464,7 +464,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 
 | libsecp256k1 module | bindings                                  |
 | ------------------- | ----------------------------------------- |
-| (core)              | `dsa`, `mult`, `keys`, `hashes`           |
+| (core)              | `dsa`, `keys`, `hashes`                   |
 | `ecdh`              | `ecdh`                                    |
 | `recovery`          | `recovery`                                |
 | `extrakeys`         | `xonly`, used by `ssa`                    |
@@ -474,8 +474,8 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `silentpayments`    | `silentpayments` (BIP352)                 |
 
 `keys` provides the public key of a private key (`pubkey_from_prvkey`,
-compressed by default, of which `mult.mult_bytes` is the uncompressed
-spelling) and the scalar and point algebra (tweaking, negation,
+compressed by default, `compressed=False` for the uncompressed form)
+and the scalar and point algebra (tweaking, negation,
 combination, arbitrary point multiplication) underlying BIP32 key
 derivation, plus the lexicographic ordering of public keys (`pubkey_cmp`,
 `pubkey_sort`) that BIP67 and MuSig2 key aggregation call for; `xonly`

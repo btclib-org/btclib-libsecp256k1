@@ -173,9 +173,10 @@ def _pubkey_from_prvkey_(prvkey: BytesLike | int) -> CData:
 def pubkey_from_prvkey(prvkey: BytesLike | int, compressed: bool = True) -> bytes:
     """Return the public key of a private key, i.e. the point kG.
 
-    This is the generator multiplication of `mult.mult_bytes`, with the
-    serialization flag this module's other producers all take:
-    `mult_bytes` is its `compressed=False` case, and every
+    This is the generator multiplication, with the serialization flag
+    this module's other producers all take: `compressed=False` answers
+    the 65 octets of `0x04 || x || y`, which is the form a caller reading
+    coordinates wants and the cheap one to parse back. Every
     private-to-public conversion that wants the compressed form -- BIP32
     neutering, a fingerprint, an address -- is this call and nothing
     after it.
@@ -333,8 +334,8 @@ class PubkeyTweakChain:
         ValueError: if the public key is not a valid point.
 
     Example:
-        >>> from btclib_secp256k1 import keys, mult
-        >>> generator = mult.mult_bytes(1)
+        >>> from btclib_secp256k1 import keys
+        >>> generator = keys.pubkey_from_prvkey(1, compressed=False)
         >>> chain = keys.PubkeyTweakChain(generator)
         >>> step1 = chain.tweak_add(2)
         >>> step2 = chain.tweak_add(3)
@@ -824,10 +825,10 @@ def reserialize(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
             valid key can make it do.
 
     Example:
-        >>> from btclib_secp256k1 import keys, mult
+        >>> from btclib_secp256k1 import keys
         >>> compressed = keys.pubkey_from_prvkey(1)
         >>> uncompressed = keys.reserialize(compressed, compressed=False)
-        >>> uncompressed == mult.mult_bytes(1)
+        >>> uncompressed == keys.pubkey_from_prvkey(1, compressed=False)
         True
         >>> keys.reserialize(uncompressed) == compressed
         True
@@ -854,8 +855,9 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
             a key it produced cannot make it do.
 
     Example:
-        >>> from btclib_secp256k1 import keys, mult
-        >>> keys.serialize(keys.parse(mult.mult_bytes(1))).hex()[:10]
+        >>> from btclib_secp256k1 import keys
+        >>> uncompressed = keys.pubkey_from_prvkey(1, compressed=False)
+        >>> keys.serialize(keys.parse(uncompressed)).hex()[:10]
         '0279be667e'
     """
     # the size is written once and the capacity derived from it. What is

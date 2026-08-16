@@ -54,9 +54,9 @@ def sign(
             make it do.
 
     Example:
-        >>> from btclib_secp256k1 import ssa, xonly, mult
+        >>> from btclib_secp256k1 import keys, ssa, xonly
         >>> msg, prvkey = bytes(32), 1
-        >>> pubkey, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
+        >>> pubkey, _ = xonly.from_pubkey(keys.pubkey_from_prvkey(prvkey))
         >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
         True
     """
@@ -148,9 +148,9 @@ class Signer:
             them, or is not in [1, n-1].
 
     Example:
-        >>> from btclib_secp256k1 import ssa, xonly, mult
+        >>> from btclib_secp256k1 import keys, ssa, xonly
         >>> msg, prvkey = bytes(32), 1
-        >>> pubkey, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
+        >>> pubkey, _ = xonly.from_pubkey(keys.pubkey_from_prvkey(prvkey))
         >>> with ssa.Signer(prvkey) as signer:
         ...     sig = signer.sign(msg, bytes(32))
         >>> sig == ssa.sign(msg, prvkey, bytes(32))

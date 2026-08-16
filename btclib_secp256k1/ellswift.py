@@ -20,8 +20,8 @@ from .keys import parse, serialize
 def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> bytes:
     """Create the 64-byte ElligatorSwift encoding of a private key's public key.
 
-    This is safer than encode(mult_bytes(prvkey)), as the private key itself
-    is used as entropy for the encoding.
+    This is safer than encoding the public key of that private key, as
+    the key itself is used as entropy for the encoding.
 
     Args:
         prvkey: the private key, 32 bytes or an int below 2**256.

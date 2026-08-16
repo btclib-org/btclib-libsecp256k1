@@ -26,7 +26,6 @@ from btclib_secp256k1 import (
     hashes,
     keys,
     lib,
-    mult,
     recovery,
     silentpayments,
     ssa,
@@ -146,16 +145,15 @@ def test_safe_abort() -> None:
 def test_mult() -> None:
     """Generator multiplication answers the point the compressed key names.
 
-    `mult_bytes` is the uncompressed serialization, so the x it carries
-    is the x of the compressed form, and the coordinates a caller wants
-    are `int.from_bytes` of its two halves -- which is what `mult`
-    answered before it was retired.
+    `pubkey_from_prvkey(compressed=False)` is the serialization that
+    carries both coordinates, so its x is the x of the compressed form and
+    the pair a caller wants is `int.from_bytes` of its two halves.
     """
-    pubkey_ = mult.mult_bytes(prvkey)
+    pubkey_ = keys.pubkey_from_prvkey(prvkey, compressed=False)
     assert pubkey_[0] == 4
     assert pubkey_[1:33] == pubkey_bytes[1:]
-    # the y, which the compressed form does not carry and which no
-    # assertion here covered while `mult` was answering it: it is the
+    # the y, which the compressed form does not carry and which nothing
+    # here asserted while a call was answering it as an int: it is the
     # even one, `pubkey_bytes` opening with 0x02, and it satisfies the
     # curve equation. That is what a caller reads with int.from_bytes
     x = int.from_bytes(pubkey_[1:33], "big")
@@ -212,12 +210,12 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="fit in 32 bytes"):
         dsa.sign(msg, 2**256)
     with pytest.raises(ValueError, match="fit in 32 bytes"):
-        mult.mult_bytes(-1)
+        keys.pubkey_from_prvkey(-1, compressed=False)
 
     # generator multiplication is keys.pubkey_from_prvkey, so what its
     # message names is the private key the scalar of it is
     with pytest.raises(ValueError, match="private key"):
-        mult.mult_bytes(0)
+        keys.pubkey_from_prvkey(0, compressed=False)
 
 
 def test_type_checks_refuse_what_merely_has_a_length() -> None:
@@ -235,7 +233,7 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
     that says mypy already knew.
     """
     prvkey = 7
-    pubkey_bytes = mult.mult_bytes(prvkey)
+    pubkey_bytes = keys.pubkey_from_prvkey(prvkey, compressed=False)
 
     with pytest.raises(TypeError, match="tag must be bytes, not str"):
         hashes.tagged_sha256("TapLeaf", b"")  # type: ignore[arg-type]
@@ -248,7 +246,7 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
     with pytest.raises(
         TypeError, match="private key must be bytes or an int, not float"
     ):
-        mult.mult_bytes(1.0)  # type: ignore[arg-type]
+        keys.pubkey_from_prvkey(1.0, compressed=False)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="tweak must be bytes or an int, not str"):
         keys.prvkey_tweak_add(prvkey, "x" * 32)  # type: ignore[arg-type]
 
@@ -265,8 +263,8 @@ def test_a_bool_is_not_a_scalar() -> None:
     This is the one type whose acceptance could not be seen in the
     answer. `keys.prvkey_verify(False)` returned False, which is the
     correct verdict on the scalar zero and indistinguishable from the
-    correct verdict on whatever the caller meant; `mult.mult_bytes(True)`
-    returned the generator. A `float` or a `str` in the same place is a
+    correct verdict on whatever the caller meant; the public key of
+    `True` returned the generator. A `float` or a `str` in the same place is a
     typo that raises, and always did.
 
     Nor could the type checker say so: `bool` is a subtype of `int`, so
@@ -370,7 +368,7 @@ def test_size_checks_refuse_both_sides() -> None:
     """
     msg = b"\x01" * 32
     prvkey = 7
-    pubkey_bytes = mult.mult_bytes(prvkey)
+    pubkey_bytes = keys.pubkey_from_prvkey(prvkey, compressed=False)
     der_bytes = dsa.sign(msg, prvkey)
     ssa_sig = ssa.sign(msg, prvkey)
     xonly_bytes = pubkey_bytes[1:33]

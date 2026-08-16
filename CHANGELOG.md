@@ -460,6 +460,22 @@ release-notes length in the first place, and are still in
 
 ### The surface and the sentence agree
 
+- **the `mult` module is folded into `keys`** (#173). With `mult.mult`
+  removed below, what was left was one function that is
+  `keys.pubkey_from_prvkey(num, compressed=False)` with the flag fixed
+  and the name hiding it — and a module, everywhere else under
+  `btclib_secp256k1/`, is a family of calls around one part of
+  libsecp256k1. The abstraction did not hold at its own edges either:
+  `mult_bytes(0)` raised "invalid private key", the message of the module
+  it delegated to, and a caller wanting the compressed answer had to
+  leave for `keys` anyway. What it bought was a name for the operation, a
+  scalar times the generator rather than the public key of a private key,
+  and that name is one line at a call site that already reads the other
+  module's refusal. `keys.pubkey_from_prvkey(num, compressed=False)` is
+  the spelling everywhere now, in the package's own docstrings and tests
+  included. Done in the window #173 names: 0.8.0.3 is unreleased and
+  btclib is adapting to the removal below, so the two are one break to a
+  released caller
 - **`mult.mult` is gone** (#170). The package docstring opens with "every
   entry point takes octets and answers octets", and that call answered
   `tuple[int, int]` — the one place a point of the curve left as numbers

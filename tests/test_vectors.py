@@ -57,7 +57,6 @@ from btclib_secp256k1 import (
     ffi,
     keys,
     lib,
-    mult,
     recovery,
     silentpayments,
     ssa,
@@ -1012,13 +1011,18 @@ def test_rfc6979_ecdsa_vector(
     s = int(s_hex, 16)
 
     # vector self-consistency: r is the x coordinate of k*G
-    assert int.from_bytes(mult.mult_bytes(bytes.fromhex(k_hex))[1:33], "big") == r
+    assert (
+        int.from_bytes(
+            keys.pubkey_from_prvkey(bytes.fromhex(k_hex), compressed=False)[1:33], "big"
+        )
+        == r
+    )
 
     # libsecp256k1 always produces low-s signatures
     der = dsa.sign(msg32, bytes.fromhex(seckey_hex))
     assert der_decode(der) == (r, min(s, N - s))
 
-    pubkey = mult.mult_bytes(bytes.fromhex(seckey_hex))
+    pubkey = keys.pubkey_from_prvkey(bytes.fromhex(seckey_hex), compressed=False)
     assert dsa.verify(msg32, pubkey, der)
 
 
@@ -1059,7 +1063,7 @@ def test_trezor_ecdsa_vector(seckey_hex: str, digest_hex: str, sig_hex: str) -> 
     der = dsa.sign(digest, bytes.fromhex(seckey_hex))
     assert der_decode(der) == (r, min(s, N - s))
 
-    pubkey = mult.mult_bytes(bytes.fromhex(seckey_hex))
+    pubkey = keys.pubkey_from_prvkey(bytes.fromhex(seckey_hex), compressed=False)
     assert dsa.verify(digest, pubkey, der)
 
 
@@ -1140,7 +1144,7 @@ def test_secp256k1py_ecdsa_vectors() -> None:
         der = bytes.fromhex(vector["sig"])[:-1]
 
         assert dsa.sign(msg32, prvkey) == der
-        pubkey = mult.mult_bytes(prvkey)
+        pubkey = keys.pubkey_from_prvkey(prvkey, compressed=False)
         assert dsa.verify(msg32, pubkey, der)
 
 
@@ -1164,8 +1168,12 @@ def test_secp256k1py_custom_nonce_vectors() -> None:
 
         r, s = der_decode(der)
         assert s <= N // 2, "not a low-s signature"
-        assert r == int.from_bytes(mult.mult_bytes(k)[1:33], "big") % N
-        pubkey = mult.mult_bytes(prvkey)
+        assert (
+            r
+            == int.from_bytes(keys.pubkey_from_prvkey(k, compressed=False)[1:33], "big")
+            % N
+        )
+        pubkey = keys.pubkey_from_prvkey(prvkey, compressed=False)
         assert dsa.verify(msg32, pubkey, der)
 
 
@@ -1179,7 +1187,7 @@ def test_der_parsing() -> None:
     the two lists exist to catch.
     """
     msg32 = b"\x01" * 32
-    pubkey = mult.mult_bytes(1)
+    pubkey = keys.pubkey_from_prvkey(1, compressed=False)
     for der_hex in PARSED_DER:
         # parses fine, does not verify
         assert not dsa.verify(msg32, pubkey, bytes.fromhex(der_hex))

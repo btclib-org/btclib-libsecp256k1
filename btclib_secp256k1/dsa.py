@@ -205,9 +205,9 @@ def verify(
 
     Example:
         >>> import hashlib
-        >>> from btclib_secp256k1 import dsa, mult
+        >>> from btclib_secp256k1 import dsa, keys
         >>> msg = hashlib.sha256(b"hello").digest()
-        >>> dsa.verify(msg, mult.mult_bytes(1), dsa.sign(msg, 1))
+        >>> dsa.verify(msg, keys.pubkey_from_prvkey(1), dsa.sign(msg, 1))
         True
     """
     parse = parse_compact if compact else parse_der

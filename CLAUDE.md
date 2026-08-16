@@ -41,13 +41,16 @@ still reaches every line. Every question of the form "why does this differ
 between platforms" comes back here.
 
 Above it, one module per libsecp256k1 module wrapped: `dsa`, `ssa`,
-`mult`, `ecdh`, `recovery`, `ellswift`, plus `keys`, `xonly`, `hashes`,
-`context` and `_scalar` for what crosses the boundary. MuSig2 is
-deliberately *not* wrapped: its two-round protocol needs a session whose
-secret nonce cannot be reused, which belongs where the signing state
-lives, in btclib; it is reachable through the raw `ffi` and `lib` this
-package exposes. See the Design section of the README before adding a
-module.
+`ecdh`, `recovery`, `ellswift`, `silentpayments`, plus `keys`, `xonly`,
+`hashes`, `context`, `_scalar`, `_secret` and `_cdata` for what crosses
+the boundary. No module is one call of another: `mult` had become that
+-- `pubkey_from_prvkey` with a flag fixed -- and was folded into `keys`.
+
+MuSig2 is deliberately *not* wrapped: its two-round protocol needs a
+session whose secret nonce cannot be reused, which belongs where the
+signing state lives, in btclib; it is reachable through the raw `ffi`
+and `lib` this package exposes. See the Design section of the README
+before adding a module.
 
 Below it, `scripts/cffi_build.py` builds the vendored library with CMake
 and then compiles the extension by one of three paths — static with

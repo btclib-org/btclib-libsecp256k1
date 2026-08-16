@@ -5,8 +5,8 @@
 
 """Tests for the keys and xonly modules, and for the ECDSA signature forms.
 
-The scalar and point operations are cross-checked against the mult
-bindings, computing the expected result modulo the group order; the
+The scalar and point operations are cross-checked against
+`pubkey_from_prvkey` of the scalar, computed modulo the group order; the
 x-only tweaking is cross-checked against the plain public key tweaking,
 which is a distinct libsecp256k1 code path; the taproot key path is
 checked end to end, signing with the tweaked private key and verifying
@@ -19,7 +19,7 @@ import hashlib
 
 import pytest
 
-from btclib_secp256k1 import dsa, keys, mult, ssa, xonly
+from btclib_secp256k1 import dsa, keys, ssa, xonly
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -85,13 +85,18 @@ def test_pubkey_from_prvkey() -> None:
     assert keys.pubkey_from_prvkey((1).to_bytes(32, "big")) == b"\x02" + generator[1:33]
 
     # the odd y, which 1G cannot exhibit
-    assert mult.mult_bytes(6)[64] & 1
-    assert keys.pubkey_from_prvkey(6) == b"\x03" + mult.mult_bytes(6)[1:33]
+    assert keys.pubkey_from_prvkey(6, compressed=False)[64] & 1
+    assert (
+        keys.pubkey_from_prvkey(6)
+        == b"\x03" + keys.pubkey_from_prvkey(6, compressed=False)[1:33]
+    )
 
-    # mult_ is this function with the compressed flag off
+    # the compressed answer is the uncompressed one compressed here,
+    # which is a second reading of the same point and not the same call
     for prvkey in (1, 6, N - 1):
-        assert mult.mult_bytes(prvkey) == keys.pubkey_from_prvkey(prvkey, False)
-        assert keys.pubkey_from_prvkey(prvkey) == compress(mult.mult_bytes(prvkey))
+        assert keys.pubkey_from_prvkey(prvkey) == compress(
+            keys.pubkey_from_prvkey(prvkey, compressed=False)
+        )
 
     # zero is no private key, and neither is the group order
     with pytest.raises(ValueError, match="private key"):
@@ -107,24 +112,33 @@ def test_pubkey_from_prvkey() -> None:
 def test_pubkey_algebra() -> None:
     """Tweaking a public key matches tweaking the private key under it.
 
-    Add, multiply and negate, each against `mult.mult_bytes` of the tweaked
+    Add, multiply and negate, each against the public key of the tweaked
     scalar, with negation checked to be its own inverse. Combining keys
     matches adding their scalars and does not depend on the order they are
     given in; one key combines to itself. A sum landing on the point at
     infinity is refused, that point having no public key.
     """
     a, b = 3, 5
-    pubkey_a, pubkey_b = mult.mult_bytes(a), mult.mult_bytes(b)
+    pubkey_a, pubkey_b = (
+        keys.pubkey_from_prvkey(a, compressed=False),
+        keys.pubkey_from_prvkey(b, compressed=False),
+    )
 
     # tweaking a public key matches tweaking its private key
-    assert keys.pubkey_tweak_add(pubkey_a, b) == (compress(mult.mult_bytes(a + b)))
-    assert keys.pubkey_tweak_mul(pubkey_a, b) == (compress(mult.mult_bytes(a * b)))
-    assert keys.pubkey_negate(pubkey_a) == (compress(mult.mult_bytes(N - a)))
+    assert keys.pubkey_tweak_add(pubkey_a, b) == (
+        compress(keys.pubkey_from_prvkey(a + b, compressed=False))
+    )
+    assert keys.pubkey_tweak_mul(pubkey_a, b) == (
+        compress(keys.pubkey_from_prvkey(a * b, compressed=False))
+    )
+    assert keys.pubkey_negate(pubkey_a) == (
+        compress(keys.pubkey_from_prvkey(N - a, compressed=False))
+    )
     assert keys.pubkey_negate(keys.pubkey_negate(pubkey_a)) == (compress(pubkey_a))
 
     # adding public keys matches adding their private keys
     combined = keys.pubkey_combine([pubkey_a, pubkey_b])
-    assert combined == compress(mult.mult_bytes(a + b))
+    assert combined == compress(keys.pubkey_from_prvkey(a + b, compressed=False))
     assert combined == keys.pubkey_combine([pubkey_b, pubkey_a])
     # a single key is combined with itself only
     assert keys.pubkey_combine([pubkey_a]) == compress(pubkey_a)
@@ -144,7 +158,7 @@ def test_pubkey_tweak_chain() -> None:
     uncompressed both, and to refuse the same invalid tweak and the same
     landing on the point at infinity.
     """
-    pubkey_bytes = mult.mult_bytes(3)
+    pubkey_bytes = keys.pubkey_from_prvkey(3, compressed=False)
     tweaks = (5, N - 1, 11)
 
     chain = keys.PubkeyTweakChain(pubkey_bytes)
@@ -166,7 +180,9 @@ def test_pubkey_tweak_chain() -> None:
     with pytest.raises(ValueError, match="tweak must be 32 bytes"):
         keys.PubkeyTweakChain(pubkey_bytes).tweak_add(b"\x01" * 33)
     with pytest.raises(ValueError, match="tweak or resulting public key"):
-        keys.PubkeyTweakChain(mult.mult_bytes(7)).tweak_add(N - 7)
+        keys.PubkeyTweakChain(keys.pubkey_from_prvkey(7, compressed=False)).tweak_add(
+            N - 7
+        )
 
 
 def test_pubkey_serialization() -> None:
@@ -175,7 +191,7 @@ def test_pubkey_serialization() -> None:
     The uncompressed form is 65 octets opening with 0x04, the compressed
     33 whose first octet carries the parity of the y being dropped.
     """
-    pubkey_bytes = mult.mult_bytes(7)
+    pubkey_bytes = keys.pubkey_from_prvkey(7, compressed=False)
 
     # both forms parse, and either can be serialized from the other
     compressed = keys.serialize(keys.parse(pubkey_bytes))
@@ -194,7 +210,7 @@ def test_pubkey_order() -> None:
     key against itself in the other form; sorting no key is no key rather
     than an error, and a key that does not parse is refused.
     """
-    uncompressed = [mult.mult_bytes(k) for k in (5, 2, 9, 1)]
+    uncompressed = [keys.pubkey_from_prvkey(k, compressed=False) for k in (5, 2, 9, 1)]
     compressed = [compress(pubkey_bytes) for pubkey_bytes in uncompressed]
     # what libsecp256k1 orders by is the compressed serialization, so
     # python sorting the same bytes is an independent reference
@@ -235,7 +251,7 @@ def test_sorting_and_adding_the_same_parsed_keys() -> None:
     compare equal to one and dangle the moment the list it points into
     was dropped.
     """
-    pubkeys_bytes = [mult.mult_bytes(k) for k in (5, 2, 9, 1)]
+    pubkeys_bytes = [keys.pubkey_from_prvkey(k, compressed=False) for k in (5, 2, 9, 1)]
     parsed = [keys.parse(pubkey_bytes) for pubkey_bytes in pubkeys_bytes]
 
     ordered = keys._pubkey_sort_(parsed)
@@ -258,8 +274,10 @@ def test_sorting_and_adding_the_same_parsed_keys() -> None:
         keys._pubkey_combine_([])
     with pytest.raises(ValueError, match="invalid public key sum"):
         keys._pubkey_combine_([
-            keys.parse(mult.mult_bytes(7)),
-            keys.parse(keys.pubkey_negate(mult.mult_bytes(7))),
+            keys.parse(keys.pubkey_from_prvkey(7, compressed=False)),
+            keys.parse(
+                keys.pubkey_negate(keys.pubkey_from_prvkey(7, compressed=False))
+            ),
         ])
 
 
@@ -293,7 +311,7 @@ def test_keys_invalid_inputs() -> None:
     two products that reach zero or infinity -- neither of which has a key
     to answer with.
     """
-    pubkey_bytes = mult.mult_bytes(7)
+    pubkey_bytes = keys.pubkey_from_prvkey(7, compressed=False)
 
     with pytest.raises(ValueError, match="private key"):
         keys.prvkey_negate(b"\x01" * 31)
@@ -313,7 +331,7 @@ def test_keys_invalid_inputs() -> None:
     # tweaking by the negation of the private key lands on the point at
     # infinity, which has no serialization
     with pytest.raises(ValueError, match="tweak or resulting public key"):
-        keys.pubkey_tweak_add(mult.mult_bytes(7), N - 7)
+        keys.pubkey_tweak_add(keys.pubkey_from_prvkey(7, compressed=False), N - 7)
 
 
 def test_xonly_from_pubkey() -> None:
@@ -324,7 +342,7 @@ def test_xonly_from_pubkey() -> None:
     lift the x back to the point it came from.
     """
     for prvkey in (1, 2, 3):
-        pubkey_bytes = mult.mult_bytes(prvkey)
+        pubkey_bytes = keys.pubkey_from_prvkey(prvkey, compressed=False)
         xonly_bytes, parity = xonly.from_pubkey(pubkey_bytes)
         assert xonly_bytes == pubkey_bytes[1:33]
         assert parity == pubkey_bytes[64] & 1
@@ -347,7 +365,9 @@ def test_xonly_tweak_add() -> None:
     and fails on a different tweak, key or parity.
     """
     prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
-    xonly_bytes, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
+    xonly_bytes, _ = xonly.from_pubkey(
+        keys.pubkey_from_prvkey(prvkey, compressed=False)
+    )
 
     tweaked_bytes, parity = xonly.tweak_add(xonly_bytes, tweak)
 
@@ -359,8 +379,11 @@ def test_xonly_tweak_add() -> None:
     # a full public key is accepted and names the same key: the public
     # key of 11 has odd y, and BIP340 reads it as the x it shares with
     # its negation rather than as another point
-    assert mult.mult_bytes(prvkey)[64] & 1
-    for form in (mult.mult_bytes(prvkey), compress(mult.mult_bytes(prvkey))):
+    assert keys.pubkey_from_prvkey(prvkey, compressed=False)[64] & 1
+    for form in (
+        keys.pubkey_from_prvkey(prvkey, compressed=False),
+        compress(keys.pubkey_from_prvkey(prvkey, compressed=False)),
+    ):
         assert xonly.tweak_add(form, tweak) == (tweaked_bytes, parity)
 
     # the commitment can be checked without recomputing it
@@ -368,7 +391,10 @@ def test_xonly_tweak_add() -> None:
     # a different tweak, key, or parity does not check out
     assert not xonly.tweak_add_check(tweaked_bytes, parity, xonly_bytes, b"\x01" * 32)
     assert not xonly.tweak_add_check(
-        tweaked_bytes, parity, xonly.from_pubkey(mult.mult_bytes(12))[0], tweak
+        tweaked_bytes,
+        parity,
+        xonly.from_pubkey(keys.pubkey_from_prvkey(12, compressed=False))[0],
+        tweak,
     )
     assert not xonly.tweak_add_check(tweaked_bytes, 1 - parity, xonly_bytes, tweak)
 
@@ -384,12 +410,16 @@ def test_xonly_tweak_add() -> None:
 def test_taproot_key_path() -> None:
     """Sign a taproot key path spending with a tweaked private key."""
     prvkey, tweak = 11, hashlib.sha256(b"taproot tweak").digest()
-    internal_bytes, _ = xonly.from_pubkey(mult.mult_bytes(prvkey))
+    internal_bytes, _ = xonly.from_pubkey(
+        keys.pubkey_from_prvkey(prvkey, compressed=False)
+    )
     output_bytes, _ = xonly.tweak_add(internal_bytes, tweak)
 
     tweaked_prvkey = xonly.prvkey_tweak_add(prvkey, tweak)
     # the tweaked private key is the one of the tweaked x-only key
-    assert xonly.from_pubkey(mult.mult_bytes(tweaked_prvkey))[0] == (output_bytes)
+    assert xonly.from_pubkey(keys.pubkey_from_prvkey(tweaked_prvkey, compressed=False))[
+        0
+    ] == (output_bytes)
     # hence it signs for the taproot output key
     signature_bytes = ssa.sign(msg, tweaked_prvkey)
     assert ssa.verify(msg, output_bytes, signature_bytes)
@@ -406,7 +436,9 @@ def test_xonly_invalid_inputs() -> None:
     negation of the scalar, which land on the point at infinity and have
     no x-only form to answer with.
     """
-    xonly_bytes, parity = xonly.from_pubkey(mult.mult_bytes(11))
+    xonly_bytes, parity = xonly.from_pubkey(
+        keys.pubkey_from_prvkey(11, compressed=False)
+    )
 
     with pytest.raises(ValueError, match="invalid public key"):
         # 32 bytes which are not a valid x coordinate
@@ -427,7 +459,9 @@ def test_xonly_invalid_inputs() -> None:
     # tweaking by the negation of the private key of the even y point
     # lands on the point at infinity, which has no x-only form
     with pytest.raises(ValueError, match="tweak or resulting public key"):
-        xonly.tweak_add(xonly.from_pubkey(mult.mult_bytes(1))[0], N - 1)
+        xonly.tweak_add(
+            xonly.from_pubkey(keys.pubkey_from_prvkey(1, compressed=False))[0], N - 1
+        )
     with pytest.raises(ValueError, match="tweak or resulting private key"):
         xonly.prvkey_tweak_add(1, N - 1)
 
@@ -441,7 +475,7 @@ def test_dsa_signature_forms() -> None:
     refused, and the DER rebuilt from the compact form still verifies.
     """
     prvkey = 7
-    pubkey_bytes = compress(mult.mult_bytes(prvkey))
+    pubkey_bytes = compress(keys.pubkey_from_prvkey(prvkey, compressed=False))
     der_bytes = dsa.sign(msg, prvkey)
 
     compact_bytes = dsa.to_compact(der_bytes)
@@ -474,7 +508,7 @@ def test_dsa_low_s() -> None:
     the original byte for byte and that verifies.
     """
     prvkey = 7
-    pubkey_bytes = compress(mult.mult_bytes(prvkey))
+    pubkey_bytes = compress(keys.pubkey_from_prvkey(prvkey, compressed=False))
     der_bytes = dsa.sign(msg, prvkey)
 
     # signatures are created in the normalized lower-s form
@@ -505,7 +539,7 @@ def test_dsa_verify_normalizes_when_it_is_told_to() -> None:
     is asserted here too, that being the promise the keyword is behind.
     """
     prvkey = 7
-    pubkey_bytes = compress(mult.mult_bytes(prvkey))
+    pubkey_bytes = compress(keys.pubkey_from_prvkey(prvkey, compressed=False))
     pubkey = keys.parse(pubkey_bytes)
     der_bytes = dsa.sign(msg, prvkey)
 
@@ -551,7 +585,9 @@ def test_size_checks_refuse_both_sides() -> None:
     the other edge, and the first mutation session found both checks
     surviving a `!=` turned into `>`.
     """
-    xonly_bytes, parity = xonly.from_pubkey(mult.mult_bytes(11))
+    xonly_bytes, parity = xonly.from_pubkey(
+        keys.pubkey_from_prvkey(11, compressed=False)
+    )
 
     # parse, reached through both entry points: 31 octets are none of the
     # three serializations, and libsecp256k1 is never handed them
@@ -575,7 +611,7 @@ def test_pubkey_verify_is_the_parse_with_nothing_kept() -> None:
     """
     prvkey = 11
     compressed = keys.pubkey_from_prvkey(prvkey)
-    uncompressed = mult.mult_bytes(prvkey)
+    uncompressed = keys.pubkey_from_prvkey(prvkey, compressed=False)
 
     for form in (compressed, uncompressed):
         assert keys.pubkey_verify(form)
@@ -607,7 +643,10 @@ def test_pubkey_sum_answers_the_infinity_combine_refuses() -> None:
     forms.
     """
     a, b = 3, 5
-    pubkey_a, pubkey_b = mult.mult_bytes(a), mult.mult_bytes(b)
+    pubkey_a, pubkey_b = (
+        keys.pubkey_from_prvkey(a, compressed=False),
+        keys.pubkey_from_prvkey(b, compressed=False),
+    )
 
     for compressed in (True, False):
         assert keys.pubkey_sum([pubkey_a, pubkey_b], compressed) == keys.pubkey_combine(
@@ -650,7 +689,12 @@ def test_xonly_pubkey_verify_and_to_pubkey_are_the_two_x_only_twins() -> None:
     x_only, parity = xonly.from_pubkey(pubkey)
     even_y = pubkey if parity == 0 else keys.pubkey_negate(pubkey)
 
-    for form in (x_only, pubkey, mult.mult_bytes(prvkey), keys.pubkey_negate(pubkey)):
+    for form in (
+        x_only,
+        pubkey,
+        keys.pubkey_from_prvkey(prvkey, compressed=False),
+        keys.pubkey_negate(pubkey),
+    ):
         assert xonly.pubkey_verify(form)
         assert xonly.to_pubkey(form) == even_y
         assert xonly.to_pubkey(form, compressed=False) == keys.reserialize(

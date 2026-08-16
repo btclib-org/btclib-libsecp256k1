@@ -7,15 +7,17 @@ a tag is generated from.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
-**Breaking: one entry point is gone, and every other break is a rename.**
+**Breaking: one module is gone, and every other break is a rename.**
 The public surface of these bindings speaks in octets, and the two
 changes are that sentence made true. The half of each call that speaks in
 libsecp256k1 objects is now private, spelled `_foo_` where it was `foo_`,
 and no behaviour changed with those names: a caller holding parsed keys
-renames what it calls. `mult.mult` is the one that went rather than moved,
-answering coordinates where every other entry point answers octets, and a
-caller of it has two lines to write. Everything else in the octets API is
-what it was.
+renames what it calls. The `mult` module is what went
+rather than moved: `mult.mult` answered coordinates where every other
+entry point answers octets, and what that left — `mult_bytes` — was
+`keys.pubkey_from_prvkey` with a flag fixed, so the module folded into
+the one it delegated to. A caller of either has one line to change, and
+everything else in the octets API is what it was.
 
 | module | was | is |
 | --- | --- | --- |
@@ -35,10 +37,10 @@ what it was.
 | `ellswift` | `encode_`, `decode_` | `_encode_`, `_decode_` |
 | `silentpayments` | `label_` | `_label_` |
 | `silentpayments` | `labeled_spend_pubkey_` | `_labeled_spend_pubkey_` |
-| `mult` | `mult_` | `mult_bytes` |
+| `mult` | `mult_`, `mult_bytes` | `keys.pubkey_from_prvkey` |
 | `mult` | `mult` | *gone: see below* |
 
-**What the removed one costs a caller.** `mult.mult` answered the pair of
+**What the removals cost a caller.** `mult.mult` answered the pair of
 coordinates as ints, which is the one place a point of the curve left this
 package as numbers instead of as a serialization. What it did is two
 `int.from_bytes` over the halves of `mult_bytes`, and they are 0.138
@@ -47,8 +49,16 @@ python frame that used to hold them cost in the other direction:
 
 ```diff
 -x, y = mult.mult(num)
-+sec = mult.mult_bytes(num)
++sec = keys.pubkey_from_prvkey(num, compressed=False)
 +x, y = int.from_bytes(sec[1:33], "big"), int.from_bytes(sec[33:], "big")
+```
+
+And `mult_bytes` is the call it always was, under the name of the module
+that makes it:
+
+```diff
+-sec = mult.mult_bytes(num)
++sec = keys.pubkey_from_prvkey(num, compressed=False)
 ```
 
 Three of the renamed take a different argument as well, the object having

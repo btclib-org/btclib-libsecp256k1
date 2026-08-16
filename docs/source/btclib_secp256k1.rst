@@ -46,13 +46,6 @@ btclib\_secp256k1.keys module
    :members:
    :show-inheritance:
 
-btclib\_secp256k1.mult module
------------------------------
-
-.. automodule:: btclib_secp256k1.mult
-   :members:
-   :show-inheritance:
-
 btclib\_secp256k1.recovery module
 ---------------------------------
 
