@@ -284,6 +284,40 @@ jobs:
       # is in step with pyproject.toml is asserted where it can be, by the
       # uv-lock hook on every commit and by `uv lock --check` in the
       # release workflow
+      # what a pull request has to answer about macOS and Windows is
+      # whether this tree still builds there, and that is answered by the
+      # first wheel: the toolchain, the CMake build of the vendored
+      # library and the cffi extension are what differ per platform, and
+      # they do not differ per interpreter. The other six wheels of those
+      # images are that build again for another ABI tag, and the four jobs
+      # they happen in were 39.0 of the 59.5 runner-minutes the six wheel
+      # jobs cost. Measured on the run of the change itself, those four
+      # came to 7.2: 14.4 and 5.7 on the two macOS images became 1.5 and
+      # 1.2, and 8.7 and 10.2 on the two Windows ones became 1.8 and 2.7.
+      #
+      # The two ubuntu images keep the whole set, because suite-static
+      # consumes it: what that job exists to check is pip's selection
+      # among a directory of wheels tagged for seven interpreters, and a
+      # directory holding one is not that question.
+      #
+      # A push to main, a release and a rehearsal all build everything --
+      # in a called workflow github.event_name is the caller's, which is
+      # never pull_request -- so the interpreter this does not reach on a
+      # branch is reached by the run that follows the merge, and the
+      # release publishes nothing this shortcut has touched
+      - name: Build one interpreter where a pull request only asks whether it builds
+        if: >-
+          github.event_name == 'pull_request'
+          && !startsWith(matrix.os, 'ubuntu')
+        # bash, and the two Windows images are the whole of the reason:
+        # the default shell there is PowerShell, where "$GITHUB_ENV" is
+        # not the variable but a literal, so this wrote a file of that
+        # name and cibuildwheel built all seven wheels anyway -- the step
+        # green, the log showing cp310 through cp314t, and only the
+        # unchanged job duration to say so
+        shell: bash
+        run: echo "CIBW_BUILD=cp314-*" >> "$GITHUB_ENV"
+
       - name: Build wheels
         run: uv run --frozen --only-group build cibuildwheel
 

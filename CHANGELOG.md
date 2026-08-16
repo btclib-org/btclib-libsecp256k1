@@ -848,6 +848,36 @@ release-notes length in the first place, and are still in
   list is stated once per job and read twice, by setup-python and by the
   loop, so a version in one and not the other is either an interpreter
   installed and never run or a run that fails on a missing executable
+- **A pull request builds one wheel on macOS and Windows, and the rest
+  after the merge** (#193). Of the 59.5 runner-minutes the six wheel jobs
+  cost, 39.0 were the four jobs that are not ubuntu. What a pull request
+  needs to know about a platform whose suite it no longer waits for is
+  whether this tree still builds there, and the first wheel answers it:
+  the toolchain, the CMake build of the vendored library and the cffi
+  extension are what differ per platform, and they do not differ per
+  interpreter. So on `pull_request` those four build `cp314-*` alone. The
+  two ubuntu images keep the whole set because `suite-static` consumes
+  it — pip's selection among a directory of wheels tagged for seven
+  interpreters is not a question a directory of one can be asked. A push
+  to `main`, a release and a rehearsal all build everything, in a called
+  workflow `github.event_name` being the caller's and never
+  `pull_request`, so no wheel a release publishes was built under the
+  shortcut. What is given up is the window between the two: a break
+  specific to one ABI tag on macOS or Windows sits on `main` until the
+  push run that follows the merge, instead of being refused at it.
+  Measured on the change's own run, those four jobs came to 7.2
+  runner-minutes: 14.4 and 5.7 on the two macOS images became 1.5 and 1.2,
+  8.7 and 10.2 on the two Windows ones became 1.8 and 2.7
+- **and the step that does it needs `shell: bash`, which the first run is
+  what said.** Without it the two Windows images run it in PowerShell,
+  where `"$GITHUB_ENV"` is not the variable but a literal, so
+  `echo "CIBW_BUILD=cp314-*" >> "$GITHUB_ENV"` wrote a file of that name
+  and cibuildwheel built all seven wheels anyway. Nothing failed: the step
+  was green, the log listed `cp310` through `cp314t`, and the only thing
+  that said so was a job duration that had not moved — 9.8 and 10.4
+  against a 8.7 and 10.2 baseline — while the macOS images, whose default
+  shell is bash, had already dropped to 1.5 and 1.2. A step that is green
+  while doing nothing is why the comment above it now carries this
 - **`github-release` needed `always()` too, not just an explicit `if`.**
   The previous fix (v0.8.0.2's own CHANGELOG entry, right below) added
   `needs.publish-pypi.result == 'success' && needs.attest.result ==
