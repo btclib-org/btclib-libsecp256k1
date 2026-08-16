@@ -613,6 +613,42 @@ leaves them off — **do not read that 200 as success.** The
 `detect-secrets` hook is the compensating control, and CONTRIBUTING.md
 carries what maintaining its baseline costs.
 
+The other plan-gated number is not a setting at all, and it is the one
+that has moved this repository's workflows twice: how many jobs may run
+at once. It is an attribute of the organization, shared by every
+repository in it, and the plan is what sets it.
+
+```shell
+gh api orgs/btclib-org --jq .plan.name        # free
+```
+
+[GitHub's own table](https://docs.github.com/en/actions/reference/limits)
+is the authority, and two of its columns matter here:
+
+| plan | concurrent jobs | of which macOS |
+| --- | --- | --- |
+| Free | 20 | 5 |
+| Pro | 40 | 5 |
+| Team | 60 | 5 |
+| Enterprise | 500 | 50 |
+
+**Read the second column before spending anything on the first.** The
+twenty is what `windows.yml`'s header measured against, and paying for
+Team would triple it; the five is what `macos.yml`'s header measured
+against, and Team does not move it at all. A macOS column that queued for
+tens of minutes was thirty-five jobs asking for five slots, and only
+Enterprise changes that arithmetic. So the split that took those cells
+out of the merge gate is not a workaround for a plan — on this repository
+it is the answer, and the plan below Enterprise that would undo it does
+not exist.
+
+What Team would buy is the rest: the Linux and Windows crowding, and the
+contention with the other repositories of the organization, `btclib`
+asking for thirty-nine jobs a commit and `bitcoin-core-rpc` for
+forty-four. Whether that is worth three seats is a question for whoever
+pays for them, and it is recorded here so that it is asked with the
+second column in view.
+
 ## Topics
 
 The topics are `pyproject.toml`'s `keywords`, entry for entry: one list

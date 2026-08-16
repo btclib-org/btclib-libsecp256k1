@@ -796,6 +796,18 @@ release-notes length in the first place, and are still in
   expected the other outcome, and the two pull requests that landed the
   rule went the way it now describes
 
+- **The concurrency ceiling is written down, with the column that
+  decides it** (#194). REPOSITORY.md's plan-gated section now carries the
+  number that has moved these workflows twice, and it is an attribute of
+  the organization rather than a setting of the repository: an
+  organization on GitHub Free runs twenty jobs at once, **of which five
+  may be macOS**. Paying for Team triples the first and leaves the second
+  exactly where it is; only Enterprise moves it. So the macOS column that
+  queued for tens of minutes was thirty-five jobs asking for five slots,
+  and the split that took those cells out of the merge gate is not a
+  workaround for a plan but the answer on any plan below Enterprise —
+  which is worth having written down before someone reads the first
+  column alone and buys a seat expecting it back
 - **The sentinel table names `windows` too** (#184). `windows.yml` became
   a workflow of its own two changes after `macos.yml` did, and the table
   in CLAUDE.md kept listing the sentinels without it — so the paragraph
