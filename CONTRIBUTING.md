@@ -575,20 +575,40 @@ has moved — and it wants the gates re-run after it, not only before, and a
 note in the pull request saying the head moved.
 
 Nothing is lost in `main`'s history by working that way, because a pull
-request is squashed on merge: the branch lands as one commit whose subject
-is the pull request title with its number, so the review's commits are the
-record of the review and `main` keeps one commit per landed change. It is
-the only merge button this repository enables, so which one is used is a
-setting rather than a choice made at the merge; REPOSITORY.md has that
-setting and what the other two would have cost.
+request lands as one commit: a branch of several is squashed into one
+whose subject is the pull request title with its number, so the review's
+commits are the record of the review and `main` keeps one commit per
+landed change. A merge commit would put the branch's steps into `main`
+and a rebase merge would replay them one by one — `main` is linear by
+branch rule, and one change is one commit there.
 
-Auto-merge had that choice to make earlier and no longer does, the dialog
-that switches it on carrying one method: what a pull request set to merge
-itself once the checks go green is holding is still
+**How that commit reaches `main` is a push rather than a button**, which
+is the maintainer's own path and needs the `main-self-merge` bypass no
+contributor has: REPOSITORY.md describes it, squashing the branch locally
+where it carries more than one commit and fast-forwarding it. Two things
+about it are worth knowing from here. The commit that lands is signed by
+the maintainer rather than by GitHub's web-flow key; and where your
+branch is already a single commit and needs no rebase to land, its sha
+does not change, so `main` receives the very commit the gates ran on and
+a branch stacked on it keeps applying. A rebase moves the sha like any
+other force-push, which is why the gates are asked for after one and not
+only before. Neither changes the shape of a correction: whether a branch
+is squashed or fast-forwarded is decided when it lands, and by then the
+review has its record either way.
+
+Squash is the only merge *button* this repository enables, so there is no
+other to read; REPOSITORY.md has that setting, what the other two would
+have cost, and the fast-forward that is not a button at all. Auto-merge is
+what presses it, the dialog that switches it on carrying one method: what
+a pull request set to merge itself once the checks go green is holding is
+still
 `gh pr view <n> --json autoMergeRequest`. Enabling it is the way to not
-wait for a matrix that compiles C on every platform; GitHub only offers it
-while something is still pending, and it merges nothing the branch rule
-would not have let through by hand.
+wait for a matrix that compiles C on every platform, and what it costs is
+the paragraph above: GitHub signs what it composes, so a pull request
+left to merge itself lands a commit signed by the web-flow key rather
+than by the maintainer, and one whose sha the branch never carried.
+GitHub only offers it while something is still pending, and it merges
+nothing the branch rule would not have let through by hand.
 
 Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.

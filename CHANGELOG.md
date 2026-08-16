@@ -737,6 +737,52 @@ release-notes length in the first place, and are still in
   the entry above rather than a signer that spares it: the DER
   serialization is 0.757 of those microseconds, and `compact=True`
   answers the 64 octets without writing it
+- **Four files said a button is how a pull request lands; none of them
+  is** (#176). A pull request reaches `main` as a fast-forward push from
+  the command line, squashed locally first where it carries more than one
+  commit, which is what keeps the commit signed by the maintainer rather
+  than by GitHub's web-flow key — and, where the head that lands is the
+  one the gates last ran on, keeps that sha, so a branch stacked on it
+  goes on applying instead of needing a rebase and a fresh run of the
+  matrix per level. `REPOSITORY.md`'s *Merge methods* said "squash is the only
+  method enabled", true of the setting and read as a description of the
+  landing; `CONTRIBUTING.md` said "a pull request is squashed on merge …
+  the only merge button this repository enables"; `RELEASING.md` merged
+  the release "with the squash button"; and `CLAUDE.md` said all three
+  buttons were enabled, which stopped being true when squash became the
+  only one. The twin change for btclib is
+  <https://github.com/btclib-org/btclib/pull/944>, whose merge rule
+  differs in the multi-commit case: the squash is made locally here
+  rather than pressed.
+- **and the ruleset that lets that push through had no section at all.**
+  REPOSITORY.md documented the classic branch protection and never the
+  two rulesets beside it, so the bypass the fast-forward needs was
+  reachable from the prose only through one clause of CONTRIBUTING.md.
+  It now has one: `main-integrity` carries the four rules with no bypass
+  actor, `main-self-merge` carries the pull request rule and names the
+  maintainer, and the split is what lets the review be bypassed — GitHub
+  refusing a self-approval — while a signature stays required of
+  everybody — though not the whole of the permission either, a push to
+  `main` needing `enforce_admins` to stay `false` and the pusher to hold
+  `admin` before the bypass is reached at all.
+
+  The sequence is there with it, and so is what GitHub does afterwards,
+  which is two different things and was written as one. A pull request is
+  marked merged when its head becomes reachable from the base branch, so
+  what decides is whether the commit pushed to `main` is the sha the pull
+  request names at that moment — not whether a rebase happened, a rebase
+  force-pushed to the branch leaving it naming the new one. Push the
+  squash to the branch before landing it and the squashed branch is the
+  reconciled case too, with the matrix running on the object that lands:
+  #185 did that and was marked **Merged**, its head branch deleted by
+  `delete_branch_on_merge` a second later. Land the squash straight from
+  a worktree and nothing is reconciled and nothing is deleted — btclib's
+  #953 is **Closed** with `mergedAt: null`, its issue closed by the
+  keyword in the *commit message*, which is the reason for putting it
+  there. Getting ahead of the reconciliation costs the same thing btclib
+  paid on #930: branch deleted first, pull request Closed with its commit
+  on `main` all the same. Two counts were stale besides, both saying four
+  required checks where the rule has named three since `codeql` left it
 
 - **The sentinel table names `windows` too** (#184). `windows.yml` became
   a workflow of its own two changes after `macos.yml` did, and the table

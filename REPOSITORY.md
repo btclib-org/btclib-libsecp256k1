@@ -270,7 +270,7 @@ would change the answer.
 
 ## Branch protection
 
-`main`, all of it read from the endpoint above: `strict` with the four
+`main`, all of it read from the endpoint above: `strict` with the three
 checks already described, one approving review with
 `dismiss_stale_reviews`, **required signatures**, linear history, no force
 pushes, no deletions, `required_conversation_resolution`, and
@@ -309,6 +309,101 @@ branch it protected. Nothing was weakened by that: what it guarded was a
 trunk a pull request did not have to pass through, and every change now
 reaches `main` through the rules above.
 
+## The rulesets, and the push their bypass is for
+
+Two rulesets sit on `main` beside that protection, and what separates
+them is who may bypass:
+
+```shell
+gh api repos/btclib-org/btclib-secp256k1/rulesets \
+  --jq '.[] | "\(.name) \(.enforcement) bypass=\(.bypass_actors | length)"'
+```
+
+`main-integrity` is the four CONTRIBUTING.md names — a verified
+signature, linear history, no force push, no branch deletion — with **no
+bypass actor at all**, which is what makes "on every commit, not at
+review time" true of an administrator too, `enforce_admins` above being
+off. `main-self-merge` is the pull request rule, and names the maintainer
+as one; the listing above answers each ruleset's id, and the rules and
+the bypass of either are read from it:
+
+```shell
+gh api repos/btclib-org/btclib-secp256k1/rulesets/<id> \
+  --jq '{rules: [.rules[].type], bypass: [.bypass_actors[].actor_type]}'
+```
+
+The split is the point of there being two. The review is the rule a solo
+maintainer cannot satisfy, GitHub refusing a self-approval; the integrity
+four are the rules nobody should be able to. One ruleset each is what
+lets the first be bypassed without the second going with it.
+
+**What the bypass is for is a push, not a button.** A reviewed branch
+reaches `main` from the command line:
+
+```shell
+git fetch origin && git rebase origin/main   # replayed on the tip
+git log --format='%h %G?' origin/main..      # every commit G, none N
+git push origin HEAD:main                    # a fast-forward, nothing rewritten
+```
+
+Where the branch carries more than one commit it is squashed into a
+single signed commit first — `git reset --soft origin/main && git
+commit`, with `--author` where the branch is somebody else's, GitHub's
+button being what would otherwise have kept their name on it — and that
+commit is what the push fast-forwards.
+
+**The bypass is not the whole of the permission.** The protection above
+still carries `required_pull_request_reviews` and its `strict` required
+checks, and what a push to `main` clears those with is `enforce_admins`
+being `false` and the pusher holding `admin`; the ruleset bypass alone
+would not be enough. So the path depends on two settings and not one,
+and the fragile one is that: turning `enforce_admins` on closes the
+fast-forward whatever the ruleset says, and moving the review
+requirement onto a ruleset of its own is what would leave the bypass
+answering for all of it.
+
+What this buys is what no button can give. GitHub composes a squash
+server-side and signs it with its own web-flow key, so the commit that
+lands is `verified` with GitHub as the signer; a push signs nothing and
+has nothing to sign, the commit arriving with the signature it already
+carried. And where the branch was a single commit and the rebase moved
+nothing, its sha does not change either, so `main` receives the very
+commit the gates ran on and a branch stacked on that one keeps applying
+instead of needing a rebase and a fresh run of the matrix per level.
+Where the rebase did move it, re-running the gates after it is what buys
+that back — and it is discipline on this path rather than a rule, the
+`strict` above being one of the things the push clears. What `strict`
+holds is the merge nobody performs here.
+
+**Whether GitHub reconciles the push depends on one thing: whether what
+lands is the sha the pull request names at that moment**, a pull request
+being marked merged when its head becomes reachable from the base
+branch.
+
+- **it names what lands** — the branch's own head is fast-forwarded,
+  whether it reached that shape as one commit or as a squash **pushed to
+  the branch first**, and a rebase force-pushed to the branch is this
+  case too. GitHub marks the pull request **Merged** on its own, and the
+  `Closes #N` in its description closes the issue.
+- **it names something else** — the squash or the rebase was made
+  locally and pushed straight to `main`. What lands is an object no pull
+  request names, so nothing is reconciled: close it by hand, and let the
+  issue close from the `Closes #N` in the *commit message*, which is the
+  reason for the keyword to be there and not only in the description.
+
+Which is an argument for pushing the squash to the branch before landing
+it, where the branch is one whose head may move: the matrix then runs on
+the very object that will land rather than on a head that never will,
+and the reconciliation does the closing. Measured in btclib the other
+way, on the day this was written:
+<https://github.com/btclib-org/btclib/pull/953> was squashed locally and
+pushed straight to `main`, landing as `7f7a269b` — signed by the
+maintainer, so both halves of the rule worked — and is **Closed** with
+`mergedAt: null`, its issue having closed twenty-two seconds earlier
+from the commit message. Which of the two happened is also what decides
+when the head branch goes, and "Head branches after a merge" below is
+where that is.
+
 ## Head branches after a merge
 
 `delete_branch_on_merge` is on, since 7 August 2026:
@@ -331,10 +426,26 @@ branch is never deleted, protection winning over it — which used to reach
 the release pull request, whose head branch was protected. No head branch
 is protected now.
 
+**It reaches one of the two landings above**, and which one is the
+reconciliation again — the setting hangs on the merge GitHub records, so
+it fires wherever GitHub records one:
+
+- **the pull request named what landed**: nothing to do. Measured on
+  <https://github.com/btclib-org/btclib-secp256k1/pull/185>, whose
+  squash was pushed to the branch and then fast-forwarded: marked Merged
+  at 12:39:19 and `head_ref_deleted` at 12:39:20, with nobody asking.
+  What is left is not to get ahead of it — deleting the branch before
+  the reconciliation is what leaves a pull request Closed with its
+  commit on `main` all the same, as btclib's
+  <https://github.com/btclib-org/btclib/pull/930> came out.
+- **it named something else** — the squash or the rebase went straight
+  to `main`: nothing is reconciled, so nothing is deleted either. Close
+  the pull request by hand and delete the branch with it.
+
 ## Merge methods
 
-**Squash is the only method enabled**, so it is a setting and not only the
-convention CONTRIBUTING.md states:
+**Squash is the only *button* enabled**, so it is a setting and not only
+the convention CONTRIBUTING.md states:
 
 ```shell
 gh api repos/btclib-org/btclib-secp256k1 \
@@ -342,6 +453,13 @@ gh api repos/btclib-org/btclib-secp256k1 \
 ```
 
 answers `true` for the first and `false` for the other two.
+
+A button is not how a pull request lands here, and this section named one
+as if it were: every merge is the fast-forward above, and the squash the
+branch may need first is made locally. What that leaves the setting doing
+is bounding the damage of a landing nobody drove from a shell — auto-merge
+below is the one that reaches the button, and GitHub's key is what signs
+what it presses.
 
 The merge commit was refused by `main`'s required linear history already,
 so turning it off takes away a button that could not have worked. The
@@ -366,7 +484,7 @@ gh api repos/btclib-org/btclib-secp256k1 --jq '.allow_auto_merge'
 It bypasses nothing, and it is not the admin escape hatch above: GitHub
 offers the button **only on a pull request that cannot be merged
 immediately**, and then merges it when the last thing blocking it clears —
-one of the four required checks, the approving review, an unresolved
+one of the three required checks, the approving review, an unresolved
 conversation. Where nothing is pending there is nothing to wait for and the
 button is not offered at all, so this setting does something here precisely
 because the rule on `main` is what it is: the matrix is tens of jobs
@@ -374,21 +492,29 @@ compiling C, and `test.yml`'s header measures what waiting for it costs.
 
 **Required signatures survive it**, measured rather than assumed, because
 GitHub composes the squash commit server-side and signs it with its own key
-exactly as the merge button does. A merge from the CLI is where that stops
-being true — `--rebase --admin` replays the author's commits as they were,
-unsigned — so the check is worth making on whatever landed:
+exactly as the merge button does — its own key and not the author's, which
+is the trade this setting makes and the fast-forward above is what does
+not make it. Nor does every landing from a shell keep a signature:
+`gh pr merge --rebase --admin` replays the author's commits as they were,
+unsigned, where a fast-forward moves commits that were signed before it
+was run. So the check is worth making on whatever landed, whichever way it
+got there:
 
 ```shell
 gh api repos/btclib-org/btclib-secp256k1/commits/<sha> \
   --jq '.commit.verification | {verified, reason}'
 ```
 
-**The merge method was chosen here, when auto-merge was switched on rather
-than when the merge happened.** That dropdown carries one entry now, squash
-being the only method enabled — "Merge methods" above is the setting and
+**What auto-merge will press was chosen when it was switched on, rather
+than when the merge happened.** That dropdown carries one entry, squash
+being the only button enabled — "Merge methods" above is the setting and
 the reason — so switching auto-merge on answers nothing a reviewer has to
-catch before it lands. What a pull request is holding is still worth
-reading, the wait itself being what this bypasses:
+catch before it lands. The fast-forward is not in the dropdown at all,
+being a push: a pull request left to merge itself is one that will not
+land that way, and what it costs is the signature on the commit. Not
+waiting for a matrix that compiles C on every platform is what is bought
+with it. What a pull request is holding is still worth reading, the wait
+itself being what this bypasses:
 
 ```shell
 gh pr view <n> --json autoMergeRequest

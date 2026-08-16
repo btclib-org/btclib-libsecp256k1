@@ -148,13 +148,26 @@ Then:
    accurate without an edit.
 
    Then merge it into `main` with a green CI. It is an ordinary pull
-   request against the only branch there is, and it merges the way every
-   other one here does: with the squash button, which is the only one the
-   repository enables — a merge commit was refused by `main`'s required
-   linear history anyway, and REPOSITORY.md has what the rebase merge
-   would have cost.
+   request against the only branch there is, and it lands the way every
+   other one here does: squashed locally into one signed commit where it
+   carries more than one — a version bump and two retitles, not a cycle
+   of work — and fast-forwarded onto `main` from the command line,
+   REPOSITORY.md having the sequence and the bypass it needs.
 
-   What that button cannot cost any more is the history of a cycle. It
+   The button is the wrong landing on this pull request in particular,
+   and not merely a second-best one: it is the release commit that gets
+   tagged, and a squash composed by GitHub would leave the tag over a
+   commit signed by the web-flow key rather than by the maintainer.
+
+   This branch is the squashed case every time — a version bump and two
+   retitles is never one commit — so push the squash to the branch before
+   fast-forwarding it, and the gates below run on the object that lands
+   and GitHub still marks the pull request Merged. Land the squash
+   straight from a worktree instead and nothing is reconciled: the pull
+   request has to be closed by hand, which is a surprise worth not having
+   between here and the tag. REPOSITORY.md has both outcomes.
+
+   What no landing here can cost any more is the history of a cycle. It
    could once: 0.7.1 was *Squash and merge* on a release pull request
    carrying ninety-two commits from a development branch, and it left one
    commit where ninety-two records of a decision had been. The trees were
