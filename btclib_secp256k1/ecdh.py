@@ -12,7 +12,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import scalar
 from ._secret import take
-from .context import ctx, guarded
+from .context import ctx
 
 
 @overload
@@ -50,24 +50,31 @@ def _shared_secret_(
         point as `shared_secret` documents it -- or None where `into`
         was given and holds it.
 
+        **A key libsecp256k1 cannot read answers 32 bytes here too, and
+        they are a shared secret with nobody.** A `secp256k1_pubkey`
+        nothing has written to is reported through the illegal callback,
+        which this does not read, and the call succeeds: nothing raises
+        and nothing about the answer says it is worthless. That is the
+        one place in this package where an unusable object produces a
+        value a caller could take for a secret, and `context.check`
+        immediately after the call is the only thing that says
+        otherwise. `shared_secret` parses the octets it is given and so
+        has no such case; a caller holding a key of its own has it, and
+        proving that key once with `keys.pubkey_verify` is what removes
+        it.
+
     Raises:
         TypeError: if `into` is not a writable bytearray or memoryview
             of octets.
         ValueError: if the private key is not 32 bytes, does not fit in
-            them, is not a valid scalar, or if the object is not a public
-            key libsecp256k1 will read; see `context.guarded`, without
-            which an unreadable key would answer success and 32 bytes
-            that are a shared secret with nobody.
+            them, or is not a valid scalar.
     """
     prvkey_bytes = scalar(prvkey, "private key")
 
     output = ffi.new("char[32]")
     # a NULL hash function selects secp256k1_ecdh_hash_function_sha256,
     # which writes 32 bytes to output
-    with guarded():
-        computed = lib.secp256k1_ecdh(
-            ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL
-        )
+    computed = lib.secp256k1_ecdh(ctx, output, pubkey, prvkey_bytes, ffi.NULL, ffi.NULL)
     if not computed:
         raise ValueError("invalid private key")
     return take(output, into=into)

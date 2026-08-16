@@ -35,7 +35,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import in_range, octets, scalar
 from ._secret import keypair, take, wipe
-from .context import ctx, guarded
+from .context import ctx
 
 # the x-only serialization, which is the whole of the key: the other
 # two lengths this module takes are a full public key, whose x it is
@@ -57,17 +57,18 @@ def _drop_y(pubkey: CData) -> tuple[CData, int]:
         y that was dropped: 0 for even, 1 for odd.
 
     Raises:
-        ValueError: if the object is not a public key libsecp256k1 will
-            read; see `context.guarded`.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to convert for any other reason,
+            which a key it produced cannot make it do. `context.check`
+            is what tells the two apart.
         RuntimeError: if libsecp256k1 fails for any other reason, which
             no valid key can make it do.
     """
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
-    with guarded():
-        converted = lib.secp256k1_xonly_pubkey_from_pubkey(
-            ctx, xonly_pubkey, parity, pubkey
-        )
+    converted = lib.secp256k1_xonly_pubkey_from_pubkey(
+        ctx, xonly_pubkey, parity, pubkey
+    )
     if not converted:
         raise RuntimeError("x-only public key conversion failed")
     return xonly_pubkey, parity[0]
@@ -88,8 +89,6 @@ def _from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
         odd.
 
     Raises:
-        ValueError: if the object is not a public key libsecp256k1 will
-            read; see `context.guarded`.
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
@@ -181,17 +180,16 @@ def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
         ValueError: if the object is not a keypair libsecp256k1 will read
             -- a NULL pointer, or one that has been wiped, which is
             reported as the zero it holds where the x of a point should
-            be; see `context.guarded`.
+            be. That is a RuntimeError here rather than a ValueError,
+            libsecp256k1 answering the same 0 for it as for a failure of
+            its own, and `context.check` is what tells the two apart.
         RuntimeError: if libsecp256k1 fails for any other reason, or
             fails to serialize the result, which a keypair it built
             cannot make it do.
     """
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
-    with guarded():
-        converted = lib.secp256k1_keypair_xonly_pub(
-            ctx, xonly_pubkey, parity, keypair_obj
-        )
+    converted = lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair_obj)
     if not converted:
         raise RuntimeError("x-only public key conversion failed")
     return serialize(xonly_pubkey), parity[0]
@@ -223,8 +221,9 @@ def _tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
     Raises:
         ValueError: if the tweak is not 32 bytes or does not fit in them,
             if the tweak or the resulting key is invalid, or if the
-            object is not a public key libsecp256k1 will read; see
-            `context.guarded`.
+            object is not a public key libsecp256k1 will read, those
+            last two being one message here -- `context.check` is what
+            tells them apart.
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             result, which no valid input can make it do.
     """
@@ -563,16 +562,16 @@ def serialize(xonly_pubkey: CData) -> bytes:
         The 32-byte x coordinate.
 
     Raises:
-        ValueError: if the object is not an x-only public key
-            libsecp256k1 will read -- a NULL pointer, or a
-            `secp256k1_xonly_pubkey` nothing has written to; see
-            `context.guarded`.
+        RuntimeError: if libsecp256k1 refuses the object -- a NULL
+            pointer, or a `secp256k1_xonly_pubkey` nothing has written
+            to -- or fails for any other reason, which a key it produced
+            cannot make it do. `context.check` is what tells the two
+            apart.
         RuntimeError: if libsecp256k1 fails for any other reason, which
             a key it produced cannot make it do.
     """
     output = ffi.new(f"char[{_XONLY_SIZE}]")
-    with guarded():
-        serialized = lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey)
+    serialized = lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey)
     if not serialized:
         raise RuntimeError("x-only public key serialization failed")
     return ffi.unpack(output, ffi.sizeof(output))

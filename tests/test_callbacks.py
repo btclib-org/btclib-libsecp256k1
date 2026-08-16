@@ -5,13 +5,25 @@
 
 """Tests of what libsecp256k1 reports through the callbacks of the context.
 
-An illegal argument is reachable through `lib`, and through the two
-wrappers that take a libsecp256k1 object rather than bytes -- a public
-key for `keys.serialize`, a keypair for `xonly.from_keypair`; all three
-are driven here. An internal error is not: libsecp256k1 reports through that
-callback what it holds to be unreachable, so the recording function is
-called directly, the way test_extension.py drives the branch of the
-loader that the build it runs on does not have.
+No wrapper reads those callbacks, so what they record is `context.check`'s
+to raise and nobody else's. Two halves are tested here. That `check`
+itself reports, clears and attributes per thread; and that a wrapper
+handed an object libsecp256k1 cannot read answers *something* -- its own
+exception where a return code allowed one, and otherwise a value that
+means nothing -- while leaving the reason on the thread for a `check`
+that follows.
+
+The second half is the contract a caller has to know, so each of its
+shapes is driven rather than described: a raise whose message is the
+wrapper's own, a `False` from a verification, an ordering from a
+comparison, and 32 bytes from an ECDH that succeeded with nobody. The
+public entry points are the counter-case, parsing their octets and so
+leaving the thread clean.
+
+An internal error is reachable through neither: libsecp256k1 reports
+through that callback what it holds to be unreachable, so the recording
+function is called directly, the way test_extension.py drives the branch
+of the loader that the build it runs on does not have.
 """
 
 from __future__ import annotations
@@ -20,7 +32,7 @@ import threading
 
 import pytest
 
-from btclib_secp256k1 import context, ffi, keys, lib, ssa, xonly
+from btclib_secp256k1 import context, dsa, ecdh, ffi, keys, lib, ssa, xonly
 from btclib_secp256k1.context import ctx
 
 # a public key libsecp256k1 is asked to parse into nowhere: the bindings
@@ -62,88 +74,130 @@ def test_check_clears_what_it_reported() -> None:
     context.check()
 
 
-def test_serialize_raises_what_was_reported() -> None:
-    """`keys.serialize` raises the message, rather than a bare failure.
+def test_serialize_raises_its_own_failure() -> None:
+    """`keys.serialize` raises a bare failure, and the reason is on the thread.
 
     It takes the libsecp256k1 object the caller holds, so there is
     nothing to check about it before the call and the precondition is
-    libsecp256k1's to violate. A NULL pointer is the shortest way there;
-    what comes back names it.
+    libsecp256k1's to violate. What reaches the caller is this wrapper's
+    RuntimeError, the return code being all it read; which precondition
+    was violated is what `check` answers after it, and a NULL pointer is
+    the shortest way there.
     """
-    with pytest.raises(ValueError, match="illegal argument: pubkey != NULL"):
+    with pytest.raises(RuntimeError, match="point serialization failed"):
         keys.serialize(ffi.NULL)
+    with pytest.raises(ValueError, match="illegal argument: pubkey != NULL"):
+        context.check()
 
 
-def test_serialize_leaves_nothing_on_the_thread() -> None:
-    """And what it raised is not left for the next caller to be blamed for.
+def test_serialize_leaves_the_reason_on_the_thread() -> None:
+    """And it leaves it there whether or not anybody comes to read it.
 
     A `secp256k1_pubkey` nothing has written to is the reachable form of
     the mistake: the message is about the zero field it finds, not about
-    a pointer. Left on the thread, it would come back out of the next
-    `check` -- which is the one a MuSig2 caller makes through `lib`,
-    about a call of their own.
+    a pointer. Nothing clears it but a `check`, so the next one reports
+    this call's message -- which is why `context.check` documents itself
+    as belonging immediately after the call it explains.
     """
-    with pytest.raises(ValueError, match="illegal argument"):
+    with pytest.raises(RuntimeError, match="point serialization failed"):
         keys.serialize(ffi.new("secp256k1_pubkey *"))
-    # raising it took it off the thread: this reports nothing
-    context.check()
+    with pytest.raises(ValueError, match="illegal argument: !secp256k1_fe"):
+        context.check()
 
 
-def test_from_keypair_raises_what_was_reported() -> None:
-    """`xonly.from_keypair` raises the message, as `keys.serialize` does.
+def test_from_keypair_raises_its_own_failure() -> None:
+    """`xonly.from_keypair` does as `keys.serialize` does, and for its reason.
 
     It takes the keypair the caller holds, so the precondition is
-    libsecp256k1's to violate here too. A NULL pointer names itself; a
-    wiped keypair is the reachable mistake, and what libsecp256k1 reports
-    of it is the zero it finds where the x of a point should be. Neither
-    is left on the thread: the `check` after each reports nothing.
+    libsecp256k1's to violate here too, and the conversion answering 0
+    is all this wrapper reads. A NULL pointer names itself; a wiped
+    keypair is the reachable mistake, and what libsecp256k1 reports of it
+    is the zero it finds where the x of a point should be.
     """
-    with pytest.raises(ValueError, match="illegal argument: keypair != NULL"):
+    with pytest.raises(RuntimeError, match="x-only public key conversion failed"):
         xonly.from_keypair(ffi.NULL)
-    context.check()
+    with pytest.raises(ValueError, match="illegal argument: keypair != NULL"):
+        context.check()
 
     signer = ssa.Signer(7)
     keypair = signer._keypair
     signer.wipe()
-    with pytest.raises(ValueError, match="illegal argument: !secp256k1_fe_is_zero"):
+    with pytest.raises(RuntimeError, match="x-only public key conversion failed"):
         xonly.from_keypair(keypair)
+    with pytest.raises(ValueError, match="illegal argument: !secp256k1_fe_is_zero"):
+        context.check()
+
+
+def test_verification_of_an_unreadable_key_is_false_not_a_verdict() -> None:
+    """`dsa._verify_` answers False for a key libsecp256k1 cannot read.
+
+    The same False a signature that does not verify gets, and the
+    difference is on the thread rather than in the answer. This is the
+    shape a caller has to know about: nothing raises, so a caller passing
+    objects of its own reads a verdict that was never reached.
+    """
+    prvkey = (7).to_bytes(32, "big")
+    msg = bytes(range(32))
+    signature = dsa.parse_der(dsa.sign(msg, prvkey))
+
+    assert dsa._verify_(msg, ffi.new("secp256k1_pubkey *"), signature) is False
+    with pytest.raises(ValueError, match="illegal argument"):
+        context.check()
+
+
+def test_ecdh_with_an_unreadable_key_answers_a_secret_with_nobody() -> None:
+    """`ecdh._shared_secret_` answers 32 bytes, and they are worth nothing.
+
+    The gravest shape of the same contract, and the reason it is pinned
+    here: the call succeeds, the answer is the right length, and nothing
+    about it says the public key was one libsecp256k1 refused. Only the
+    thread says so.
+    """
+    secret = ecdh._shared_secret_(ffi.new("secp256k1_pubkey *"), 7)
+
+    assert isinstance(secret, bytes)
+    assert len(secret) == 32
+    with pytest.raises(ValueError, match="illegal argument"):
+        context.check()
+
+
+def test_comparison_of_unreadable_keys_is_an_ordering_like_any_other() -> None:
+    """`keys._pubkey_cmp_` answers zero for two objects it could not read.
+
+    Which is what it answers for two keys that are equal. The sum has the
+    same shape and is checked with it: `_pubkey_sum_` answers None for the
+    point at infinity and None for a key libsecp256k1 refused.
+    """
+    blank = ffi.new("secp256k1_pubkey *")
+
+    assert keys._pubkey_cmp_(blank, blank) == 0
+    with pytest.raises(ValueError, match="illegal argument"):
+        context.check()
+
+    assert keys._pubkey_sum_([ffi.NULL]) is None
+    with pytest.raises(ValueError, match="illegal argument"):
+        context.check()
+
+
+def test_the_public_entry_points_leave_the_thread_clean() -> None:
+    """A caller who passes octets cannot reach any of that.
+
+    `verify` and `pubkey_tweak_add` parse what they are given, so the
+    objects they hand libsecp256k1 are ones it has just built: a bad key
+    is refused by the parse, with this package's own message, and nothing
+    is recorded on the thread. That is the whole of why the shapes above
+    belong to the private halves alone.
+    """
+    msg = bytes(range(32))
+    not_a_point = b"\x02" + bytes(32)
+
+    with pytest.raises(ValueError, match="invalid public key"):
+        keys.pubkey_tweak_add(not_a_point, 7)
     context.check()
 
-
-def test_guarded_clears_before_the_call_it_holds() -> None:
-    """Entering the block takes an earlier call's message off the thread.
-
-    Without that, the block would raise what something else provoked,
-    which is the misattribution the guard exists to prevent -- and the
-    call it holds need not have failed, or even have happened.
-    """
-    assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
-    with context.guarded():
-        pass
-    # leaving raised nothing, so entering had cleared what was there
-
-
-def test_guarded_does_not_replace_the_exception_of_its_own_block() -> None:
-    """An exception out of the block passes through, and is not the guard's.
-
-    The check is deliberately not in a `finally`: the block holds the
-    guarded call and nothing else, so an exception out of it is some
-    other failure, and raising the violated precondition instead would
-    report the wrong one and lose the right one. What libsecp256k1 said
-    stays on the thread, for the next `__enter__` to clear.
-    """
-
-    def fail_after_libsecp256k1_has_reported() -> None:
-        """Provoke a precondition, then fail for an unrelated reason."""
-        with context.guarded():
-            assert not lib.secp256k1_ec_pubkey_parse(ctx, *NOWHERE_ARGS)
-            raise KeyError("what actually failed")
-
-    with pytest.raises(KeyError, match="what actually failed"):
-        fail_after_libsecp256k1_has_reported()
-    # the precondition was recorded and left, rather than raised over it
-    with pytest.raises(ValueError, match="pubkey != NULL"):
-        context.check()
+    with pytest.raises(ValueError, match="invalid public key"):
+        dsa.verify(msg, not_a_point, dsa.sign(msg, 7))
+    context.check()
 
 
 def test_internal_error() -> None:

@@ -23,7 +23,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
 from ._secret import take
-from .context import ctx, guarded
+from .context import ctx
 
 
 @overload
@@ -261,19 +261,22 @@ def _verify_(
             rather than reject a signature that is not in it.
 
     Returns:
-        True if the signature is valid for that key and message.
+        True if the signature is valid for that key and message -- and
+        False where libsecp256k1 could not read one of the two objects,
+        which is the same answer it gives a signature that simply does
+        not verify. This raises nothing for it: a caller passing objects
+        of its own is the one that can be handed an unreadable one, and
+        `context.check` immediately after the call is what says the
+        False is not a verdict. `verify` parses both from octets and so
+        has no such case.
 
     Raises:
-        ValueError: if the message hash is not 32 bytes, or if either
-            object is not one libsecp256k1 will read; see
-            `context.guarded`, without which an unreadable key would
-            answer False, which is a verdict a caller would believe.
+        ValueError: if the message hash is not 32 bytes.
     """
     msg_bytes = octets(msg_bytes, "message hash", 32)
     if normalize:
         _normalize_(signature)
-    with guarded():
-        verified = lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey)
+    verified = lib.secp256k1_ecdsa_verify(ctx, signature, msg_bytes, pubkey)
     return bool(verified)
 
 
@@ -344,18 +347,15 @@ def _normalize_(signature: CData) -> CData:
     Returns:
         The same object passed in, with s replaced by n - s where s was
         the higher of the two. A signature already normalized is left as
-        it is.
-
-    Raises:
-        ValueError: if the object is not a signature libsecp256k1 will
-            read; see `context.guarded`.
+        it is, and so is one libsecp256k1 cannot read: this raises
+        nothing, and `context.check` immediately after the call is what
+        says which of the two happened.
     """
     # libsecp256k1 takes the same object as input and output here,
     # documenting sigout == sigin. The return value says whether
     # anything was changed, which is what `_is_low_s_` asks and this
     # does not
-    with guarded():
-        lib.secp256k1_ecdsa_signature_normalize(ctx, signature, signature)
+    lib.secp256k1_ecdsa_signature_normalize(ctx, signature, signature)
     return signature
 
 
@@ -397,16 +397,16 @@ def _is_low_s_(signature: CData) -> bool:
             `parse_compact` return. Not mutated: this asks.
 
     Returns:
-        True if s is the lower of the two.
-
-    Raises:
-        ValueError: if the object is not a signature libsecp256k1 will
-            read; see `context.guarded`.
+        True if s is the lower of the two -- and True, too, for an
+        object libsecp256k1 cannot read, which it reports as unchanged
+        exactly as it reports an already-normalized signature. This
+        raises nothing, and `context.check` immediately after the call
+        is what separates them. `is_low_s` parses its octets and so has
+        no such case.
     """
     # a NULL output only checks the input, which is reported as
     # not normalized by a return value of 1
-    with guarded():
-        changed = lib.secp256k1_ecdsa_signature_normalize(ctx, ffi.NULL, signature)
+    changed = lib.secp256k1_ecdsa_signature_normalize(ctx, ffi.NULL, signature)
     return not changed
 
 
@@ -607,10 +607,10 @@ def serialize_der(signature: CData) -> bytes:
         Its DER encoding, at most 72 bytes.
 
     Raises:
-        ValueError: if the object is not a signature libsecp256k1 will
-            read; see `context.guarded`.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            the 72-byte buffer makes unreachable.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails for any other reason, which the
+            72-byte buffer makes unreachable. `context.check` is what
+            tells the two apart.
     """
     # 72 is the maximum a signature of this curve can encode to, and it
     # is structural rather than generous: secp256k1_ecdsa_sig_serialize
@@ -627,10 +627,9 @@ def serialize_der(signature: CData) -> bytes:
     # fixed the buffer is unpacked instead, and keys.serialize says why
     sig_bytes = ffi.new("char[72]")
     length = ffi.new("size_t *", ffi.sizeof(sig_bytes))
-    with guarded():
-        serialized = lib.secp256k1_ecdsa_signature_serialize_der(
-            ctx, sig_bytes, length, signature
-        )
+    serialized = lib.secp256k1_ecdsa_signature_serialize_der(
+        ctx, sig_bytes, length, signature
+    )
     if not serialized:
         raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, length[0])
@@ -647,16 +646,15 @@ def serialize_compact(signature: CData) -> bytes:
         The 64 bytes of r and s, each big endian and zero padded.
 
     Raises:
-        ValueError: if the object is not a signature libsecp256k1 will
-            read; see `context.guarded`.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            a signature it parsed cannot make it do.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails for any other reason, which a
+            signature it parsed cannot make it do. `context.check` is
+            what tells the two apart.
     """
     sig_bytes = ffi.new("char[64]")
-    with guarded():
-        serialized = lib.secp256k1_ecdsa_signature_serialize_compact(
-            ctx, sig_bytes, signature
-        )
+    serialized = lib.secp256k1_ecdsa_signature_serialize_compact(
+        ctx, sig_bytes, signature
+    )
     if not serialized:
         raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes))

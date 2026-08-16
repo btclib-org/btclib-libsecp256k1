@@ -25,8 +25,14 @@ Under each of those entry points is the half of it that speaks in those
 objects, spelled `_foo_`. The leading underscore says private, because
 an object is a promise no argument check can hold a caller to: what can
 be proved of a bare pointer's contents is nothing, and what answers for
-it is libsecp256k1 itself, through the illegal callback `context.guarded`
-turns back into an exception. The trailing one says which kind of
+it is libsecp256k1 itself, through the illegal callback -- which these
+wrappers do not read, so a private half handed an object libsecp256k1
+cannot use answers whatever that call answers: its own exception where a
+return code allowed one, and otherwise a `False`, an ordering or a
+shared secret that mean nothing. `context.check` immediately after the
+call is what says so, and the public entry point above is the one with
+no such case, having parsed the octets itself. The trailing one says
+which kind of
 private, `_verify_` taking a parsed key where `_parse_der` is an
 ordinary helper. `foo` is `_foo_` with a parse in front of it, a
 serialize behind it, or both, which is the equality

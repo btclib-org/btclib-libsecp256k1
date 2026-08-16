@@ -15,7 +15,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._scalar import entropy, in_range, octets, scalar
 from ._secret import take
-from .context import ctx, guarded
+from .context import ctx
 from .keys import parse, serialize
 
 
@@ -66,18 +66,13 @@ def _encode_(pubkey: CData, aux_rand32: BytesLike | None = None) -> bytes:
         The 64-byte ElligatorSwift encoding.
 
     Raises:
-        ValueError: if aux_rand32 is given and is not 32 bytes, or if the
-            object is not a public key libsecp256k1 will read; see
-            `context.guarded`.
+        ValueError: if aux_rand32 is given and is not 32 bytes.
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
     ell_bytes = ffi.new("char[64]")
     aux_rand32_bytes = entropy(aux_rand32)
-    with guarded():
-        encoded = lib.secp256k1_ellswift_encode(
-            ctx, ell_bytes, pubkey, aux_rand32_bytes
-        )
+    encoded = lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, aux_rand32_bytes)
     if not encoded:
         raise RuntimeError("ElligatorSwift encoding failed")
     return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))

@@ -32,7 +32,7 @@ from . import BytesLike, CData, ffi, keys, lib, xonly
 from ._cdata import array
 from ._scalar import in_range, octets, scalar
 from ._secret import keypair, take, wipe
-from .context import ctx, guarded
+from .context import ctx
 
 # the two widths this module has to check, neither of them a macro that
 # survives the preprocessing of the headers into cffi definitions. The
@@ -84,7 +84,8 @@ def _create_outputs_(
             outpoint is not 36 bytes, if any private key is not 32 bytes,
             does not fit in them, or is not in [1, n-1], if libsecp256k1
             refuses the set, or if any object is not a public key it will
-            read; see `context.guarded`.
+            read, those last two being one message here --
+            `context.check` is what tells them apart.
     """
     if not recipients:
         raise ValueError("at least one recipient is required")
@@ -109,18 +110,17 @@ def _create_outputs_(
             ffi.new("unsigned char[32]", scalar(prvkey, "private key"))
             for prvkey in prvkeys
         )
-        with guarded():
-            created = lib.secp256k1_silentpayments_sender_create_outputs(
-                ctx,
-                array("secp256k1_xonly_pubkey *[]", outputs),
-                array("secp256k1_silentpayments_recipient *[]", recipient_objs),
-                len(recipient_objs),
-                outpoint_smallest36,
-                array("secp256k1_keypair *[]", keypairs),
-                len(keypairs),
-                array("unsigned char *[]", seckeys),
-                len(seckeys),
-            )
+        created = lib.secp256k1_silentpayments_sender_create_outputs(
+            ctx,
+            array("secp256k1_xonly_pubkey *[]", outputs),
+            array("secp256k1_silentpayments_recipient *[]", recipient_objs),
+            len(recipient_objs),
+            outpoint_smallest36,
+            array("secp256k1_keypair *[]", keypairs),
+            len(keypairs),
+            array("unsigned char *[]", seckeys),
+            len(seckeys),
+        )
     finally:
         for buffer in (*keypairs, *seckeys):
             wipe(buffer)
@@ -306,14 +306,14 @@ def _labeled_spend_pubkey_(spend_pubkey: CData, label_obj: CData) -> CData:
     Raises:
         ValueError: if the two sum to the point at infinity, which has no
             serialization and which a label BIP352 made cannot produce,
-            or if either object is not one libsecp256k1 will read; see
-            `context.guarded`.
+            or if either object is not one libsecp256k1 will read, those
+            last two being one message here -- `context.check` is what
+            tells them apart.
     """
     labeled = ffi.new("secp256k1_pubkey *")
-    with guarded():
-        added = lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
-            ctx, labeled, spend_pubkey, label_obj
-        )
+    added = lib.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(
+        ctx, labeled, spend_pubkey, label_obj
+    )
     if not added:
         raise ValueError("invalid labeled spend public key")
     return labeled
@@ -394,23 +394,23 @@ def _prevouts_summary_(
             bytes, if the inputs sum to the point at infinity, which is
             BIP352's "not a Silent Payments transaction" and which the
             recipient skips, or if any object is not a key libsecp256k1
-            will read; see `context.guarded`.
+            will read, those last two being one message here --
+            `context.check` is what tells them apart.
     """
     if not taproot_pubkeys and not pubkeys:
         raise ValueError("at least one public key is required")
     outpoint_smallest36 = octets(outpoint_smallest36, "smallest outpoint", 36)
 
     summary = ffi.new("secp256k1_silentpayments_prevouts_summary *")
-    with guarded():
-        summarized = lib.secp256k1_silentpayments_recipient_prevouts_summary_create(
-            ctx,
-            summary,
-            outpoint_smallest36,
-            array("secp256k1_xonly_pubkey *[]", taproot_pubkeys),
-            len(taproot_pubkeys),
-            array("secp256k1_pubkey *[]", pubkeys),
-            len(pubkeys),
-        )
+    summarized = lib.secp256k1_silentpayments_recipient_prevouts_summary_create(
+        ctx,
+        summary,
+        outpoint_smallest36,
+        array("secp256k1_xonly_pubkey *[]", taproot_pubkeys),
+        len(taproot_pubkeys),
+        array("secp256k1_pubkey *[]", pubkeys),
+        len(pubkeys),
+    )
     if not summarized:
         raise ValueError("not a silent payments transaction")
     return summary
@@ -519,8 +519,9 @@ def _scan_outputs_(
         ValueError: if no output is given, if the scan key is not 32
             bytes, does not fit in them, or is not in [1, n-1], if a
             label or a label tweak is the wrong length, if libsecp256k1
-            refuses the scan, or if any object is not one it will read;
-            see `context.guarded`.
+            refuses the scan, or if any object is not one it will read,
+            those last two being one message here -- `context.check` is
+            what tells them apart.
     """
     if not tx_outputs:
         raise ValueError("at least one transaction output is required")
@@ -555,19 +556,18 @@ def _scan_outputs_(
             lookup = ffi.callback(
                 "secp256k1_silentpayments_label_lookup", _lookup(cache)
             )
-        with guarded():
-            scanned = lib.secp256k1_silentpayments_recipient_scan_outputs(
-                ctx,
-                array("secp256k1_silentpayments_found_output *[]", found_objs),
-                n_found,
-                array("secp256k1_xonly_pubkey *[]", tx_outputs),
-                len(tx_outputs),
-                scan_prvkey_bytes,
-                summary,
-                spend_pubkey,
-                lookup,
-                ffi.NULL,
-            )
+        scanned = lib.secp256k1_silentpayments_recipient_scan_outputs(
+            ctx,
+            array("secp256k1_silentpayments_found_output *[]", found_objs),
+            n_found,
+            array("secp256k1_xonly_pubkey *[]", tx_outputs),
+            len(tx_outputs),
+            scan_prvkey_bytes,
+            summary,
+            spend_pubkey,
+            lookup,
+            ffi.NULL,
+        )
         if not scanned:
             raise ValueError("silent payment scanning failed")
         return [_found_output(found) for found in found_objs[: n_found[0]]]
@@ -800,16 +800,17 @@ def serialize_label(label_obj: CData) -> bytes:
         Its 33 bytes, which are the compressed point it is.
 
     Raises:
-        ValueError: if the object is not a label libsecp256k1 will read;
-            see `context.guarded`.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to serialize for any other reason,
+            which a label it produced cannot make it do.
+            `context.check` is what tells the two apart.
         RuntimeError: if libsecp256k1 fails for any other reason, which
             a label it produced cannot make it do.
     """
     output = ffi.new(f"char[{LABEL_SIZE}]")
-    with guarded():
-        serialized = lib.secp256k1_silentpayments_recipient_label_serialize(
-            ctx, output, label_obj
-        )
+    serialized = lib.secp256k1_silentpayments_recipient_label_serialize(
+        ctx, output, label_obj
+    )
     if not serialized:
         raise RuntimeError("label serialization failed")
     return ffi.unpack(output, ffi.sizeof(output))

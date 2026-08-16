@@ -25,9 +25,15 @@ affecting how these bindings drive it:
     less
 - the libsecp256k1 default callbacks, which this project replaces with
     do-nothing stubs so that an illegal argument does not `abort()` the
-    hosting Python process. The consequence is that nothing downstream of
-    the wrapper modules catches an illegal argument: code reaching the
-    raw `lib` bindings directly is on its own
+    hosting Python process. The consequence is that nothing catches an
+    illegal argument on the caller's behalf: `context.check()` reports
+    what was recorded, and calling it is the caller's to do. Code
+    reaching the raw `lib` bindings directly is on its own, and so is
+    code calling a private `_foo_` half with a libsecp256k1 object of
+    its own — an object no argument check can vouch for, where a refusal
+    can reach the caller as a `False`, an ordering or 32 bytes of ECDH
+    rather than as an exception. The entry points taking octets are not
+    in that position: they parse what they are given
 - the build: which optional modules are compiled in, and the commit of
     libsecp256k1 the submodule is pinned to
 - the distributions published to PyPI and their provenance

@@ -308,6 +308,18 @@ these is past the boundary that proves things. The trailing one says
 which kind of private — `_verify_` takes a parsed key where `_parse_der`
 is an ordinary helper.
 
+**A private half does not read that callback**, and what it answers when
+libsecp256k1 refuses its object is therefore whatever the C call
+answered: its own exception where a return code allowed one, and
+otherwise a value that means nothing — `False` from a verification, an
+ordering from a comparison, `None` from a sum, and, in `ecdh`, 32 bytes
+that are a shared secret with nobody. Nothing raises in those four.
+`context.check()` immediately after the call is what says so, and
+proving the object once — `keys.parse` built it, or `keys.pubkey_verify`
+answered for the octets it came from — is what makes the question moot.
+The public half has no such case, having parsed its own octets, and that
+is the whole of what a caller gives up by reaching past it.
+
 ```python
 >>> ecdsa_sig = dsa.sign(msg, prvkey)
 >>> parsed = keys.parse(pubkey)           # a valid point: proved once
@@ -708,10 +720,12 @@ if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
 
 That example is the one that matters: partial signing zeroes the secret
 nonce, so signing twice with it is refused, and this is how a session
-learns why. The bindings need none of this, validating their arguments
-before calling, and the abort()ing libsecp256k1 defaults are replaced by
-do-nothing stubs in the vendored build, so no illegal argument can take
-the hosting process down.
+learns why. The entry points taking octets need none of it, validating
+their arguments before calling; the private halves taking an object need
+exactly it, for the reason Parsing the key once gives. Either way the
+abort()ing libsecp256k1 defaults are replaced by do-nothing stubs in the
+vendored build, so no illegal argument can take the hosting process
+down.
 
 ## Thread safety
 

@@ -17,7 +17,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib, xonly
 from ._scalar import entropy, octets, optional_entropy, scalar
 from ._secret import keypair, take, wipe
-from .context import ctx, guarded
+from .context import ctx
 
 # SECP256K1_SCHNORRSIG_EXTRAPARAMS_MAGIC: the libsecp256k1 macros do not
 # survive the preprocessing of the headers into cffi definitions
@@ -434,21 +434,24 @@ def _verify_(
         signature_bytes: the 64-byte signature.
 
     Returns:
-        True if the signature is valid for that key and message.
+        True if the signature is valid for that key and message -- and
+        False where libsecp256k1 could not read the key, which is the
+        same answer it gives a signature that simply does not verify.
+        This raises nothing for it: a caller passing an object of its
+        own is the one that can be handed an unreadable one, and
+        `context.check` immediately after the call is what says the
+        False is not a verdict. `verify` parses the key from octets and
+        so has no such case.
 
     Raises:
-        ValueError: if the signature is not 64 bytes, or if the object is
-            not an x-only public key libsecp256k1 will read; see
-            `context.guarded`, without which an unreadable key would
-            answer False, which is a verdict a caller would believe.
+        ValueError: if the signature is not 64 bytes.
     """
     msg_bytes = octets(msg_bytes, "message")
     signature_bytes = octets(signature_bytes, "signature", 64)
 
-    with guarded():
-        verified = lib.secp256k1_schnorrsig_verify(
-            ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
-        )
+    verified = lib.secp256k1_schnorrsig_verify(
+        ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
+    )
     return bool(verified)
 
 

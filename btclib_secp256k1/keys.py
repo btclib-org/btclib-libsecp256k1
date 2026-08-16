@@ -22,7 +22,7 @@ from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._cdata import array
 from ._scalar import octets, scalar
 from ._secret import take
-from .context import ctx, guarded
+from .context import ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
 # libsecp256k1 flag macros do not survive the preprocessing of the
@@ -279,14 +279,14 @@ def _pubkey_negate_(pubkey: CData) -> CData:
         The same object passed in, negated.
 
     Raises:
-        ValueError: if the object is not a public key libsecp256k1 will
-            read -- a NULL pointer, or a `secp256k1_pubkey` nothing has
-            written to; see `context.guarded`.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            a key it produced cannot make it do.
+        RuntimeError: if libsecp256k1 refuses the object -- a NULL
+            pointer, or a `secp256k1_pubkey` nothing has written to --
+            or fails for any other reason, which a key it produced
+            cannot make it do. Which of the two it was is on the thread
+            rather than in the message, and `context.check` is what
+            reads it.
     """
-    with guarded():
-        negated = lib.secp256k1_ec_pubkey_negate(ctx, pubkey)
+    negated = lib.secp256k1_ec_pubkey_negate(ctx, pubkey)
     if not negated:
         raise RuntimeError("public key negation failed")
     return pubkey
@@ -331,12 +331,12 @@ def _pubkey_tweak_add_(pubkey: CData, tweak: BytesLike | int) -> CData:
     Raises:
         ValueError: if the tweak is not 32 bytes or does not fit in them,
             if the tweak or the resulting public key is invalid, or if
-            the object is not a public key libsecp256k1 will read; see
-            `context.guarded`.
+            the object is not a public key libsecp256k1 will read, those
+            last two being one message here -- `context.check` is what
+            tells them apart.
     """
     tweak_bytes = scalar(tweak, "tweak")
-    with guarded():
-        tweaked = lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes)
+    tweaked = lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, tweak_bytes)
     if not tweaked:
         raise ValueError("invalid tweak or resulting public key")
     return pubkey
@@ -491,12 +491,12 @@ def _pubkey_tweak_mul_(pubkey: CData, tweak: BytesLike | int) -> CData:
     Raises:
         ValueError: if the tweak is not 32 bytes or does not fit in them,
             if it is zero or at or above the group order, or if the
-            object is not a public key libsecp256k1 will read; see
-            `context.guarded`.
+            object is not a public key libsecp256k1 will read, those
+            last two being one message here -- `context.check` is what
+            tells them apart.
     """
     tweak_bytes = scalar(tweak, "tweak")
-    with guarded():
-        multiplied = lib.secp256k1_ec_pubkey_tweak_mul(ctx, pubkey, tweak_bytes)
+    multiplied = lib.secp256k1_ec_pubkey_tweak_mul(ctx, pubkey, tweak_bytes)
     if not multiplied:
         raise ValueError("invalid tweak")
     return pubkey
@@ -552,7 +552,8 @@ def _pubkey_combine_(pubkeys: Sequence[CData]) -> CData:
     Raises:
         ValueError: if the sequence is empty, if the sum is the point at
             infinity, which is no public key, or if any object is not a
-            public key libsecp256k1 will read; see `context.guarded`.
+            public key libsecp256k1 will read. The last two are one
+            message, for the reason `_pubkey_sum_` gives.
     """
     combined = _pubkey_sum_(pubkeys)
     if combined is None:
@@ -573,26 +574,31 @@ def _pubkey_sum_(pubkeys: Sequence[CData]) -> CData | None:
 
     Returns:
         The libsecp256k1 public key object of the sum, or None where that
-        sum is the point at infinity.
+        sum is the point at infinity -- and None, too, where libsecp256k1
+        could not read one of the objects, the two being one answer here.
+        `context.check` immediately after the call is what separates
+        them: a key it refused is on the thread, and an infinity is not.
+        No caller reaching this through `pubkey_sum` or `pubkey_combine`
+        has the question, those parsing the octets they are given, so
+        what the conflation costs is paid only by a caller passing
+        objects of its own.
 
     Raises:
-        ValueError: if the sequence is empty, or if any object is not a
-            public key libsecp256k1 will read; see `context.guarded`,
-            which is also what tells that from the infinity below.
+        ValueError: if the sequence is empty.
     """
     pubkeys = list(pubkeys)
     if not pubkeys:
         raise ValueError("at least one public key is required")
 
     combined = ffi.new("secp256k1_pubkey *")
-    # the guard is what makes the 0 below mean one thing. libsecp256k1
-    # answers 0 both for a key it cannot read and for a sum that is the
-    # point at infinity, and it reports the first through the illegal
-    # callback: raised there, what is left here is the second
-    with guarded():
-        summed = lib.secp256k1_ec_pubkey_combine(
-            ctx, combined, array("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
-        )
+    # libsecp256k1 answers 0 both for a key it cannot read and for a sum
+    # that is the point at infinity, and reports the first through the
+    # illegal callback rather than in the return value: what tells the
+    # two apart is on the thread, which is what the Returns section
+    # above sends a caller to `context.check` for
+    summed = lib.secp256k1_ec_pubkey_combine(
+        ctx, combined, array("secp256k1_pubkey *[]", pubkeys), len(pubkeys)
+    )
     return combined if summed else None
 
 
@@ -630,10 +636,10 @@ def pubkey_sum(
     `pubkey_combine` with the one sum that is no public key answered
     rather than refused. A caller doing arithmetic has that sum as a
     value -- `P + (-P)` is the identity and not a malformed argument --
-    and the two spellings are the same call: what tells a sum at infinity
-    from a key libsecp256k1 could not read is that the second is reported
-    through the illegal callback and raises, which `context.guarded` is
-    what makes true here.
+    and the two spellings are the same call. There is no key here that
+    libsecp256k1 could fail to read, `parse` below having proved every
+    one of them, so the None this answers is the infinity and nothing
+    else; `_pubkey_sum_` is where that is not true and says so.
 
     The infinity has no serialization, which is why it is None and not
     octets: a `secp256k1_pubkey` is a point of the curve and never the
@@ -781,15 +787,14 @@ def _pubkey_cmp_(pubkey1: CData, pubkey2: CData) -> int:
     Returns:
         A negative number, zero, or a positive number, according to
         whether the first key sorts before, equal to, or after the
-        second.
-
-    Raises:
-        ValueError: if either object is not a public key libsecp256k1
-            will read; see `context.guarded`, which is what tells that
-            from the zero of two keys that are equal.
+        second. Where libsecp256k1 cannot read an object it compares a
+        key of zeros in its place, so the answer is an ordering like any
+        other and means nothing: this raises nothing, and
+        `context.check` immediately after the call is what says the
+        answer is not to be believed. `pubkey_cmp` parses what it is
+        given and so has no such case.
     """
-    with guarded():
-        order = lib.secp256k1_ec_pubkey_cmp(ctx, pubkey1, pubkey2)
+    order = lib.secp256k1_ec_pubkey_cmp(ctx, pubkey1, pubkey2)
     return int(order)
 
 
@@ -831,10 +836,10 @@ def _pubkey_sort_(pubkeys: Sequence[CData]) -> list[CData]:
         The same objects that were passed in, in ascending order.
 
     Raises:
-        ValueError: if any object is not a public key libsecp256k1 will
-            read; see `context.guarded`.
-        RuntimeError: if libsecp256k1 fails to sort them, which no valid
-            key can make it do.
+        RuntimeError: if libsecp256k1 refuses an object -- one it cannot
+            read -- or fails to sort for any other reason, which no
+            valid key can make it do. `context.check` is what tells the
+            two apart.
     """
     pubkeys = list(pubkeys)
     # nothing to sort is not a call to make: the array of an empty
@@ -847,8 +852,7 @@ def _pubkey_sort_(pubkeys: Sequence[CData]) -> list[CData]:
     # the array holds borrowed pointers, and is what gets reordered: the
     # list above is what keeps the keys it points to alive
     pointers = array("secp256k1_pubkey *[]", pubkeys)
-    with guarded():
-        sorted_ = lib.secp256k1_ec_pubkey_sort(ctx, pointers, len(pubkeys))
+    sorted_ = lib.secp256k1_ec_pubkey_sort(ctx, pointers, len(pubkeys))
     if not sorted_:
         raise RuntimeError("public key sorting failed")
     # what comes back are the caller's own objects, found by the address
@@ -1014,11 +1018,12 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
         uncompressed one.
 
     Raises:
-        ValueError: if the object is not a public key libsecp256k1 will
-            read -- a NULL pointer, or a `secp256k1_pubkey` nothing has
-            written to; see `context.guarded`.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            a key it produced cannot make it do.
+        RuntimeError: if libsecp256k1 refuses the object -- a NULL
+            pointer, or a `secp256k1_pubkey` nothing has written to --
+            or fails for any other reason, which a key it produced
+            cannot make it do. Which of the two it was is on the thread
+            rather than in the message, and `context.check` is what
+            reads it.
 
     Example:
         >>> from btclib_secp256k1 import keys
@@ -1026,22 +1031,32 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
         >>> keys.serialize(keys.parse(uncompressed)).hex()[:10]
         '0279be667e'
     """
-    # the size is written once and the capacity derived from it. What is
-    # unpacked is the buffer, not the length libsecp256k1 reports back:
-    # this serialization has one length per flag, so a buffer of the
-    # wrong size has to reach the caller to be caught -- reading the
+    # the buffer is declared by a literal and the size read back off it,
+    # so the two cannot say different numbers: `ffi.new` of an
+    # interpolated cdecl parses that string on every call, which is 0.045
+    # microseconds of the 0.287 this costs -- an Apple M5, macOS 26.6,
+    # arm64, CPython 3.13.14, minimum of 7 rounds of 500 000 calls.
+    #
+    # What is unpacked is the buffer, not the length libsecp256k1 reports
+    # back: this serialization has one length per flag, so a buffer of
+    # the wrong size has to reach the caller to be caught -- reading the
     # reported length instead would quietly accept an oversized one,
-    # which a mutation session measured directly (`size = 34` survived
+    # which a mutation session measured directly (`char[34]` survives
     # that spelling, and dies in this one). The DER serialization is the
-    # other case, and reads `length[0]` for the reason given there
-    size = 33 if compressed else 65
-    output = ffi.new(f"char[{size}]")
-    length = ffi.new("size_t *", ffi.sizeof(output))
+    # other case, and reads `length[0]` for the reason given there.
+    #
+    # The length is built per call and not hoisted, though it is the same
+    # number every time: libsecp256k1 writes 0 into it before it does
+    # anything (`*outputlen = 0` in secp256k1.c) and restores it only on
+    # success, and it holds the value it finds there against 33 or 65 on
+    # the way in. One failed call would leave a shared buffer at
+    # zero, and every later serialization -- on any thread, of a
+    # perfectly good key -- would be refused
+    output = ffi.new("char[33]" if compressed else "char[65]")
+    size = ffi.sizeof(output)
+    length = ffi.new("size_t *", size)
     flags = COMPRESSED if compressed else UNCOMPRESSED
-    with guarded():
-        serialized = lib.secp256k1_ec_pubkey_serialize(
-            ctx, output, length, pubkey, flags
-        )
+    serialized = lib.secp256k1_ec_pubkey_serialize(ctx, output, length, pubkey, flags)
     if not serialized:
         raise RuntimeError("point serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return ffi.unpack(output, size)

@@ -22,6 +22,72 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### What a crossing costs, and what stops being paid for it
+
+- **`context.guarded` is gone, and every call it held is now a bare
+  call.** It cleared the thread, ran the libsecp256k1 call, and raised
+  whatever the illegal callback had recorded, which turned a refused
+  object into an exception at each of the twenty-six places it was
+  used. Measured around one trivial C call, it cost 0.175 microseconds
+  of the 0.266 that call took — an Apple M5, macOS 26.6, arm64, CPython
+  3.13.14, minimum of 7 rounds of a million calls — and an entry point
+  crossing twice, as `keys.pubkey_tweak_add` does, paid it twice.
+  `context.check` is unchanged and still exported: what it reports is
+  now every caller's to ask for, and its docstring says when.
+- **and what a refused object does instead is the contract this
+  changes.** Where the wrapper read a return code it still raises, with
+  its own message rather than libsecp256k1's — `keys.serialize` of a
+  NULL pointer is a `RuntimeError` naming the serialization, where it
+  was a `ValueError` naming `pubkey != NULL`; `xonly.serialize`,
+  `xonly._drop_y`, `xonly.from_keypair`, `recovery._to_der_`,
+  `recovery.serialize_compact`, `dsa.serialize_der`,
+  `dsa.serialize_compact` and `silentpayments.serialize_label` moved
+  from `ValueError` to `RuntimeError` with it, libsecp256k1 answering
+  the same 0 for a refusal as for a failure of its own. Where the
+  wrapper believed the return value, there is now no exception at all:
+  `dsa._verify_` and `ssa._verify_` answer `False`, `keys._pubkey_sum_`
+  answers `None`, `keys._pubkey_cmp_` answers an ordering, `dsa._is_low_s_`
+  answers `True`, and `ecdh._shared_secret_` answers 32 bytes that are a
+  shared secret with nobody. Each is driven in `tests/test_callbacks.py`
+  rather than described, the ECDH one because it is the gravest: the
+  call succeeds, the answer is the right length, and only the thread
+  says it is worthless.
+- **No entry point taking octets is in that position**, which is why the
+  trade is worth stating separately from the cost. `verify`,
+  `pubkey_tweak_add`, `shared_secret` and the rest parse what they are
+  given, so the objects they hand libsecp256k1 are ones it has just
+  built and the refusal cannot arise; a bad key is the parse's
+  `ValueError`, and the thread is left clean. What is given up belongs
+  to a caller passing a `secp256k1_pubkey` of its own to a `_foo_` half,
+  and `keys.pubkey_verify` on the octets it came from is what settles it
+  once instead of at every call.
+- **`_scalar.octets` and `_scalar.scalar` answer `bytes` without asking
+  the questions `bytes` already answers**, 0.031 microseconds against
+  0.078 on the same machine. The two `isinstance` tests, the
+  `memoryview` width test and the defensive copy are what a `bytearray`
+  or a `memoryview` needs, and are what the slow path still does; the
+  exact type is asked once in front of them. `dsa.verify` passes three
+  arguments through it.
+- **`keys.serialize` builds its buffer from a literal cdecl**, 0.287
+  microseconds against 0.381 with the guard already gone and 0.590
+  before it: `ffi.new` of an interpolated `f"char[{size}]"` parses that
+  string on every call, and `ffi.sizeof` was called twice where the size
+  was in hand. The length buffer is still built per call and deliberately
+  not hoisted, though it holds the same number every time — libsecp256k1
+  writes 0 into it before it does anything and restores it only on
+  success, and it holds what it finds there against 33 or 65 on the way
+  in, so one
+  failed call would leave a shared buffer at zero and every later
+  serialization, on any thread and of a perfectly good key, would be
+  refused. That was measured rather than reasoned about.
+- **What the entry points cost now.** Microseconds per call on the
+  machine above, minimum of 9 rounds, before against after:
+  `keys.parse` of 65 bytes 0.261 and 0.197, `keys.serialize` 0.590 and
+  0.303, `xonly.parse` of 65 bytes 0.835 and 0.478,
+  `keys.pubkey_tweak_add` 4.146 and 3.469, `dsa.verify` 12.260 and
+  11.818, `dsa.sign` 12.165 and 11.801, `ssa.verify` of a 65-byte key
+  13.157 and 12.456, of an x-only key 14.638 and 14.308.
+
 ### Signing under one key
 
 - **`ssa.Signer` builds the BIP340 keypair once** (#153). `ssa.sign` and

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from . import BytesLike, CData, ffi, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
-from .context import ctx, guarded
+from .context import ctx
 from .dsa import serialize_der
 from .keys import serialize
 
@@ -115,13 +115,13 @@ def _recover_(msg_bytes: BytesLike, signature: CData) -> CData:
     Raises:
         ValueError: if the message hash is not 32 bytes, if no key can be
             recovered, or if the object is not a recoverable signature
-            libsecp256k1 will read; see `context.guarded`.
+            libsecp256k1 will read, those last two being one message
+            here -- `context.check` is what tells them apart.
     """
     msg_bytes = octets(msg_bytes, "message hash", 32)
 
     pubkey = ffi.new("secp256k1_pubkey *")
-    with guarded():
-        recovered = lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes)
+    recovered = lib.secp256k1_ecdsa_recover(ctx, pubkey, signature, msg_bytes)
     if not recovered:
         raise ValueError("public key recovery failed")
     return pubkey
@@ -176,16 +176,17 @@ def _to_der_(signature: CData) -> bytes:
         id dropped.
 
     Raises:
-        ValueError: if the object is not a recoverable signature
-            libsecp256k1 will read; see `context.guarded`.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to convert for any other reason,
+            which a signature it parsed cannot make it do.
+            `context.check` is what tells the two apart.
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no input can make it do.
     """
     dsa_signature = ffi.new("secp256k1_ecdsa_signature *")
-    with guarded():
-        converted = lib.secp256k1_ecdsa_recoverable_signature_convert(
-            ctx, dsa_signature, signature
-        )
+    converted = lib.secp256k1_ecdsa_recoverable_signature_convert(
+        ctx, dsa_signature, signature
+    )
     if not converted:
         raise RuntimeError("signature conversion failed")
     return serialize_der(dsa_signature)
@@ -259,17 +260,18 @@ def serialize_compact(signature: CData) -> tuple[bytes, int]:
         pair `parse_compact` reads back.
 
     Raises:
-        ValueError: if the object is not a recoverable signature
-            libsecp256k1 will read; see `context.guarded`.
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to serialize for any other reason,
+            which a signature it parsed cannot make it do.
+            `context.check` is what tells the two apart.
         RuntimeError: if libsecp256k1 fails for any other reason, which
             a signature it parsed cannot make it do.
     """
     sig_bytes = ffi.new("char[64]")
     recid = ffi.new("int *")
-    with guarded():
-        serialized = lib.secp256k1_ecdsa_recoverable_signature_serialize_compact(
-            ctx, sig_bytes, recid, signature
-        )
+    serialized = lib.secp256k1_ecdsa_recoverable_signature_serialize_compact(
+        ctx, sig_bytes, recid, signature
+    )
     if not serialized:
         raise RuntimeError("signature serialization failed")
     return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes)), recid[0]

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import secrets
 import threading
-from types import TracebackType
 
 from . import CData, ffi, lib
 
@@ -117,17 +116,19 @@ def check() -> None:
     same MuSig2 secret nonce, for one, is reported as the failed magic
     check of the nonce that the first signature zeroed.
 
-    It is meant for a call made through `lib` directly, as a MuSig2
-    session is, and it reports what was last recorded: call it right
-    after the call whose return value you are explaining.
+    It is for a call made through `lib` directly, as a MuSig2 session
+    is, and it is the caller's to make: no wrapper in this package calls
+    it, so what it reports is whatever was recorded last on this thread
+    by anything at all. Call it immediately after the call whose return
+    value you are explaining, and read nothing into a message from any
+    other one.
 
-    The wrappers do not need it where they hand libsecp256k1 bytes,
-    having proved those bytes first; where they hand it an object the
-    caller built, they cannot prove anything and run the call inside
-    `guarded` below, which is what calls this. So a violated
-    precondition raised through a wrapper is this message, and no
-    wrapper leaves one on the thread for the next caller to be blamed
-    for.
+    A wrapper is one of those others. Handed an object libsecp256k1
+    cannot read, a wrapper answers its own verdict -- `False` from a
+    verification, `None` from a sum, its own `ValueError` where a return
+    code let it raise -- and the reason is recorded here on the way past.
+    So a message on the thread may be a wrapper's rather than the
+    caller's, which is the whole of why this asks to be called at once.
 
     What was recorded is cleared, so a second call reports nothing and
     a later one cannot inherit this call's message.
@@ -143,93 +144,3 @@ def check() -> None:
         raise RuntimeError(f"libsecp256k1 internal error: {error}")
     if illegal is not None:
         raise ValueError(f"libsecp256k1 illegal argument: {illegal}")
-
-
-class guarded:
-    """Run a libsecp256k1 call whose argument could not be checked first.
-
-    Every argument these bindings pass as bytes is proved before the
-    call, a bare pointer's length being what no C return code can
-    report. An argument that is a libsecp256k1 object is the case that
-    cannot be: `keys.serialize` takes a public key, `xonly.from_keypair`
-    a keypair, and every private half takes what a `parse` returned, and
-    of none of them is there anything to ask before handing it over. So
-    what answers for those is libsecp256k1 itself, through the illegal
-    callback, and this is how what it says reaches the caller.
-
-    Both halves are here because either alone is a bug. The clearing is
-    what makes the message this call's own: recorded and left by an
-    earlier call, one would be raised out of this one, which is the
-    misattribution `check` exists to prevent. The `check` is what makes
-    the failure speak: `secp256k1_ec_pubkey_negate` of a pointer to
-    nothing returns 0 like any other refusal, and the reason it returns
-    0 is on the thread and nowhere else.
-
-    And it is called whatever the call *answered*, not only on a failure,
-    because a violated precondition does not always show in the return
-    value: `secp256k1_ecdsa_verify` of an unreadable key answers False,
-    which is a verdict a caller would believe, and
-    `secp256k1_ecdh` of one answers success and 32 bytes that are a
-    shared secret with nobody.
-
-    A class, and lowercase, because `with guarded():` is what the call
-    sites say and the two halves above are what it has to keep together
-    -- neither of which is a reason to build a generator. A
-    `contextlib.contextmanager` generator costs more than the C call it
-    guards, and the smallest guarded *entry point* is where that shows:
-    `keys.serialize` of a parsed point is 0.582 microseconds this way
-    and 0.847 with one, `keys.pubkey_sort` of twenty keys 21.12 against
-    26.99. The sort is the shape that makes the case, building one guard
-    per key. Smaller still is `keys._pubkey_cmp_`, which is a private
-    half rather than an entry point, and is where CHANGELOG.md measures
-    the guard on its own.
-
-    A shared instance measures 0.567 against the 0.582 of building one
-    per call, which is noise and is why the call sites say `guarded()`:
-    `__slots__` leaves nothing to allocate. An Apple M5, macOS 26.6,
-    arm64, CPython 3.14.6, minimum of 11 rounds.
-
-    Raises:
-        ValueError: if libsecp256k1 reported a violated precondition.
-        RuntimeError: if it reported an internal error.
-
-    Example:
-        >>> from btclib_secp256k1 import ffi, keys
-        >>> keys.serialize(ffi.NULL)
-        Traceback (most recent call last):
-        ValueError: libsecp256k1 illegal argument: pubkey != NULL
-    """
-
-    # nothing is held between the two halves: what they read and write is
-    # the thread local, so an instance needs no dictionary of its own
-    __slots__ = ()
-
-    def __enter__(self) -> None:
-        """Clear what an earlier call may have left on this thread."""
-        _reported.illegal = _reported.error = None
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Raise what libsecp256k1 reported, unless the block already did.
-
-        Not a `finally`, and the difference is the whole of what this
-        method decides. The block should hold the guarded call and
-        nothing else, so an exception out of it is something other than
-        a violated precondition -- and checking anyway would replace
-        that exception with this one, reporting the precondition as the
-        failure and losing the failure that actually happened. So it
-        passes through with the thread left as libsecp256k1 set it, and
-        the next `__enter__` is what clears it.
-
-        Args:
-            exc_type: the class of the exception ending the block, if
-                one is.
-            exc_value: that exception.
-            traceback: its traceback.
-        """
-        if exc_type is None:
-            check()
