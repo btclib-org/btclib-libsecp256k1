@@ -34,6 +34,8 @@ from btclib_secp256k1 import (
 )
 
 prvkey = 1
+# the field order of secp256k1, for the curve equation below
+P = 2**256 - 2**32 - 977
 pubkey_bytes = b"\x02y\xbef~\xf9\xdc\xbb\xacU\xa0b\x95\xce\x87\x0b\x07\x02\x9b\xfc\xdb-\xce(\xd9Y\xf2\x81[\x16\xf8\x17\x98"
 # the x-only form BIP340 verifies against; the key has even y, so it is
 # the same point the compressed form above encodes
@@ -142,15 +144,24 @@ def test_safe_abort() -> None:
 
 
 def test_mult() -> None:
-    """Both spellings of generator multiplication reach the same point.
+    """Generator multiplication answers the point the compressed key names.
 
-    `mult_` answers the serialized public key and `mult` the coordinates,
-    so the x of the second is the x the first carries.
+    `mult_bytes` is the uncompressed serialization, so the x it carries
+    is the x of the compressed form, and the coordinates a caller wants
+    are `int.from_bytes` of its two halves -- which is what `mult`
+    answered before it was retired.
     """
     pubkey_ = mult.mult_bytes(prvkey)
+    assert pubkey_[0] == 4
     assert pubkey_[1:33] == pubkey_bytes[1:]
-    pubkey = mult.mult(prvkey)
-    assert pubkey[0] == int.from_bytes(pubkey_bytes[1:], "big")
+    # the y, which the compressed form does not carry and which no
+    # assertion here covered while `mult` was answering it: it is the
+    # even one, `pubkey_bytes` opening with 0x02, and it satisfies the
+    # curve equation. That is what a caller reads with int.from_bytes
+    x = int.from_bytes(pubkey_[1:33], "big")
+    y = int.from_bytes(pubkey_[33:], "big")
+    assert y % 2 == 0
+    assert (y * y - x * x * x - 7) % P == 0
 
 
 def test_invalid_inputs() -> None:
@@ -201,12 +212,12 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="fit in 32 bytes"):
         dsa.sign(msg, 2**256)
     with pytest.raises(ValueError, match="fit in 32 bytes"):
-        mult.mult(-1)
+        mult.mult_bytes(-1)
 
     # generator multiplication is keys.pubkey_from_prvkey, so what its
     # message names is the private key the scalar of it is
     with pytest.raises(ValueError, match="private key"):
-        mult.mult(0)
+        mult.mult_bytes(0)
 
 
 def test_type_checks_refuse_what_merely_has_a_length() -> None:
@@ -237,7 +248,7 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
     with pytest.raises(
         TypeError, match="private key must be bytes or an int, not float"
     ):
-        mult.mult(1.0)  # type: ignore[arg-type]
+        mult.mult_bytes(1.0)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="tweak must be bytes or an int, not str"):
         keys.prvkey_tweak_add(prvkey, "x" * 32)  # type: ignore[arg-type]
 

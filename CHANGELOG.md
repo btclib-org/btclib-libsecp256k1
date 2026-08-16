@@ -458,10 +458,66 @@ release-notes length in the first place, and are still in
   `to_compact` name the input form the way `compact` names it on `sign`
   and `verify`, which is the coherence a third name would have broken
 
+### The surface and the sentence agree
+
+- **`mult.mult` is gone** (#170). The package docstring opens with "every
+  entry point takes octets and answers octets", and that call answered
+  `tuple[int, int]` — the one place a point of the curve left as numbers
+  rather than as a serialization, `pubkey_cmp`'s int and `prvkey_verify`'s
+  bool being verdicts and `from_pubkey`'s parity a flag beside the octets
+  it comes with. What it did is `int.from_bytes` twice over the two
+  halves of `mult_bytes`, and they cost 0.138 microseconds of a call that
+  is some 8.5 — 1.6% of it, and the whole of what the exception was
+  worth. The first spelling of this entry claimed the conversions were
+  *cheaper* inside the function, 8.549 against 8.578, which is noise read
+  as a direction: the removed function did those same two conversions
+  behind a python frame, so the ordering the code implies is the other
+  one, and three alternating rounds put the two within each other's
+  spread. What is stable is the 0.138. The module docstring carries the
+  two lines a caller writes instead
+- **and `xonly.from_keypair` stays, with the rule widened to cover it**
+  (#169). It takes a libsecp256k1 object and is not half of a
+  parse/serialize pair, which the docstring's "an object crosses only
+  where a caller already holds one" did not account for. The reason it is
+  not an exception is that a keypair *has* no serialization to make a
+  bridge out of: `secp256k1_keypair` holds a private key in
+  libsecp256k1's own layout and the C API never writes one out, so a
+  caller that built one through `lib` — a MuSig2 signer — holds something
+  no octets could have carried here. The rule now names the two kinds,
+  the parse and the keypair, and `from_keypair`'s own docstring points at
+  it rather than restating it. Making it private instead would have
+  broken the MuSig2 path the README documents, `ssa.Signer.pubkey` being
+  the same call only for a keypair this package built.
+
+  The fact #169 says the choice depends on — whether anyone outside this
+  package drives MuSig2 through `lib` today — was not established, and
+  keeping is the conservative half of that uncertainty: it costs a
+  sentence in the rule, where making it private costs a caller who may
+  exist an entry point that cannot be worked around, a keypair having no
+  serialization to reach `keys.parse` with. What would settle it is a
+  downstream search rather than an argument, and it is not on this branch
+- **the two are one question**, asked in #169 and #170 of the same
+  sentence: an exception to "octets in, octets out" is worth keeping when
+  octets cannot carry the thing, and worth removing when they can. A
+  keypair cannot be serialized; a point can
+
 ### Documentation
 
 - **`ssa.Signer` and `keys.PubkeyTweakChain` are presented as what they
-  are**, which is the one thing the README had no name for: an outpost
+  are**, and the chain's saving is now stated against the walk it is
+  actually worth measuring against. The section said five steps are 64.62
+  microseconds through `pubkey_tweak_add` and 55.14 through a chain,
+  which is true and is the compressed walk; the same path walked in the
+  *uncompressed* form, compressed in python where BIP32 wants 33 octets
+  to hash, is 54.75 — the chain within the noise. So what the chain saves
+  is real against one spelling and a rounding error against the other,
+  and what it is unambiguously worth is the line a caller does not write.
+  The README says both numbers now, and the section opens by separating
+  the two objects: a keypair is arithmetic no serialization gives back, a
+  parsed key is a parse the caller can make cheap by choosing the form it
+  carries. That is <https://github.com/btclib-org/btclib-secp256k1/issues/161>'s
+  own principle, and it is what the measurement says of the two
+- **the outpost section is what the README had no name for**: an outpost
   past the boundary. The private halves hand an object from one call to
   the next; these two hold one across many, for the caller that crosses
   again and again with the same key — a signer signing message after
@@ -471,9 +527,11 @@ release-notes length in the first place, and are still in
   compressed key, on a key it had already converted.
 
   The chain was in no section at all before this, so it now has one, with
-  the walk it is for: five steps are 65.61 microseconds through
-  `pubkey_tweak_add` and 56.58 through a chain, which is the 2.39 of a
-  compressed parse saved four times. The signer's own numbers move from
+  the walk it is for: five steps through `pubkey_tweak_add` against five
+  through a chain, which is a compressed parse saved four times. The pair
+  of timings first written here was superseded by the entry above, which
+  re-measured the walk and added the third spelling of it, so the numbers
+  live there and not in two places. The signer's own numbers move from
   the section that described the trade to the one that describes the
   saving: 15.82 against 8.27, of which the keypair is 7.55
 - **and the two answer differently under threads, which nothing said.**

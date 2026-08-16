@@ -1012,7 +1012,7 @@ def test_rfc6979_ecdsa_vector(
     s = int(s_hex, 16)
 
     # vector self-consistency: r is the x coordinate of k*G
-    assert mult.mult(bytes.fromhex(k_hex))[0] == r
+    assert int.from_bytes(mult.mult_bytes(bytes.fromhex(k_hex))[1:33], "big") == r
 
     # libsecp256k1 always produces low-s signatures
     der = dsa.sign(msg32, bytes.fromhex(seckey_hex))
@@ -1164,7 +1164,7 @@ def test_secp256k1py_custom_nonce_vectors() -> None:
 
         r, s = der_decode(der)
         assert s <= N // 2, "not a low-s signature"
-        assert r == mult.mult(k)[0] % N
+        assert r == int.from_bytes(mult.mult_bytes(k)[1:33], "big") % N
         pubkey = mult.mult_bytes(prvkey)
         assert dsa.verify(msg32, pubkey, der)
 

@@ -163,6 +163,9 @@ def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
     holds another. `from_prvkey` is the same answer for a caller holding
     the private key and no keypair.
 
+    This is the one entry point taking a libsecp256k1 object that is not
+    half of a parse/serialize pair; the package docstring says why.
+
     Args:
         keypair_obj: the libsecp256k1 keypair object, as `ssa.Signer`
             holds and as `secp256k1_keypair_create` writes.

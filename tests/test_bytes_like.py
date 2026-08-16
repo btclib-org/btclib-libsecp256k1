@@ -272,7 +272,6 @@ CALLS: list[tuple[str, Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = [
     ("keys.pubkey_cmp", keys.pubkey_cmp, (PUBKEY, PUBKEY_LONG), {}),
     ("keys.pubkey_sort", keys.pubkey_sort, ([PUBKEY, PUBKEY_LONG],), {}),
     ("mult.mult_bytes", mult.mult_bytes, (PRVKEY,), {}),
-    ("mult.mult", mult.mult, (PRVKEY,), {}),
     ("hashes.tagged_sha256", hashes.tagged_sha256, (b"TapLeaf", MSG), {}),
     ("dsa.sign", dsa.sign, (MSG, PRVKEY, bytes(32)), {}),
     ("dsa.verify", dsa.verify, (MSG, PUBKEY, DER), {}),

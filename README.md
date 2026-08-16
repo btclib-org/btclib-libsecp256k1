@@ -255,7 +255,7 @@ and decides nothing else.
   only a value — the 32-byte width is the curve's, not a fact the caller
   supplied and got wrong. The set of valid scalars is unchanged; only the
   type spelling them is. What the door is for is the caller who already
-  holds a number: `mult(3)`, a vector, a tweak just computed.
+  holds a number: `mult_bytes(3)`, a vector, a tweak just computed.
   The cost is not in that serialization, which is a loop over nine CPython
   digits and measures as noise. It is that an `int` holding a secret was
   produced by python arithmetic, variable in time with the magnitude of
@@ -362,11 +362,18 @@ compressed key is a field square root — and pays it for a key it had
 already converted.
 
 `ssa.Signer` and `keys.PubkeyTweakChain` are the two outposts on that
-side of the boundary. Each holds the converted object across calls, so
-the conversion happens once and every crossing afterwards carries only
-what changes: a message, a tweak. There are two of them because there
-are two conversions worth not repeating, and there is nothing else in
-these bindings that holds state at all.
+side of the boundary, and the only things in these bindings that hold
+state at all. Each holds the converted object across calls, so the
+conversion happens once and every crossing afterwards carries only what
+changes: a message, a tweak.
+
+The two are not worth the same, and the numbers below say which is
+which. A keypair is *arithmetic* — a point multiplication, half of what
+a signature costs — and no serialization would give it back. A parsed
+public key is a *parse*, and the caller can make that parse cheap by
+carrying the uncompressed form instead: 0.269 microseconds against
+2.326. So the signer saves what nothing else can, and the chain saves
+what a caller free to choose its serialization could have saved itself.
 
 `ssa.Signer` holds the keypair:
 
@@ -399,12 +406,21 @@ True
 
 That is a BIP32 path walked one index at a time, and the shape of it is
 what costs: each step needs the previous step's *serialized* key to hash
-into the next tweak, so `pubkey_tweak_add` parses at every step the very
-point the step before had built and serialized. The chain parses once —
-65.61 microseconds against 56.58 for the five steps above, which is the
-2.39 of a compressed parse saved four times. Every step still answers the
-octets its caller needs, and `chain.pubkey()` is the key it has arrived
-at, with `chain._pubkey_()` the point itself for a caller handing it on.
+into the next tweak, so `pubkey_tweak_add` on the compressed form parses
+at every step the very point the step before had built and serialized —
+64.62 microseconds against the chain's 55.14, for the five steps above,
+which is the 2.326 of a compressed parse saved four times.
+
+What that comparison leaves out is the caller's other move, and it is
+worth stating because it is nearly free: walking the same path in the
+*uncompressed* form and compressing each answer in python is 54.75, which
+is the chain's 55.14 within the noise. The uncompressed parse is 0.269,
+so there is almost nothing left for holding the point to save — the
+chain's saving is real against the compressed walk and a rounding error
+against that one. What it is unambiguously worth is not having to write
+`bytes([2 + (sec[64] & 1)]) + sec[1:33]` where BIP32 wants 33 octets to
+hash. `chain.pubkey()` is the key it has arrived at, and
+`chain._pubkey_()` the point itself for a caller handing it on.
 
 What the two do not share is what they hold. A parsed public key is a
 public value a caller may keep for as long as it likes; a keypair is the

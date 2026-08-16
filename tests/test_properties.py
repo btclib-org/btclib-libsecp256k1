@@ -95,8 +95,13 @@ def test_serialization_round_trips() -> None:
         # form libsecp256k1 writes where this file composes it
         assert keys.pubkey_from_prvkey(prvkey) == compressed
         assert keys.pubkey_from_prvkey(prvkey, False) == uncompressed
-        # mult agrees with the serialization it is derived from
-        assert mult.mult(prvkey) == (
+        # the coordinates agree with the serialization they are read
+        # out of, which is the whole of what `mult.mult` used to do
+        multiplied = mult.mult_bytes(prvkey)
+        assert (
+            int.from_bytes(multiplied[1:33], "big"),
+            int.from_bytes(multiplied[33:], "big"),
+        ) == (
             int.from_bytes(uncompressed[1:33], "big"),
             int.from_bytes(uncompressed[33:], "big"),
         )
@@ -330,7 +335,7 @@ def test_pinned_zero_leading_x() -> None:
     assert keys.serialize(keys.parse(uncompressed)) == compress(uncompressed)
     assert keys.serialize(keys.parse(compress(uncompressed)), False) == uncompressed
     assert xonly.from_pubkey(uncompressed)[0] == uncompressed[1:33]
-    assert mult.mult(prvkey)[0] == int.from_bytes(uncompressed[1:33], "big")
+    assert mult.mult_bytes(prvkey)[1:33] == uncompressed[1:33]
 
 
 def test_pinned_short_der_signature() -> None:

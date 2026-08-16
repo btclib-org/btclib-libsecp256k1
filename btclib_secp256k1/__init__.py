@@ -7,10 +7,19 @@
 
 Every entry point of these bindings takes octets and answers octets. A
 libsecp256k1 object crosses the boundary only where a caller already
-holds one: `keys.parse` and `keys.serialize`, and the pairs beside them
-in `xonly`, `dsa`, `recovery` and `silentpayments`, are that bridge, and
-a MuSig2 session driven through the raw `lib` is who is on the other
-side of it.
+holds one, and there are two ways it can. The first is a `parse`:
+`keys.parse` and `keys.serialize`, and the pairs beside them in `xonly`,
+`dsa`, `recovery` and `silentpayments`, are that bridge, and a MuSig2
+session driven through the raw `lib` is who is on the other side of it.
+
+The second is a keypair, which has no bridge because it has no
+serialization to be one: `secp256k1_keypair` holds a private key in
+libsecp256k1's own layout, and the C API creates one and never writes it
+out. A caller that built one -- through `lib`, as a MuSig2 signer does --
+holds an object nothing here could have handed it as octets, and
+`xonly.from_keypair` is what reads the public key off it.
+`ssa.Signer.pubkey` is that same call for a caller that let this package
+build the keypair instead.
 
 Under each of those entry points is the half of it that speaks in those
 objects, spelled `_foo_`. The leading underscore says private, because

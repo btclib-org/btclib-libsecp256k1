@@ -5,17 +5,25 @@
 
 """Secp256k1 point multiplication.
 
-The two spellings of generator multiplication for a caller who thinks of
-it as an operation on a scalar rather than as the public key of a private
-key: serialized uncompressed, and as a pair of coordinates. The C call is
-`keys.pubkey_from_prvkey`, which is the same multiplication answering in
-either serialization.
+Generator multiplication for a caller who thinks of it as an operation on
+a scalar rather than as the public key of a private key. The C call is
+`keys.pubkey_from_prvkey`, which is the same multiplication with the
+serialization flag every producer of a key takes; this is its
+`compressed=False` case under the name the operation has.
 
-`mult_bytes` used to be `mult_`, and was renamed for the trailing
-underscore rather than for anything it does: that underscore now means a
-private half speaking in parsed objects, and this is a public function
-answering octets. `_bytes` is what the rest of this package calls the
-octets of a thing.
+`mult` was here too, and answered the pair of coordinates as ints. It is
+gone: a point of the curve left this package as numbers in that one
+place, where every other answer is octets or a verdict, and reading the
+two halves of these 65 octets is `int.from_bytes` twice -- 0.138
+microseconds of a call that is some 8.5, which is 1.6% of it and the
+whole of what the exception was worth. Measured in the caller because
+that is where it now happens: the function that used to do it held the
+same two conversions inside a python frame that cost about as much
+again, so the two spellings are the same call and neither is reliably
+the faster. What a caller wanting coordinates writes is:
+
+    sec = mult.mult_bytes(num)
+    x, y = int.from_bytes(sec[1:33], "big"), int.from_bytes(sec[33:], "big")
 """
 
 from __future__ import annotations
@@ -50,27 +58,3 @@ def mult_bytes(num: BytesLike | int) -> bytes:
         '0479be667e'
     """
     return pubkey_from_prvkey(num, compressed=False)
-
-
-def mult(num: BytesLike | int) -> tuple[int, int]:
-    """Multiply the generator point, as a pair of coordinates.
-
-    Args:
-        num: the scalar to multiply the generator by, 32 bytes or an int
-            below 2**256.
-
-    Returns:
-        The affine coordinates (x, y) of the resulting point, as ints.
-        This is `mult_bytes` with the two halves of its output read as
-        big endian integers; a caller that wants bytes wants
-        `mult_bytes`, or `keys.pubkey_from_prvkey` for the compressed
-        form.
-
-    Raises:
-        ValueError: if the scalar is not 32 bytes or does not fit in
-            them, or if it is not in [1, n-1].
-        RuntimeError: if libsecp256k1 fails to serialize the point,
-            which no input can make it do.
-    """
-    result = mult_bytes(num)
-    return int.from_bytes(result[1:33], "big"), int.from_bytes(result[33:], "big")

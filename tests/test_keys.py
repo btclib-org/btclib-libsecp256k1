@@ -85,7 +85,7 @@ def test_pubkey_from_prvkey() -> None:
     assert keys.pubkey_from_prvkey((1).to_bytes(32, "big")) == b"\x02" + generator[1:33]
 
     # the odd y, which 1G cannot exhibit
-    assert mult.mult(6)[1] & 1
+    assert mult.mult_bytes(6)[64] & 1
     assert keys.pubkey_from_prvkey(6) == b"\x03" + mult.mult_bytes(6)[1:33]
 
     # mult_ is this function with the compressed flag off
