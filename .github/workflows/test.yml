@@ -706,7 +706,8 @@ jobs:
   #
   # The name carries the workflow because a context is keyed by name alone:
   # two workflows with a job named the same thing produce one ambiguous
-  # check, and macos.yml is a second workflow over the same matrix shape.
+  # check, and macos.yml and windows.yml are two more workflows over the
+  # same matrix shape.
   #
   # `if: always()` because a job with unmet `needs` is skipped, and a
   # skipped check is not a failed one: without it a failing matrix cell

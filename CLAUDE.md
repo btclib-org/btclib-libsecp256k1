@@ -167,15 +167,19 @@ both monthly on the 1st.
 | `links` | do the URLs in the prose still resolve | Mon |
 | `macos` | does the suite pass on macOS | Wed, and a release |
 | `latest` | does the tree survive every dependency at its newest | Wed |
+| `windows` | does the suite pass on Windows | Sat, and a release |
 | `mutation` | would the suite notice a wrong line | Sun |
 | `published` | can the world install what PyPI serves | 1st, a release |
 | `vendored-vectors` | do the vendored vectors still match upstream | 1st |
 
-`macos` is the one sentinel a pull request would otherwise have waited for,
-and the reason it is one is measured in `test.yml`'s header: the macOS
-runners queue for tens of minutes where every other platform queues for two.
-A release calls it, so what a merge no longer waits for a publication still
-does.
+`macos` and `windows` are the two sentinels a pull request would otherwise
+have waited for, and each left the gate on a measurement rather than a
+preference — the macOS runners queue for tens of minutes where every other
+platform queues for two, and the Windows cells were the largest family of
+jobs in a run asking for more of them at once than an organization on GitHub
+Free is given. `test.yml`'s header carries the first measurement and
+`windows.yml`'s the second. A release calls both, so what a merge no longer
+waits for a publication still does.
 
 `latest` is the one that covers a gap nothing else does. Every uv command
 elsewhere passes `--locked`, the dependency groups declare no version, and

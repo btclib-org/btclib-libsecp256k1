@@ -711,6 +711,20 @@ release-notes length in the first place, and are still in
   serialization is 0.757 of those microseconds, and `compact=True`
   answers the 64 octets without writing it
 
+- **The sentinel table names `windows` too** (#184). `windows.yml` became
+  a workflow of its own two changes after `macos.yml` did, and the table
+  in CLAUDE.md kept listing the sentinels without it — so the paragraph
+  under the table still called `macos` "the one sentinel a pull request
+  would otherwise have waited for" when there are two, each split by a
+  measurement of a different kind: a queue for the first, an
+  organization's ceiling of concurrent jobs for the second. The
+  measurements stay where they were made, in `test.yml`'s header and
+  `windows.yml`'s. Two smaller readings of the same omission go with it:
+  the static-then-dynamic pair of steps CONTRIBUTING.md attributes to
+  `macos.yml`'s cells is `windows.yml`'s too, and `test.yml`'s aggregate
+  job explains its name by there being a second workflow over this matrix
+  shape, which is now a third
+
 ### CI
 
 - **`github-release` needed `always()` too, not just an explicit `if`.**

@@ -251,9 +251,9 @@ command at all, for the reason above, and no longer gates.
       --reinstall-package btclib_secp256k1 pytest
   ```
 
-  the two steps of `macos.yml`'s own cells are these two, in this order and
-  for the same reason: neither the environment nor the build cache is keyed
-  on the variable that chooses the linkage
+  the two steps of `macos.yml`'s and `windows.yml`'s own cells are these
+  two, in this order and for the same reason: neither the environment nor
+  the build cache is keyed on the variable that chooses the linkage
 
 - `Build wheels on <os>`, for this platform only
 
