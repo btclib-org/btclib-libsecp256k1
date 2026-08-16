@@ -90,6 +90,70 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # the cheapest job in the workflow, and the one that decides whether the
+  # rest of it runs at all: a pull request that edits only prose no
+  # artifact carries cannot change what any of the jobs below build, and
+  # was spending the whole matrix to prove it. Every root job takes this
+  # one as a `needs` and reads its output; the jobs downstream of those
+  # skip on their own, a job whose needs are skipped being skipped too.
+  #
+  # Three things this must not get wrong:
+  #
+  # - it runs on every trigger, and answers `true` on all but one. A
+  #   `changes` job that skipped itself off the pull_request path would
+  #   leave every dependent reading an empty output, which is not 'true',
+  #   and the whole workflow would skip on main and on a release
+  # - README.md is not prose for this purpose. It is the long description
+  #   of the package, and check-dist renders it with twine and rates it
+  #   with pyroma, so an edit to it is a change the matrix can fail on
+  # - test-passed takes this job as a `needs` as well, so a failure here
+  #   fails the gate. Without that, an error listing the files would skip
+  #   everything and be reported as a pass
+  changes:
+    name: Decide whether the matrix has anything to check
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # the file list of a pull request, which contents: read does not carry
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.decide.outputs.code }}
+
+    steps:
+      - name: Ask which files the pull request touches
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # a push to main, a release call and a dispatch build everything:
+          # only a pull request has a base to be a diff against
+          if [ "$EVENT" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "$EVENT is not a pull request: everything runs"
+            exit 0
+          fi
+          gh api "repos/$REPO/pulls/$NUMBER/files" --paginate \
+            --jq '.[].filename' > files.txt
+          echo "files changed:"
+          cat files.txt
+          # the allowlist is what nothing built reads: the prose files of
+          # the root and of .github, and neither README.md nor a file
+          # under docs/, which the sdist carries. An empty list is not a
+          # documentation change, it is a question this could not answer,
+          # so the count is checked before the pattern
+          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|HISTORY|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$'
+          if [ ! -s files.txt ] || grep -qvE "$prose" files.txt; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "something the matrix reads changed: everything runs"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "prose only: the matrix has nothing to check"
+          fi
+
   # coverage is a property of the python wrapper layer, not of the
   # platform: measuring it once is enough, and the fail_under ratchet in
   # pyproject.toml is what makes the number mean something
@@ -102,7 +166,7 @@ jobs:
     # should have run. A run on the merge result still happens the moment
     # the pull request is marked ready, which is why ready_for_review is a
     # trigger type above
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     # every job below caps its own runtime, this one included: the default
     # is six hours, and with tens of jobs compiling C a single hang is
@@ -112,6 +176,7 @@ jobs:
     # not a failure, while a hung one is
     timeout-minutes: 15
 
+    needs: changes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -140,7 +205,7 @@ jobs:
 
   build-cibuildwheel:
     name: Build wheels on ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.changes.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     # the interpreter uv runs the build tools with is the one setup-python
@@ -178,6 +243,7 @@ jobs:
           - windows-latest
           - windows-11-arm
 
+    needs: changes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -228,7 +294,7 @@ jobs:
 
   build-dynamic:
     name: Build dynamic wheel on ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.changes.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     # see build-cibuildwheel; here the platform tag of the wheel is the
@@ -244,6 +310,7 @@ jobs:
         # ubuntu-24.04-arm/macos-latest are arm64
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-26-intel, macos-latest]
 
+    needs: changes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -304,13 +371,14 @@ jobs:
 
   build-sdist:
     name: Build sdist
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # see build-cibuildwheel
     env:
       UV_PYTHON_DOWNLOADS: never
 
+    needs: changes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -429,13 +497,14 @@ jobs:
 
   build-windows:
     name: "Build on Linux for Windows"
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # see build-cibuildwheel
     env:
       UV_PYTHON_DOWNLOADS: never
 
+    needs: changes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -720,6 +789,7 @@ jobs:
     # skips uniformly rather than tripping the skip check below
     if: ${{ always() && !github.event.pull_request.draft }}
     needs:
+      - changes
       - coverage
       - build-cibuildwheel
       - build-dynamic

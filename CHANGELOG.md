@@ -727,6 +727,25 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **A pull request that changes only prose no longer runs the matrix**
+  (#189). Measured on the last full run before this, 48 jobs and 81.8
+  runner-minutes, of which the change that added `windows.yml` to the
+  table of sentinels — four markdown files and one workflow comment —
+  asked for all of them. `changes` is one ubuntu job that lists the pull
+  request's files through the API and answers whether anything the matrix
+  reads changed; the five root jobs read it in their `if`, and what hangs
+  off them skips on its own. `test: every job passed` already carried
+  `always()`, so it still runs and reads `skipped`, which it does not
+  treat as a failure, and the branch rule keeps naming the same context.
+  Three things the job cannot get wrong, all in the comment above it: it
+  runs on every trigger and answers `true` on all but `pull_request`,
+  because a `changes` that skipped itself would leave every dependent
+  reading an empty output and skip the release path too; `README.md` is
+  not prose here, being the long description `check-dist` renders with
+  twine and rates with pyroma, which is why the allowlist is written out
+  rather than inverted from `*.md`; and `test-passed` takes `changes` as
+  a `needs`, so an error listing the files fails the gate instead of
+  skipping everything and reporting a pass
 - **`github-release` needed `always()` too, not just an explicit `if`.**
   The previous fix (v0.8.0.2's own CHANGELOG entry, right below) added
   `needs.publish-pypi.result == 'success' && needs.attest.result ==
