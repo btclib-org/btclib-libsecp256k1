@@ -138,7 +138,13 @@ verification equation is written as, with no product serialized on its
 way into the sum. Neither computes anything libsecp256k1 does not: the
 arithmetic is upstream's calls in the order the equation names them, and
 *Parsing the key once* below is where the crossing they save is
-measured. The cryptography —
+measured. One entry point is more than a composition, and it is
+`dsa.sign(grind=True)`: a loop that signs again, with a counter mixed
+into the nonce, until `r` is the low one. That is Bitcoin Core's
+`CKey::Sign` and not a scheme of this package's — a signer's size policy,
+which is why it is asked for and never done by default — and *Grinding
+for a low r* below is where its cost, and the reason the loop is python
+rather than C, are measured. The cryptography —
 the algorithms, the constant-time
 implementation, the side-channel hardening — is upstream's, and none of
 it is reimplemented, extended or second-guessed here. Wrappers of the
@@ -570,6 +576,56 @@ What does cost in `dsa.sign` is the DER serialization, 0.757
 microseconds, and a caller who wanted the other form never has to pay it:
 `compact=True` answers the 64 octets of `r ‖ s` directly, where reaching
 them through `to_compact` writes the DER and parses it straight back.
+
+## Grinding for a low r
+
+`dsa.sign(grind=True)` answers the signature of the same key and message
+whose `r` has its high bit clear. DER spends a leading zero octet on an
+integer whose top bit is set, so that signature encodes one octet
+shorter — which is what Bitcoin Core's `CKey::Sign` grinds for, and this
+is Core's scheme rather than a rephrasing of it: the first attempt is the
+plain RFC6979 signature, and each retry mixes a `uint32` counter, little
+endian in the first 4 of 32 octets, into the nonce. Written any other
+way it would answer octets nobody else answers; written this way,
+`tests/test_vectors.py` holds it to Core's own vectors and to
+rust-secp256k1's.
+
+It costs a signature and then some: 25.23 microseconds against the 12.62
+of a plain one, measured beside it over 2000 keys, because half the
+attempts are wasted and the tail is longer than the average — 2.09
+attempts on the mean, and the worst of those 2000 keys took 14. That is
+why it is a parameter and not the default, and why `s` is not mentioned
+in the same breath: libsecp256k1 has already returned the lower of the
+two, so there is nothing there to grind for.
+
+Where the loop is written was measured, not assumed. In the compact form,
+which is what the retry tests: 25.90 microseconds for a loop calling the
+wrappers once per attempt, 24.82 for what is implemented — the key
+checked once, the two scratch buffers allocated once per call — and 23.82
+for the same loop with those buffers held at module level, which a
+package with one shared context and a
+[thread safety](#thread-safety) story does not get to do. A loop compiled
+in C would have started from that last number, so what crossing the
+boundary twice on average actually costs is about a microsecond of
+twenty-five. It buys nothing here, and it would have cost the one thing
+these bindings do not trade: a
+[dynamic build](#the-vendored-library-is-not-optional) compiles no C at
+all, so a C helper would be a feature the static wheels have and the
+dynamic ones do not.
+
+What the loop tests is the compact serialization, and not the DER
+length, which is not the same question: DER is `6 + lenR + lenS`, so a
+high `r` of 33 octets with an `s` that happens to need only 31 encodes to
+70 octets too — about one signature in 500 — and a length test would
+take those for low-r ones. The first octet of the compact form is the top
+of `r`, which is exactly what Core's `SigHasLowR` reads.
+
+The entropy argument is refused together with it. Grinding writes the
+very 32 octets `aux_rand32` is, so `dsa.sign(msg, key, aux, grind=True)`
+raises rather than resolving silently in favour of one of them.
+`recovery.sign` has no `grind`, and the reason is that there is nothing
+to shorten: a recoverable signature is 65 fixed octets, so grinding one
+would buy the caller two signatures' worth of nothing.
 
 ## Wrapped modules
 

@@ -136,8 +136,99 @@ def nonce_rfc6979(
     return take(nonce, into=into)
 
 
+def _signed(
+    signature: CData, msg_bytes: bytes, prvkey_bytes: bytes, ndata: bytes | CData
+) -> None:
+    """Sign into a signature object the caller owns.
+
+    The one signing call of this module, written once because `_sign_`
+    makes it and `_grind` makes it again for every attempt after the
+    first. Every argument is checked before it gets here, so what this
+    is for is the call itself and the one failure of it: two spellings of
+    it would be two chances to pass a different nonce function.
+
+    Args:
+        signature: the signature object to sign into, overwritten.
+        msg_bytes: the 32-byte hash of the message, already checked.
+        prvkey_bytes: the 32-byte private key, already checked.
+        ndata: the extra entropy to mix into the nonce, or NULL for none,
+            as `optional_entropy` returns it.
+
+    Raises:
+        ValueError: if the private key is not in [1, n-1], which is the
+            one thing about it libsecp256k1 answers for and `scalar`
+            cannot.
+    """
+    # secp256k1_ecdsa_sign takes the nonce function and its data: NULL
+    # for the first selects the RFC6979 default, and it is the only one
+    # these bindings pass -- a python nonce function would be called from
+    # inside the signature, with the secret passing through a python
+    # object on every call. The contribution beside it is 32 bytes of
+    # entropy, and `optional_entropy` says what omitting it means here
+    noncefp = ffi.NULL
+    if not lib.secp256k1_ecdsa_sign(
+        ctx, signature, msg_bytes, prvkey_bytes, noncefp, ndata
+    ):
+        raise ValueError("invalid private key: not in [1, n-1]")
+
+
+def _grind(signature: CData, msg_bytes: bytes, prvkey_bytes: bytes) -> None:
+    """Sign again into the same object until r is the low one.
+
+    Bitcoin Core's `CKey::Sign` scheme, and it has to be that one octet
+    for octet: what makes a ground signature reproducible by anybody else
+    is the counter, not the idea. The first attempt is the plain RFC6979
+    signature the caller already holds; each retry mixes a `uint32`
+    counter, little endian in the first 4 of 32 octets, into the nonce
+    that derives the next one. Where the high bit of r is clear, DER
+    spends no leading zero octet on it and the encoding is one octet
+    shorter -- which is the whole of the benefit, and why this is a
+    signer's policy rather than an operation of the curve.
+
+    The test is on the compact serialization rather than on the DER
+    length, and they are not the same question: DER is 6 + lenR + lenS,
+    so a high r of 33 octets with an s that happens to need only 31
+    encodes to 70 octets too -- about one signature in 500 -- and a
+    length test would take those for low-r. The first octet of the
+    compact form is the top of r, which is what Core's `SigHasLowR`
+    reads.
+
+    Both buffers are allocated here and reused across attempts: once per
+    call rather than once per attempt, which is most of what a loop
+    written in C would have saved, and per call rather than at module
+    level, which a package holding one shared context and documenting
+    thread safety cannot do.
+
+    Args:
+        signature: the signature of the first attempt, signed over in
+            place until its r is the low one.
+        msg_bytes: the 32-byte hash of the message, already checked.
+        prvkey_bytes: the 32-byte private key, already checked.
+
+    Raises:
+        RuntimeError: if libsecp256k1 fails to serialize an attempt,
+            which a signature it has just made cannot do.
+    """
+    compact = ffi.new("unsigned char[64]")
+    # the counter goes in the first 4 octets and the other 28 stay zero,
+    # so the buffer is written once per attempt and not rebuilt
+    entropy = ffi.new("unsigned char[32]")
+    counter = 0
+    while True:
+        if not lib.secp256k1_ecdsa_signature_serialize_compact(ctx, compact, signature):
+            raise RuntimeError("signature serialization failed")
+        if compact[0] < 0x80:
+            return
+        counter += 1
+        entropy[0:4] = counter.to_bytes(4, "little")
+        _signed(signature, msg_bytes, prvkey_bytes, entropy)
+
+
 def _sign_(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    grind: bool = False,
 ) -> CData:
     """Create an ECDSA signature, as the parsed signature.
 
@@ -152,6 +243,10 @@ def _sign_(
         prvkey: the private key, 32 bytes or an int below 2**256.
         aux_rand32: 32 bytes of extra entropy mixed into the nonce, or
             None for the RFC6979 nonce alone.
+        grind: whether to sign again until r is the low one, as `sign`
+            documents. Not with aux_rand32: the two write the same 32
+            octets, so asking for both is refused rather than resolved
+            here.
 
     Returns:
         The libsecp256k1 signature object, in the lower-s form
@@ -159,30 +254,19 @@ def _sign_(
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
-            given and is not 32 bytes, or if the private key is not 32
-            bytes, does not fit in them, or is not in [1, n-1].
+            given and is not 32 bytes, if aux_rand32 and grind are given
+            together, or if the private key is not 32 bytes, does not fit
+            in them, or is not in [1, n-1].
     """
     prvkey_bytes = scalar(prvkey, "private key")
     msg_bytes = octets(msg_bytes, "message hash", 32)
+    if grind and aux_rand32 is not None:
+        raise ValueError("aux_rand32 and grind are the same 32 octets")
 
     signature = ffi.new("secp256k1_ecdsa_signature *")
-
-    # secp256k1_ecdsa_sign takes the nonce function and its data: NULL
-    # for the first selects the RFC6979 default, and it is the only one
-    # these bindings pass -- a python nonce function would be called from
-    # inside the signature, with the secret passing through a python
-    # object on every call. The contribution beside it is 32 bytes of
-    # entropy, and `optional_entropy` says what omitting it means here
-    noncefp = ffi.NULL
-    if not lib.secp256k1_ecdsa_sign(
-        ctx,
-        signature,
-        msg_bytes,
-        prvkey_bytes,
-        noncefp,
-        optional_entropy(aux_rand32),
-    ):
-        raise ValueError("invalid private key: not in [1, n-1]")
+    _signed(signature, msg_bytes, prvkey_bytes, optional_entropy(aux_rand32))
+    if grind:
+        _grind(signature, msg_bytes, prvkey_bytes)
     return signature
 
 
@@ -191,6 +275,7 @@ def sign(
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
     compact: bool = False,
+    grind: bool = False,
 ) -> bytes:
     """Create an ECDSA signature.
 
@@ -204,6 +289,15 @@ def sign(
     reaching it through `to_compact` is that DER encoding parsed straight
     back apart.
 
+    `grind` is the one thing here that is more than a libsecp256k1 call,
+    and it is Bitcoin Core's `CKey::Sign` scheme rather than an invention
+    of this package: signing again, with a counter mixed into the nonce,
+    until r has its high bit clear and DER therefore spends no leading
+    zero octet on it. It costs what the octet is worth -- two signatures
+    on average, and the tail is longer than that -- so it is asked for
+    and never done by default. `s` is not ground for and could not be:
+    libsecp256k1 has already returned the lower of the two.
+
     Args:
         msg_bytes: the 32-byte hash of the message.
         prvkey: the private key, 32 bytes or an int below 2**256.
@@ -212,15 +306,22 @@ def sign(
             entropy is not a serialization, and padding one would make a
             caller mistake a valid argument.
         compact: whether to answer the 64-byte `r || s` rather than DER.
+        grind: whether to sign again until r is the low one. Refused
+            together with aux_rand32: grinding is written into those very
+            32 octets, so a caller asking for both is asking for two
+            different values of one argument, and Core's counter is what
+            makes the result reproducible by anyone else.
 
     Returns:
         The signature, in the lower-s form libsecp256k1 always produces:
         DER, or the 64 octets of `r || s` where `compact` asks for them.
+        Where `grind` asks for it, of the low r as well.
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
-            given and is not 32 bytes, or if the private key is not 32
-            bytes, does not fit in them, or is not in [1, n-1].
+            given and is not 32 bytes, if aux_rand32 and grind are given
+            together, or if the private key is not 32 bytes, does not fit
+            in them, or is not in [1, n-1].
         RuntimeError: if libsecp256k1 fails to serialize the signature,
             which no input can make it do.
 
@@ -230,8 +331,10 @@ def sign(
         >>> msg = hashlib.sha256(b"hello").digest()
         >>> dsa.is_low_s(dsa.sign(msg, 1))
         True
+        >>> dsa.sign(msg, 1, grind=True, compact=True)[0] < 0x80
+        True
     """
-    signature = _sign_(msg_bytes, prvkey, aux_rand32)
+    signature = _sign_(msg_bytes, prvkey, aux_rand32, grind)
     return serialize_compact(signature) if compact else serialize_der(signature)
 
 

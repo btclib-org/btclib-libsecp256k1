@@ -73,8 +73,9 @@ them `ndata` and `ellswift.encode` called them `rnd32`, and
 unaffected.
 
 What the rest of the release adds: one for a caller that signs more than
-once under one key, one for a caller computing a taproot output key from
-a public key it has validated, a set for a caller composing two of these
+once under one key, one for a caller whose ECDSA signatures go into a
+transaction, one for a caller computing a taproot output key from a
+public key it has validated, a set for a caller composing two of these
 calls where the second used to parse what the first had just serialized,
 and one for a caller that would rather hold octets than a parsed key at
 all.
@@ -99,6 +100,18 @@ and nothing runs behind the caller to do it — SECURITY.md now names this
 as the one buffer of the package whose zeroing is asked for rather than
 done. The private key handed to the constructor is a python `bytes` or
 `int` and is no more zeroizable than before.
+
+`dsa.sign` takes `grind=True`, which answers the signature of the same
+key and message whose `r` has its high bit clear — one octet shorter in
+DER, and the reason Bitcoin Core's `CKey::Sign` does it. It is Core's
+scheme rather than a rephrasing: a `uint32` counter mixed into the nonce,
+so what comes back is what Core and rust-secp256k1 answer for the same
+inputs, held to their own vectors here. It costs two signatures on
+average — 12.62 microseconds against 25.23, on the machine and with the
+method CHANGELOG.md states — which is why it is asked for and never done
+by default. `aux_rand32` is refused alongside it, being the same 32
+octets, and `s` needs nothing of the kind: libsecp256k1 has always
+returned the lower of the two.
 
 `xonly._tweak_add_` is the private half of `xonly.tweak_add`: it takes
 the parsed point `keys.parse` returns, rather than the x-only form, and

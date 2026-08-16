@@ -75,6 +75,44 @@ def test_sign_and_verify() -> None:
     assert ssa.verify(msg, keys.reserialize(pubkey_bytes), ssa_sig)
 
 
+def test_grinding_is_the_signature_the_boundary_would_have_returned() -> None:
+    """Grinding changes which signature is answered, and nothing else.
+
+    What the vendored vectors pin is the octets, against Core and against
+    rust-secp256k1; what is left for here is the boundary around them.
+    Both halves grind -- `_sign_` for a caller holding the object and
+    `sign` for one wanting the encoding -- and both serializations carry
+    the same signature out, so the compact form and the DER form of one
+    ground signature are each other's. It still verifies, and it is still
+    low-s: grinding chooses among the signatures libsecp256k1 makes
+    rather than making one of its own.
+
+    The refusal is the entropy argument: grinding writes those same 32
+    octets, so asking for both at once is refused rather than silently
+    resolved in favour of one of them.
+    """
+    msg = b"\x03" * 32
+
+    ground = dsa.sign(msg, prvkey, grind=True)
+    assert dsa.verify(msg, pubkey_bytes, ground)
+    assert dsa.is_low_s(ground)
+    # the high bit of r is what was ground for, and r is the first 32
+    # octets of the compact form
+    assert dsa.to_compact(ground)[0] < 0x80
+    assert dsa.sign(msg, prvkey, compact=True, grind=True) == dsa.to_compact(ground)
+    # the private half answers with the object the public one encodes
+    assert dsa.serialize_der(dsa._sign_(msg, prvkey, grind=True)) == ground
+
+    # deterministic, like the signature it grinds from: the counter is a
+    # function of the message and the key too
+    assert dsa.sign(msg, prvkey, grind=True) == ground
+
+    with pytest.raises(ValueError, match="aux_rand32 and grind"):
+        dsa.sign(msg, prvkey, b"\x01" * 32, grind=True)
+    with pytest.raises(ValueError, match="aux_rand32 and grind"):
+        dsa._sign_(msg, prvkey, b"\x01" * 32, grind=True)
+
+
 def test_ssa_sign_custom() -> None:
     """Sign a BIP340 message of any length, which only sign_custom takes.
 

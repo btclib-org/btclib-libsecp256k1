@@ -143,6 +143,56 @@ release-notes length in the first place, and are still in
   used to name the message. Each on its own is refused as before, and
   every wipe that happened still happens
 
+### Grinding for a low r
+
+- **`dsa.sign(grind=True)` signs again until `r` is the low one** (#204).
+  Bitcoin Core's `CKey::Sign` scheme and not a rephrasing of it: the
+  first attempt is the plain RFC6979 signature, and each retry mixes a
+  `uint32` counter, little endian in the first 4 of 32 octets, into the
+  nonce, until the high bit of `r` is clear and DER therefore spends no
+  leading zero octet on it. One octet shorter, about half the time, for
+  two signatures' work — measured on this tree, on an Apple M5, macOS
+  26.6, arm64, CPython 3.14.6, 2000 distinct keys signed once each,
+  microseconds per call: `dsa.sign` 12.62 against `dsa.sign(grind=True)`
+  25.23, at 2.09 attempts on the mean and 14 for the worst of those keys.
+  Off by default for that reason, and asked for by a caller who wants the
+  octet. `dsa._sign_` takes it too; `s` has no counterpart, libsecp256k1
+  having already returned the lower of the two, and `recovery.sign` does
+  not get one, a recoverable signature being 65 fixed octets with nothing
+  to shorten
+- **the loop is python, and no C was written** — which was measured
+  rather than assumed. In the compact form, which is what the retry
+  tests: 25.90 for a loop calling the wrappers once per attempt, 24.82
+  for what landed, with the key checked once and the two scratch buffers
+  allocated once per call, and 23.82 for the same loop with those buffers
+  held at module level — which one shared context and a documented
+  thread-safety story rule out. A loop compiled in C would have started
+  from that last figure, so the crossing is worth about a microsecond of
+  twenty-five, and it would have been bought with the one property these
+  bindings do not trade: a dynamic build compiles no C at all, so a C
+  helper would be a feature the static wheels have and the dynamic ones
+  do not
+- **the retry reads the compact serialization, not the DER length**,
+  which is not the same question: DER is `6 + lenR + lenS`, so a high `r`
+  of 33 octets with an `s` that needs only 31 encodes to 70 octets too —
+  about one signature in 500, measured over 200 000 — and a length test
+  would take those for low-r ones. The first octet of the compact form is
+  the top of `r`, which is what Core's `SigHasLowR` reads
+- **`aux_rand32` and `grind` are refused together**, with a `ValueError`.
+  Grinding writes the very 32 octets that argument is, so a caller asking
+  for both is asking for two values of one argument; ignoring one of
+  them, as Core does with its `test_case`, would make an argument vanish
+  where every other one here is checked
+- **what judges it is Core's vectors and rust-secp256k1's**, in
+  `tests/test_vectors.py`: the two deterministic signatures of Core's
+  `key_test1`, which are already low-r at the first attempt and so pin
+  that asking for grinding changes nothing; the property
+  `key_signature_tests` asserts over 256 messages, together with the
+  high-r half of that same test, which says the loop has something to
+  find; and rust-secp256k1's `test_low_r`, whose vector takes five
+  attempts and so pins the counter itself, in an implementation sharing
+  no line with Core's
+
 ### The parsed public key
 
 - **`xonly.tweak_add_` tweaks the point, where `tweak_add` tweaks its

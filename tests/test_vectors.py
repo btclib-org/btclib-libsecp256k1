@@ -29,6 +29,11 @@
 - deterministic ECDSA and DER encodings from trezor-firmware
   (crypto/tests/test_check.c, test_ecdsa_sign_digest_deterministic
   and test_ecdsa_der)
+- low-r grinding, from the two implementations of the scheme this
+  package copies: bitcoin/bitcoin src/test/key_tests.cpp, both the
+  fixed signatures of `key_test1` and the property `key_signature_tests`
+  asserts over 256 messages, and rust-bitcoin/rust-secp256k1 src/lib.rs
+  `test_low_r`, whose vector is the one that takes more than one attempt
 - ecdsa_sig.json and ecdsa_custom_nonce_sig.json, the ECDSA vectors
   used by btclib, vendored from
   https://github.com/rustyrussell/secp256k1-py (tests/data);
@@ -1075,6 +1080,133 @@ def test_trezor_ecdsa_vector(seckey_hex: str, digest_hex: str, sig_hex: str) -> 
 
     pubkey = keys.pubkey_from_prvkey(bytes.fromhex(seckey_hex), compressed=False)
     assert dsa.verify(digest, pubkey, der)
+
+
+# Bitcoin Core's src/test/key_tests.cpp, key_test1: the scalars of the
+# WIFs strSecret1 and strSecret2, signing Hash("Very deterministic
+# message") through CKey::Sign, which grinds unless told otherwise. Core
+# asserts the same octets for the compressed and the uncompressed
+# spelling of each key, so the scalar is all there is to carry over --
+# and it is the scalar this package takes anyway, a private key having
+# no compression flag on this side of the boundary
+CORE_PRVKEY1 = "12b004fff7f4b69ef8650e767f18f11ede158148b425660723b9f9a66e61f747"
+CORE_PRVKEY2 = "b524c28b61c9b2c49b2c7dd4c2d75887abb78768c054bd7c01af4029f6c0d117"
+CORE_DETERMINISTIC_VECTORS = [
+    (
+        CORE_PRVKEY1,
+        (
+            "304402205dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe5"
+            "9d31d022014ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd"
+            "4582f6"
+        ),
+    ),
+    (
+        CORE_PRVKEY2,
+        (
+            "3044022052d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9d"
+            "c1cd5022061d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771"
+            "b5944d"
+        ),
+    ),
+]
+
+# rust-bitcoin/rust-secp256k1, src/lib.rs, test_low_r: the same counter
+# scheme in an implementation that shares no line of code with Core's,
+# and a case that needs five attempts to reach a low r -- so the counter
+# is in the answer here, where Core's own vectors are settled by the
+# first attempt
+RUST_LOW_R_MSG = "887d04bb1cf1b1554f1b268dfe62d13064ca67ae45348d50d1392ce2d13418ac"
+RUST_LOW_R_PRVKEY = "57f0148f94d13095cfda539d0da0d1541304b678d8b36e243980aab4e1b7cead"
+RUST_LOW_R_SIG = (
+    "047dd4d049db02b430d24c41c7925b2725bcd5a85393513bdec04b4dc363632b"
+    "1054d0180094122b380f4cfa391e6296244da773173e78fc745c1b9c79f7b713"
+)
+
+
+def hash256(msg: bytes) -> bytes:
+    """Return Bitcoin Core's Hash(), which is the SHA256 of the SHA256."""
+    return hashlib.sha256(hashlib.sha256(msg).digest()).digest()
+
+
+@pytest.mark.parametrize("prvkey_hex, der_hex", CORE_DETERMINISTIC_VECTORS)
+def test_bitcoin_core_deterministic_vector(prvkey_hex: str, der_hex: str) -> None:
+    """Reproduce the deterministic signatures of Core's `key_test1`.
+
+    Both are low-r at the first attempt, which is the half of grinding a
+    fixed vector pins without looking as though it pins anything: asking
+    for it has to change nothing, and a loop that ground one attempt too
+    many, or that read the wrong octet of the compact form, would answer
+    something else here.
+    """
+    msg = hash256(b"Very deterministic message")
+    prvkey = bytes.fromhex(prvkey_hex)
+
+    assert dsa.sign(msg, prvkey).hex() == der_hex
+    assert dsa.sign(msg, prvkey, grind=True).hex() == der_hex
+    assert dsa.verify(msg, keys.pubkey_from_prvkey(prvkey), bytes.fromhex(der_hex))
+
+
+def test_rust_secp256k1_low_r_vector() -> None:
+    """Reproduce rust-secp256k1's `test_low_r`, which grinds five times.
+
+    The vector that says the counter is written the way both other
+    implementations write it: little endian, in the first 4 of 32 octets,
+    starting at 1 for the attempt after the deterministic one. Any other
+    reading of those octets diverges by the second attempt, and this one
+    needs five -- the first is the signature asserted below to be the one
+    with the high r.
+    """
+    msg = bytes.fromhex(RUST_LOW_R_MSG)
+    prvkey = bytes.fromhex(RUST_LOW_R_PRVKEY)
+
+    assert dsa.sign(msg, prvkey, compact=True, grind=True).hex() == RUST_LOW_R_SIG
+    # what grinding was for: the deterministic signature of this key and
+    # message is the high-r one, so the vector above is not it
+    assert dsa.sign(msg, prvkey, compact=True)[0] >= 0x80
+    assert dsa.verify(
+        msg,
+        keys.pubkey_from_prvkey(prvkey),
+        bytes.fromhex(RUST_LOW_R_SIG),
+        compact=True,
+    )
+
+
+def test_bitcoin_core_low_r_property() -> None:
+    """Reproduce `key_signature_tests` of Core's src/test/key_tests.cpp.
+
+    Core's own property, over its own inputs: 256 messages signed with
+    grinding, none of them encoding to more than 70 octets and none with
+    an r of more than 32, at least one shorter than 70 -- and, before
+    that, the other half of the same test, that specifying the entropy
+    without grinding does reach a high r within 20 tries. That last one
+    is what makes the rest mean something: it is the same 32 octets the
+    grinding counter writes, so it says the loop has something to find
+    rather than a predicate that is always true.
+    """
+    prvkey = bytes.fromhex(CORE_PRVKEY1)
+
+    # a high r within 20 tries, the counter as Core's test_case writes it
+    high_r = [
+        dsa.sign(
+            hash256(b"A message to be signed"),
+            prvkey,
+            attempt.to_bytes(4, "little") + bytes(28),
+        )
+        for attempt in range(1, 21)
+    ]
+    assert any(der[3:5] == b"\x21\x00" for der in high_r)
+
+    lengths = set()
+    for i in range(256):
+        der = dsa.sign(
+            hash256(b"A message to be signed" + str(i).encode()), prvkey, grind=True
+        )
+        # der[3] is the length of r, which grinding holds to 32 octets:
+        # the leading zero DER spends on a high one is what it is for
+        assert der[3] <= 32
+        lengths.add(len(der))
+    assert max(lengths) <= 70
+    assert min(lengths) < 70
 
 
 # encodings accepted by secp256k1_ecdsa_signature_parse_der: they parse
