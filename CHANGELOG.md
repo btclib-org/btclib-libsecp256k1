@@ -500,6 +500,48 @@ release-notes length in the first place, and are still in
   what an overloaded call reports, and is the one way this is visible
   to a caller who was already type-checking
 
+### The test a stateful object has to pass
+
+- **the rule the outpost section applies is now stated there** (#191),
+  rather than only in <https://github.com/btclib-org/btclib-secp256k1/issues/161>
+  where it was reached. That section explained the two objects that
+  exist and separated them correctly — a keypair is arithmetic, a parsed
+  point is a parse — but the reader who needs it is the one proposing a
+  *third*, and what they needed was the test, not the two instances of
+  it. It is written as one sentence: what an object saves is the cost of
+  rebuilding, from octets, whatever it holds
+- **and the saving is that cost by construction, not by measurement,**
+  which is the stronger form of the same claim and the one the section
+  now makes. `ssa.sign` builds the keypair, signs with it and wipes it;
+  `signer.sign` is that middle term with the first already paid, so the
+  difference between them is `secp256k1_keypair_create` on any machine,
+  and the numbers only add that nothing else of consequence sits in it.
+  They are the section's own — 15.82 against the signer's 8.27, of which
+  the keypair is 7.55, and 15.82 − 8.27 is that 7.55 — rather than a set
+  of its own. The chain gets the same treatment: what it saves is the
+  parse it holds, and which parse that is depends on the serialization
+  its caller carries — the pair the section states four paragraphs
+  above, pointed at rather than restated. That is the sharper form of
+  the distinction, because it says why this saving is the one a caller
+  can make cheap and the keypair's is not
+- **and which figures survive a different machine is said**, because a
+  section arguing from microseconds should say which of them it is
+  arguing from: the identity, and it carries because it is structural,
+  not because a ratio travels better than an absolute. The counts are
+  one laptop's
+- **two objections are answered before they are raised.** What recovers
+  a parse is `keys.parse`, not a cheaper serialization: the
+  uncompressed-form argument reaches neither an x-only key, which has no
+  second serialization, nor a walk starting from the 33 octets an xpub
+  carries, where reaching the uncompressed form costs a `reserialize`
+  the chain does not pay — which is the finding of
+  <https://github.com/btclib-org/btclib-secp256k1/pull/185>, now in the
+  same section and pointed at from here. And statelessness is the other
+  side of the ledger, the same argument that keeps MuSig2 out, so the
+  two paragraphs point at each other. Ergonomics is weighed by neither,
+  deliberately: the line a caller does not write belongs in btclib with
+  the lifetimes
+
 ### One statement of each thing
 
 - **the duplications are gone**, each of them two spellings of one

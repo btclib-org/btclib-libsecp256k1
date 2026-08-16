@@ -400,6 +400,60 @@ carrying the uncompressed form instead: 0.269 microseconds against
 2.326. So the signer saves what nothing else can, and the chain saves
 what a caller free to choose its serialization could have saved itself.
 
+**The rule that separates them is the test a third outpost would have to
+pass**, and it is worth stating on its own, because the answer to every
+proposal of one — a held public key for verifying, for ECDH, for
+combining — is here rather than in the proposal:
+
+> what an object saves is the cost of *rebuilding, from octets, whatever
+> it holds*. It earns its state when that cost is arithmetic, and does
+> not when it is a parse.
+
+The saving is not merely bounded by that cost; it *is* that cost, and by
+construction rather than by measurement. `ssa.sign` builds the keypair,
+signs with it and wipes it; `signer.sign` is that middle term with the
+first already paid — so the difference between them is
+`secp256k1_keypair_create` on any machine, and what the numbers below
+add is that nothing else of consequence sits in it. They are the ones
+this section already states: 15.82 microseconds against the signer's
+8.27, of which the keypair is 7.55, and 15.82 − 8.27 is that 7.55.
+
+The chain reads the same way and answers differently, which is the
+distinction of the paragraph above arrived at from the other end. What
+it saves is the parse it holds, so *which* parse decides the figure —
+and that is the pair the paragraph above states, the caller's to choose
+by the serialization they carry. A keypair offers its caller no such
+choice.
+
+Two things the rule needs said, or it reads as narrower than it is. The
+first is what recovers a parse, and it is **`keys.parse` itself, not a
+cheaper serialization**. The argument through the uncompressed form does
+not reach an x-only key, which is a field square root to rebuild and has
+no second serialization to escape to — and it does not always reach a
+full one either, which is what the walk below measures: from the 33
+octets an xpub carries, reaching the uncompressed form costs a
+`reserialize` that the chain does not pay. A caller who wants the parse
+held holds it — `keys.parse` hands back the object and the private
+halves take it, which is what "the private halves above hand one object
+from a call to the next" already promised. What a class would add there
+is a name, not a saving. The second is the other side of the ledger:
+this package is [stateless by construction](#design), which is also why
+MuSig2 is not
+wrapped, so an object is an exception to that, with an owner and an
+invalidation and a threading story, and the rule is what the exception
+has to be paid for with. What it does not weigh is ergonomics — the line
+a caller does not have to write is real, and belongs in btclib along
+with the lifetimes.
+
+So the numbers **confirm** the rule rather than establish it, and it is
+worth being clear which of them would survive a different machine. Not
+the microsecond counts, which are one laptop's; the identity is what
+carries, and it carries because it is structural rather than because a
+ratio travels better than an absolute. A rule resting instead on which
+of two measurements is larger would invert on the first machine that
+measured them differently — and one such pair is a rounding error apart,
+which the walk below is about.
+
 `ssa.Signer` holds the keypair:
 
 ```python
