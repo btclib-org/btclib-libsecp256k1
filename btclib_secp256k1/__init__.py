@@ -43,15 +43,83 @@ was just serialized -- and for a compressed key that parse is a field
 square root.
 """
 
-import pathlib
-from importlib.metadata import version
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import _btclib_secp256k1
 
-# read from the installed distribution metadata, so that the version in
-# pyproject.toml stays the only place to bump at release time
-__version__ = version("btclib_secp256k1")
+
+def _read_version() -> str:
+    """Read the version out of the installed distribution metadata.
+
+    That is where it comes from so that the version in pyproject.toml
+    stays the only place to bump at release time. Where it is read is
+    the `__getattr__` below; this is only the reading of it, and it is
+    out here rather than inside that function because mypy does not
+    check the body of the `else` a `TYPE_CHECKING` guard takes -- a
+    `return len(...)` from a function annotated `-> str` passes
+    `--strict` in there, and is caught as `[return-value]` out here.
+
+    `importlib.metadata` is not a small module to reach for -- `email`,
+    `json` and `inspect` are three of the ones it pulls behind it -- so
+    the import is deferred to the one call that needs it.
+
+    Returns:
+        The version of the installed distribution.
+    """
+    from importlib.metadata import version  # noqa: PLC0415
+
+    return version("btclib_secp256k1")
+
+
+if TYPE_CHECKING:
+    # what a type checker is told, and it is told this instead of the
+    # function below rather than as well: a module with a `__getattr__`
+    # is one mypy stops checking attribute names on altogether, so
+    # `from btclib_secp256k1 import nosuchmodule` and
+    # `btclib_secp256k1.typo` both start passing --strict. That is the
+    # front door of this package, the line every caller writes, and the
+    # two checks are worth the six lines it takes to keep them
+    __version__: str
+else:
+
+    def __getattr__(name: str) -> str:
+        """Build the one attribute this module makes only when asked.
+
+        `__version__` is that attribute, and reading it at import is
+        what made that import 15.85 milliseconds where it is now 1.69 --
+        an Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 12
+        fresh interpreters. CHANGELOG.md carries the command, the rest
+        of the table and what the 14 milliseconds are made of, so that
+        the decomposition is written down once. So the caller that wants
+        the version pays for it and the one that never asks pays
+        nothing; btclib, which depends on this package, is one of
+        those.
+
+        The value is stored into the module's own namespace on the way
+        out, which is the usual shape of PEP 562 and is what keeps the
+        second read a dict lookup rather than another walk of the
+        metadata: `importlib.metadata.version` is 290 microseconds every
+        time it is called, `sys.modules` caching the module and not the
+        answer. So `dir()` does not list `__version__` until something
+        reads it, and does afterwards.
+
+        Args:
+            name: the attribute being looked up.
+
+        Returns:
+            The version of the installed distribution, for
+            `__version__`.
+
+        Raises:
+            AttributeError: for any other name, this being the fallback
+                python calls only once the module itself has none.
+        """
+        if name == "__version__":
+            globals()["__version__"] = value = _read_version()
+            return value
+        msg = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(msg)
+
 
 # an opaque handle to a libsecp256k1 object, as returned by ffi.new: the
 # cffi cdata type is not expressible in the type system, but a named
@@ -110,7 +178,15 @@ def _load_lib(module: Any) -> Any:
         return module.lib
 
     # a dynamic one (cffi ABI mode) has to find, at run time, the shared
-    # object shipped beside it
+    # object shipped beside it. pathlib is imported here rather than at
+    # module level because the line above is where a static build
+    # returns, and a static build is what every platform of the matrix
+    # ships by default: 2.27 milliseconds of an import that is 1.69
+    # milliseconds without it, measured as `__getattr__` says. It is
+    # worth that only alongside the deferral there -- `importlib.metadata`
+    # imports pathlib itself, so this line on its own would save nothing
+    import pathlib  # noqa: PLC0415
+
     path = pathlib.Path(module.__file__).parent
     rejected: list[tuple[str, OSError]] = []
     for suffix in (".dll", ".so", ".dylib"):

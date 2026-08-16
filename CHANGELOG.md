@@ -139,6 +139,100 @@ release-notes length in the first place, and are still in
   nothing to win and the figures say so: the field square root is what
   that row is.
 
+### What importing the package costs
+
+- **`__version__` is read on first access rather than at import** (#210).
+  The value comes from where it came from -- the installed distribution
+  metadata, so that `pyproject.toml` stays the only place a release bumps
+  -- and a module-level `__getattr__` (PEP 562) is what defers reading
+  it. `importlib.metadata` pulls `email`, `json` and `inspect` behind it,
+  among others.
+- **`pathlib` is imported where it is used**, which is the dynamic branch
+  of `_load_lib`. A static extension returns from `hasattr(module,
+  "lib")` two lines earlier, and a static extension is what every
+  platform of the matrix ships by default.
+- **It takes both, and deferring `import pathlib` alone would have bought
+  nothing.** `importlib.metadata` imports `pathlib` itself, and
+  `import pathlib` was the statement *above* the one that read the
+  version, so on the file as it was `pathlib` arrived whether that first
+  line ran or not: the row below measures it at 0.09 milliseconds, which
+  is nothing. The 2.27 that deferring it is worth here is a saving this
+  branch creates rather than one that was lying there.
+- Every figure below is one session, one build, `__init__.py` the only
+  thing that differs, minimum of 12 fresh interpreters each -- an Apple
+  M5, macOS 26.6, arm64, CPython 3.14.6. It is the only place this
+  decomposition is written down; the docstrings that quote a figure send
+  the reader here rather than repeating the split.
+
+  ```shell
+  # after each swap, run it once and throw that answer away: a changed
+  # __init__.py invalidates its .pyc, and compiling this file is about a
+  # millisecond -- most of the number being reported for the branch
+  python -c "import time, importlib
+  t = time.perf_counter(); importlib.import_module('btclib_secp256k1')
+  print((time.perf_counter() - t) * 1e3)"
+  ```
+
+  | | ms |
+  | --- | --- |
+  | as it is now, both deferred | **1.69** |
+  | with `import pathlib` back at module level | 3.96 |
+  | with the `importlib.metadata` import back instead | 10.98 |
+  | the file as it was: both, and the `version()` call | 15.85 |
+  | the file as it was, with `import pathlib` deferred alone | 15.76 |
+  | as it is now, then reading `__version__` | 15.59 |
+  | the file as it was, then reading `__version__` | 15.97 |
+  | `_btclib_secp256k1`, the extension, either way | 0.58 |
+
+  The middle rows are marginal costs over this branch, each measured by
+  putting one statement back, and they do not add up to the fourth: the
+  9.3 of the metadata import already contains `pathlib`'s 2.27, and what
+  is left of the 15.85 is the first `version()` call, 4.9 of it.
+
+  The last two rows before the extension are the same number and not a
+  saving of 0.4: a caller that reads the version pays what it paid, and
+  which of the two comes out ahead is the drift of the machine between
+  two batches.
+
+- **The value is stored into the module's namespace on the way out.**
+  `sys.modules` caches the module `importlib.metadata` is, not the answer
+  `version()` gives, so a `__getattr__` that only defers would leave
+  every read after the first walking the metadata again -- 290
+  microseconds each, where the attribute it replaced was a dict lookup at
+  0.010. Storing it is the usual shape of PEP 562 and makes the second
+  read 0.018. It is also what makes the `dir()` sentence below true: the
+  interpreter does not memoise a module `__getattr__`, so without this
+  the attribute would never appear at all.
+- **The reading of the version is outside the `TYPE_CHECKING` guard**,
+  in `_read_version`, and only the `__getattr__` is inside it. mypy does
+  not check the body of the `else` such a guard takes: with the two
+  working lines in there, `return len(version(...))` from a function
+  annotated `-> str` passes `--strict`, and `warn_unreachable` does not
+  catch it either. Out here the same error is `[return-value]`, which is
+  what `py.typed` and *a wrong annotation propagates* ask for.
+- **The `__getattr__` is behind `if TYPE_CHECKING`, and that is the
+  point of the change surviving the gate.** A module that has one is a
+  module mypy stops checking attribute names on: measured on this tree,
+  `from btclib_secp256k1 import nosuchmodule` and
+  `btclib_secp256k1.typo` both stop being errors under `--strict`, and
+  that is the front door of the package. Declaring `__version__: str` to
+  the type checker and defining the function only at run time keeps both
+  checks, and `tests/test_extension.py` needing a
+  `type: ignore[attr-defined]` to ask for a missing attribute is the
+  proof that it does.
+- **Two tests hold the saving**, `test_import_defers_the_metadata` and
+  `test_import_defers_pathlib`: each imports the package in a subprocess
+  and asserts what is *not* in `sys.modules` afterwards. Nothing else
+  would notice a module-level import added later, here or in anything
+  this package imports, which is how the 13 milliseconds arrived. The
+  second is skipped on a dynamic extension, which reaches `_load_lib`'s
+  other branch and imports `pathlib` legitimately; the matrix runs the
+  suite both ways.
+- **What it costs a caller** is that `dir(btclib_secp256k1)` does not
+  list `__version__` until something reads it, and does afterwards.
+  Nothing else changes: the attribute, the `from … import __version__`,
+  and reading the metadata directly all answer what they answered.
+
 ### Signing under one key
 
 - **`ssa.Signer` builds the BIP340 keypair once** (#153). `ssa.sign` and

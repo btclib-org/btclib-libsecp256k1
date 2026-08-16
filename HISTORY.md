@@ -264,6 +264,22 @@ verification, which is 12.9 microseconds against 12.1, and most of the
 call on `keys._pubkey_cmp_`, which is 0.57 against a C comparison of
 0.087. `lib` is exported for a caller who counts that.
 
+**Importing the package is ten times cheaper**, 1.69 milliseconds against
+15.85 — an Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 12
+fresh interpreters, CHANGELOG.md carrying the command and the table. Two
+imports did it, neither of them the compiled extension, which is 0.58 of
+those milliseconds: `importlib.metadata`, reached at import to fill
+`__version__` and pulling `email`, `json` and `inspect` behind it, and
+`pathlib`, which only the dynamic branch of `_load_lib` uses and which a
+static wheel never reaches. The version is read on first access now, and
+`pathlib` where it is used — and it takes both, `importlib.metadata`
+importing `pathlib` itself. What a caller has to know is one thing:
+`dir(btclib_secp256k1)` does not list `__version__` until something reads
+it, and does afterwards. Reading it — as the attribute, as
+`from btclib_secp256k1 import __version__`, or straight out of the
+metadata — answers what it always answered, and costs what it always
+cost, the first read and every one after it.
+
 ## v0.8.0.2
 
 Non-breaking, and two additions for a caller that verifies signatures it

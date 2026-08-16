@@ -20,12 +20,15 @@ mistaken for one.
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import types
 
+import _btclib_secp256k1
 import _cffi_backend
 import pytest
 
+import btclib_secp256k1
 from btclib_secp256k1 import __version__, _load_lib
 
 
@@ -33,16 +36,105 @@ def test_version() -> None:
     """Check that __version__ is a non-empty string.
 
     Not that the distribution is installed under the name __init__.py
-    asks for: were it not, importlib.metadata would raise at import and
-    every test in the suite would fail. What is checked is that the
-    attribute is still exposed, and with a value in it.
+    asks for: were it not, the `from` import at the top of this module
+    would raise while it is being collected, and there would be no test
+    here to fail. What is checked is that the package keeps exposing the
+    attribute, and with a value in it -- through a module-level
+    `__getattr__`, so that the attribute a caller never reads costs
+    nothing to have.
     """
-    # that the distribution is installed under the name __init__.py asks
-    # for is not what this checks: were it not, importlib.metadata would
-    # raise at import time and every test would fail. What is checked is
-    # that the package keeps exposing the attribute, and with a value
     assert isinstance(__version__, str)
     assert __version__
+
+
+def test_no_such_attribute() -> None:
+    """A name the package does not have is still an AttributeError.
+
+    The other half of the `__getattr__` that builds `__version__`, and
+    the one no other test reaches: python calls it for every name the
+    module itself has none of, so what it answers for anything but that
+    one has to be what a module without it answers on its own.
+    Answering None, or the version, would turn a typo into a value.
+
+    The `type: ignore` is the point rather than an annoyance: mypy still
+    knows this attribute does not exist, which is what the
+    `if TYPE_CHECKING` in `__init__.py` is there to preserve, and a
+    module that simply had a `__getattr__` would need no suppression
+    here because it would have stopped checking.
+    """
+    with pytest.raises(AttributeError, match="no attribute 'nonesuch'"):
+        _ = btclib_secp256k1.nonesuch  # type: ignore[attr-defined]
+
+
+def _imported_modules(name: str) -> set[str]:
+    """Return what importing this package leaves in sys.modules.
+
+    A subprocess because the answer is about a fresh interpreter: this
+    one has the package imported already, and every test module beside
+    this one has imported half the standard library into it.
+
+    Args:
+        name: the module to import in that interpreter.
+
+    Returns:
+        The names in `sys.modules` afterwards.
+    """
+    code = f"import sys, {name}; print('\\n'.join(sys.modules))"
+    completed = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    return set(completed.stdout.split())
+
+
+def test_import_defers_the_metadata() -> None:
+    """Importing the package does not import `importlib.metadata`.
+
+    What the deferral in `__init__.py` bought, asserted rather than
+    measured: reading `__version__` at import time is most of what made
+    that import 15.85 milliseconds where it is now 1.69, CHANGELOG.md
+    carrying the split -- `importlib.metadata` pulls `email`, `json` and
+    `inspect` behind it. Nothing else says so, and a module level import
+    added
+    later -- here or in anything this package imports -- puts those
+    milliseconds back with every other gate green, which is how they
+    arrived in the first place.
+
+    What is asserted is what *this* import adds, the names an empty
+    interpreter already holds being subtracted first: asking for
+    absolute absence would make a future interpreter, or a stray `.pth`
+    preloading one of these, a failure of this package. Nothing is
+    subtracted today, a bare interpreter here holding none of them.
+
+    The named modules are the expensive ones rather than all of them: a
+    list of everything `importlib.metadata` reaches is a list that
+    changes with the interpreter.
+    """
+    added = _imported_modules("btclib_secp256k1") - _imported_modules("sys")
+    assert "importlib.metadata" not in added
+    for module in ("email", "json", "inspect", "zipfile"):
+        assert module not in added, f"{module} is imported again"
+
+
+@pytest.mark.skipif(
+    not hasattr(_btclib_secp256k1, "lib"),
+    reason="a dynamic extension reaches _load_lib's second branch, which uses pathlib",
+)
+def test_import_defers_pathlib() -> None:
+    """A static extension does not import `pathlib` either.
+
+    The other half of the same ratchet, and it holds for the static
+    build alone: `_load_lib` returns at `hasattr(module, "lib")` there,
+    where a dynamic one goes on to glob for the shared object and
+    imports `pathlib` legitimately. The matrix runs the suite both ways,
+    so the skip is what keeps this true rather than flaky.
+
+    It only holds alongside the test above, which is why the two are not
+    one assertion in one test: `importlib.metadata` imports `pathlib`
+    itself, so this one would fail on a tree that deferred `pathlib`
+    alone, and the deferral it is really asserting is the pair.
+    """
+    added = _imported_modules("btclib_secp256k1") - _imported_modules("sys")
+    assert "pathlib" not in added
 
 
 def test_load_lib_no_candidate(tmp_path: pathlib.Path) -> None:
