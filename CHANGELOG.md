@@ -421,6 +421,85 @@ release-notes length in the first place, and are still in
   None` is what says so, and two tests in `tests/test_callbacks.py` hold
   the pair, each verified against the mutant it exists to kill
 
+### The copy a caller can take back
+
+- **every producer of a secret takes `into`** (#188), a keyword-only
+  writable buffer the secret is written to instead of a `bytes`:
+  `keys.prvkey_negate`, `prvkey_tweak_add` and `prvkey_tweak_mul`,
+  `xonly.prvkey_tweak_add`, `ecdh.shared_secret` and its private half,
+  `ellswift.xdh`, `dsa.nonce_rfc6979` and `ssa.nonce_bip340`. Omitted,
+  nothing changes and the `bytes` comes back as before. Given, nothing
+  is returned, and the copy the caller ends up holding is one they can
+  overwrite — which is the entire claim, and SECURITY.md now states it
+  beside the limitation it narrows rather than instead of it. It does
+  not wipe the buffer for them; a buffer never overwritten is exactly
+  the copy `into` was reached for to avoid, and the obligation is
+  stated rather than enforced for the reason `ssa.Signer` has no
+  finalizer
+- **which is not what #87 declined.** That issue asked whether an opaque
+  secret *handle* buys assurance and answered no: a handle is a lifetime
+  someone has to own and invalidate, the same shape of requirement that
+  keeps MuSig2 out, and its entry side still starts from a `bytes` the
+  caller already made. Both halves of that stand. What is new is neither
+  a lifetime nor an entry: one keyword argument, one call, no object,
+  and it addresses the *exit* — where `_secret.take` had nowhere to put
+  the secret except an immutable object nothing can zero
+- **`into` is keyword-only, and that is not a style choice.** Passed
+  positionally to `dsa.nonce_rfc6979` it would land on `aux_rand32`,
+  which takes 32 octets and would have accepted the empty buffer as
+  entropy — a wrong nonce, silently, from a call that reads right. The
+  suite caught it on the way in; keyword-only is what keeps a caller
+  from meeting it
+- **and the buffer is proved before anything is copied, the wipe
+  happening either way.** A wrong length is refused rather than filled:
+  too short raises on the assignment anyway, but too *long* would take
+  the secret in its first octets and leave whatever was behind it, which
+  reads as a secret with a tail. A read-only view cannot be wiped, so
+  accepting one would defeat the facility silently. And a view of more
+  than one dimension passes every one of those checks and then fails the
+  copy with `NotImplementedError`, while a strided one succeeds and
+  leaves the secret scattered through an owner twice its size, so both
+  are refused as not contiguous octets. Beyond that the buffer protocol
+  decides rather than a type: `mmap` and `array.array("B")` are taken,
+  an `mlock`ed `mmap` being a plausible destination for exactly this
+  caller, and `memoryview` itself is what refuses a non-buffer. That
+  breadth is the run time's rather than the annotation's, which stays
+  the two named types until `collections.abc.Buffer` is reachable at a
+  3.12 floor: a caller under `mypy --strict` passes the rest as
+  `memoryview(x)`, and SECURITY.md says so where the mismatch is met.
+  `_secret.into_buffer` is annotated `object` and not
+  `MutableBytesLike`, that being the annotation it exists to not trust
+- **the wipe is in a `finally`, which is the defect this facility could
+  have shipped with.** `take` had no failure mode before `into`, and
+  with one on the straight line a refused buffer returned through the
+  entry point leaving a live private key in cffi memory that is freed
+  without being overwritten -- none of the eight has a `finally` of its
+  own, and `xonly.prvkey_tweak_add`'s wipes the keypair rather than the
+  key. Nothing is lost by wiping on the way out: the value never reached
+  the caller, and the call they retry recomputes it
+- **the two secrets `silentpayments` answers are left out**, each being
+  one member of a returned tuple where an argument could not say which:
+  the tweak of `label`, and the per-output tweak `scan_outputs` hands
+  back. SECURITY.md names both rather than claiming every entry point
+- **and what holds the set is a walk rather than a list.** A hardcoded
+  tuple of eight cannot notice a ninth, which is the whole point of the
+  test; `tests/test_secret.py` walks the package for functions whose
+  source calls `_secret.take` and requires `into` of each, one
+  exemption named. Its limit is written down beside it: a secret that
+  never goes through `take` is invisible to it, which is exactly how
+  `_found_output` escaped the first draft of that sentence
+- **the cost, which is in the type system rather than at run time.**
+  Three `@overload`s per entry point, so that omitting `into` still
+  types as `bytes` and a downstream `mypy --strict` sees no change; the
+  implementation signature is the union. The third is the one a caller
+  needs to *forward* an optional buffer through a wrapper of their own,
+  which is how btclib would surface this argument, and with only two it
+  is that caller who writes the two-branch version or a `cast`. Four
+  negative-typing tests moved from `type: ignore[arg-type]` to
+  `[call-overload]`, which is
+  what an overloaded call reports, and is the one way this is visible
+  to a caller who was already type-checking
+
 ### One statement of each thing
 
 - **the duplications are gone**, each of them two spellings of one

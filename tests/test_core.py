@@ -248,7 +248,7 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
     ):
         keys.pubkey_from_prvkey(1.0, compressed=False)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="tweak must be bytes or an int, not str"):
-        keys.prvkey_tweak_add(prvkey, "x" * 32)  # type: ignore[arg-type]
+        keys.prvkey_tweak_add(prvkey, "x" * 32)  # type: ignore[call-overload]
 
     # a sequence of public keys handed one public key: bytes is itself a
     # sequence, so what reaches parse is an int, and saying so is the
@@ -311,7 +311,7 @@ def test_a_flag_that_is_not_an_int_is_refused_by_name() -> None:
     with pytest.raises(TypeError, match="parity must be an int, not float"):
         xonly.tweak_add_check(tweaked, float(tweaked_parity), xonly_bytes, 11)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="party must be an int, not float"):
-        ellswift.xdh(ell, ell, 7, 0.0)  # type: ignore[arg-type]
+        ellswift.xdh(ell, ell, 7, 0.0)  # type: ignore[call-overload]
     with pytest.raises(TypeError, match="label m must be an int, not float"):
         silentpayments.label(7, 0.0)  # type: ignore[arg-type]
 

@@ -98,7 +98,7 @@ def test_rfc6979_attempt_is_the_counter_the_derivation_retries_on() -> None:
     with pytest.raises(ValueError, match=r"attempt must be in \[0, 4294967295\]"):
         dsa.nonce_rfc6979(msg, EVEN_Y, attempt=2**32)
     with pytest.raises(TypeError, match="attempt must be an int"):
-        dsa.nonce_rfc6979(msg, EVEN_Y, attempt=1.0)  # type: ignore[arg-type]
+        dsa.nonce_rfc6979(msg, EVEN_Y, attempt=1.0)  # type: ignore[call-overload]
 
 
 @pytest.mark.parametrize("prvkey", [EVEN_Y, ODD_Y], ids=["even y", "odd y"])
@@ -164,4 +164,4 @@ def test_the_nonce_wrappers_refuse_what_the_signers_refuse() -> None:
     with pytest.raises(ValueError, match="private key"):
         ssa.nonce_bip340(msg, 0)
     with pytest.raises(TypeError, match="message must be bytes"):
-        ssa.nonce_bip340(11, EVEN_Y)  # type: ignore[arg-type]
+        ssa.nonce_bip340(11, EVEN_Y)  # type: ignore[call-overload]

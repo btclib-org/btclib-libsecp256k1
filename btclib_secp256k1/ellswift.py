@@ -10,7 +10,9 @@ https://github.com/bitcoin/bips/blob/master/bip-0324.mediawiki
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, lib
+from typing import overload
+
+from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._scalar import entropy, in_range, octets, scalar
 from ._secret import take
 from .context import ctx, guarded
@@ -156,9 +158,36 @@ def decode(ell_bytes: BytesLike, compressed: bool = True) -> bytes:
     return serialize(_decode_(ell_bytes), compressed)
 
 
+@overload
 def xdh(
     ell_a_bytes: BytesLike, ell_b_bytes: BytesLike, prvkey: BytesLike | int, party: int
-) -> bytes:
+) -> bytes: ...
+@overload
+def xdh(
+    ell_a_bytes: BytesLike,
+    ell_b_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    party: int,
+    *,
+    into: MutableBytesLike,
+) -> None: ...
+@overload
+def xdh(
+    ell_a_bytes: BytesLike,
+    ell_b_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    party: int,
+    *,
+    into: MutableBytesLike | None,
+) -> bytes | None: ...
+def xdh(
+    ell_a_bytes: BytesLike,
+    ell_b_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    party: int,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Compute the x-only ECDH shared secret of two ElligatorSwift keys.
 
     The private key must be the one of the given party: 0 for party A,
@@ -171,14 +200,19 @@ def xdh(
         prvkey: the private key of the party below, 32 bytes or an int
             below 2**256.
         party: 0 if the private key is A's, 1 if it is B's.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32-byte shared secret, which both parties compute alike. The
-        two encodings enter the hash in the order they are given here,
-        so BIP324's initiator goes first.
+        The 32-byte shared secret, which both parties compute alike --
+        or None where `into` was given and holds it. The two encodings
+        enter the hash in the order they are given here, so BIP324's
+        initiator goes first.
 
     Raises:
-        TypeError: if the party is not an int.
+        TypeError: if the party is not an int, or if `into` is not a
+            writable bytearray or memoryview of octets.
         ValueError: if either encoding is not 64 bytes, if party is not
             0 or 1, or if the private key is not 32 bytes, does not fit
             in them, or is not a valid scalar.
@@ -202,4 +236,4 @@ def xdh(
         ffi.NULL,
     ):
         raise ValueError("invalid private key")
-    return take(output)
+    return take(output, into=into)

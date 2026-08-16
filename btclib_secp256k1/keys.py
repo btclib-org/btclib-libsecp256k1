@@ -16,8 +16,9 @@ Public keys are returned in compressed form, unless otherwise required.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import overload
 
-from . import BytesLike, CData, ffi, lib
+from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._cdata import array
 from ._scalar import octets, scalar
 from ._secret import take
@@ -79,26 +80,57 @@ def pubkey_verify(pubkey_bytes: BytesLike) -> bool:
     return _parsed(pubkey_bytes, "public key") is not None
 
 
-def prvkey_negate(prvkey: BytesLike | int) -> bytes:
+@overload
+def prvkey_negate(prvkey: BytesLike | int) -> bytes: ...
+@overload
+def prvkey_negate(prvkey: BytesLike | int, *, into: MutableBytesLike) -> None: ...
+@overload
+def prvkey_negate(
+    prvkey: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def prvkey_negate(
+    prvkey: BytesLike | int, *, into: MutableBytesLike | None = None
+) -> bytes | None:
     """Negate a private key.
 
     Args:
         prvkey: the private key, 32 bytes or an int below 2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32 bytes of n - k, the key of the negated public key.
+        The 32 bytes of n - k, the key of the negated public key -- or
+        None where `into` was given and holds them.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if it is not 32 bytes, does not fit in them, or is
-            not in [1, n-1].
+            not in [1, n-1]; or if `into` is not 32 bytes.
     """
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     if not lib.secp256k1_ec_seckey_negate(ctx, prvkey_buffer):
         raise ValueError("invalid private key: not in [1, n-1]")
-    return take(prvkey_buffer)
+    return take(prvkey_buffer, into=into)
 
 
-def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
+@overload
+def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes: ...
+@overload
+def prvkey_tweak_add(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike
+) -> None: ...
+@overload
+def prvkey_tweak_add(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def prvkey_tweak_add(
+    prvkey: BytesLike | int,
+    tweak: BytesLike | int,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Add a tweak to a private key.
 
     This is the private-key side of BIP32 derivation, and of any other
@@ -108,42 +140,71 @@ def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
     Args:
         prvkey: the private key, 32 bytes or an int below 2**256.
         tweak: the tweak, 32 bytes or an int below 2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32 bytes of (k + t) mod n.
+        The 32 bytes of (k + t) mod n -- or None where `into` was given
+        and holds them.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if either value is not 32 bytes or does not fit in
-            them, if the private key is not in [1, n-1], or if the sum
-            is zero, which is the one tweak with no valid result.
+            them, if the private key is not in [1, n-1], if the sum
+            is zero, which is the one tweak with no valid result, or if
+            `into` is not 32 bytes.
     """
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_add(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return take(prvkey_buffer)
+    return take(prvkey_buffer, into=into)
 
 
-def prvkey_tweak_mul(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
+@overload
+def prvkey_tweak_mul(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes: ...
+@overload
+def prvkey_tweak_mul(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike
+) -> None: ...
+@overload
+def prvkey_tweak_mul(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def prvkey_tweak_mul(
+    prvkey: BytesLike | int,
+    tweak: BytesLike | int,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Multiply a private key by a tweak.
 
     Args:
         prvkey: the private key, 32 bytes or an int below 2**256.
         tweak: the tweak, 32 bytes or an int below 2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32 bytes of (k * t) mod n.
+        The 32 bytes of (k * t) mod n -- or None where `into` was given
+        and holds them.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if either value is not 32 bytes or does not fit in
-            them, if the private key is not in [1, n-1], or if the tweak
-            is zero or at or above the group order.
+            them, if the private key is not in [1, n-1], if the tweak
+            is zero or at or above the group order, or if `into` is not
+            32 bytes.
     """
     prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_mul(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
-    return take(prvkey_buffer)
+    return take(prvkey_buffer, into=into)
 
 
 def _pubkey_from_prvkey_(prvkey: BytesLike | int) -> CData:

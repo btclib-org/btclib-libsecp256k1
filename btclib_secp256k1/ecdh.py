@@ -7,13 +7,27 @@
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, keys, lib
+from typing import overload
+
+from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import scalar
 from ._secret import take
 from .context import ctx, guarded
 
 
-def _shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
+@overload
+def _shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes: ...
+@overload
+def _shared_secret_(
+    pubkey: CData, prvkey: BytesLike | int, *, into: MutableBytesLike
+) -> None: ...
+@overload
+def _shared_secret_(
+    pubkey: CData, prvkey: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def _shared_secret_(
+    pubkey: CData, prvkey: BytesLike | int, *, into: MutableBytesLike | None = None
+) -> bytes | None:
     """Compute the ECDH shared secret from an already-parsed public key.
 
     The private half of `shared_secret`, for a caller who already holds
@@ -27,12 +41,18 @@ def _shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
             `keys.parse` returns.
         prvkey: this party's private key, 32 bytes or an int below
             2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
         The 32-byte shared secret, the SHA256 of the compressed shared
-        point as `shared_secret` documents it.
+        point as `shared_secret` documents it -- or None where `into`
+        was given and holds it.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if the private key is not 32 bytes, does not fit in
             them, is not a valid scalar, or if the object is not a public
             key libsecp256k1 will read; see `context.guarded`, without
@@ -50,10 +70,25 @@ def _shared_secret_(pubkey: CData, prvkey: BytesLike | int) -> bytes:
         )
     if not computed:
         raise ValueError("invalid private key")
-    return take(output)
+    return take(output, into=into)
 
 
-def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
+@overload
+def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes: ...
+@overload
+def shared_secret(
+    pubkey_bytes: BytesLike, prvkey: BytesLike | int, *, into: MutableBytesLike
+) -> None: ...
+@overload
+def shared_secret(
+    pubkey_bytes: BytesLike, prvkey: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def shared_secret(
+    pubkey_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Compute the ECDH shared secret.
 
     The result is the SHA256 of the compressed shared point, i.e. the
@@ -74,13 +109,19 @@ def shared_secret(pubkey_bytes: BytesLike, prvkey: BytesLike | int) -> bytes:
         pubkey_bytes: the other party's public key, 33 or 65 bytes.
         prvkey: this party's private key, 32 bytes or an int below
             2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32-byte shared secret.
+        The 32-byte shared secret -- or None where `into` was given and
+        holds it.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if the public key is not a valid point, if the
             private key is not 32 bytes or does not fit in them, or if
             it is not a valid scalar.
     """
-    return _shared_secret_(keys.parse(pubkey_bytes), prvkey)
+    return _shared_secret_(keys.parse(pubkey_bytes), prvkey, into=into)

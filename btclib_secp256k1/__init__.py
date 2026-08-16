@@ -61,6 +61,19 @@ CData = Any
 # idea and arrives with python 3.12, which is not yet the floor here
 BytesLike = bytes | bytearray | memoryview
 
+# what a caller may hand a producer of secrets to be written into,
+# instead of taking the `bytes` it would otherwise return. `bytes` is
+# absent for the reason the whole facility exists: it cannot be
+# overwritten, so writing a secret there would buy nothing.
+#
+# The runtime is wider than this: `_secret.into_buffer` takes whatever
+# the buffer protocol offers and is writable, an `mmap` and an
+# `array.array("B")` included. These two are what a typed caller passes
+# bare -- `collections.abc.Buffer` is the alias that would say the rest
+# and arrives with python 3.12, which is not yet the floor here -- and
+# anything else is `memoryview(x)`, which copies nothing
+MutableBytesLike = bytearray | memoryview
+
 ffi = _btclib_secp256k1.ffi
 
 

@@ -18,18 +18,47 @@ serialize one of their own.
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, keys, lib
+from typing import overload
+
+from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
 from ._secret import take
 from .context import ctx, guarded
 
 
+@overload
 def nonce_rfc6979(
     msg_bytes: BytesLike,
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
     attempt: int = 0,
-) -> bytes:
+) -> bytes: ...
+@overload
+def nonce_rfc6979(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    attempt: int = 0,
+    *,
+    into: MutableBytesLike,
+) -> None: ...
+@overload
+def nonce_rfc6979(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    attempt: int = 0,
+    *,
+    into: MutableBytesLike | None,
+) -> bytes | None: ...
+def nonce_rfc6979(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    attempt: int = 0,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Return the RFC6979 nonce `sign` derives for a message and a key.
 
     libsecp256k1 exports its nonce function as a callable pointer, and
@@ -64,12 +93,17 @@ def nonce_rfc6979(
             drives that counter itself; 0 is what it takes first and what
             every signature this package makes has used.
 
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
+
     Returns:
-        The 32-byte nonce.
+        The 32-byte nonce -- or None where `into` was given and holds it.
 
     Raises:
-        TypeError: if the attempt is not an int, or an argument is not
-            bytes.
+        TypeError: if the attempt is not an int, if an argument is not
+            bytes, or if `into` is not a writable bytearray or
+            memoryview of octets.
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
             given and is not 32 bytes, if the private key is not 32 bytes
             or does not fit in them, or if the attempt is out of range.
@@ -99,7 +133,7 @@ def nonce_rfc6979(
         nonce, msg_bytes, prvkey_bytes, ffi.NULL, ndata, attempt
     ):
         raise RuntimeError("RFC6979 nonce derivation failed")
-    return take(nonce)
+    return take(nonce, into=into)
 
 
 def _sign_(

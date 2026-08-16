@@ -12,8 +12,9 @@ https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 from __future__ import annotations
 
 from types import TracebackType
+from typing import overload
 
-from . import BytesLike, CData, ffi, keys, lib, xonly
+from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib, xonly
 from ._scalar import entropy, octets, optional_entropy, scalar
 from ._secret import keypair, take, wipe
 from .context import ctx, guarded
@@ -27,11 +28,35 @@ EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
 _NONCE_ALGO = b"BIP0340/nonce"
 
 
+@overload
 def nonce_bip340(
     msg_bytes: BytesLike,
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
-) -> bytes:
+) -> bytes: ...
+@overload
+def nonce_bip340(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    into: MutableBytesLike,
+) -> None: ...
+@overload
+def nonce_bip340(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    into: MutableBytesLike | None,
+) -> bytes | None: ...
+def nonce_bip340(
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Return the BIP340 nonce `sign` derives for a message and a key.
 
     libsecp256k1 exports its nonce function as a callable pointer, and
@@ -65,11 +90,16 @@ def nonce_bip340(
             being what it substitutes. `sign` given None generates 32
             fresh octets instead of passing none, so what reproduces a
             signature's nonce is the aux that signature was made with.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32-byte nonce.
+        The 32-byte nonce -- or None where `into` was given and holds it.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if aux_rand32 is given and is not 32 bytes, or if the
             private key is not 32 bytes, does not fit in them, or is not
             in [1, n-1].
@@ -102,7 +132,7 @@ def nonce_bip340(
         aux,
     ):
         raise RuntimeError("BIP340 nonce derivation failed")
-    return take(nonce)
+    return take(nonce, into=into)
 
 
 def sign(

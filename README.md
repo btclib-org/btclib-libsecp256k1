@@ -534,6 +534,15 @@ private keys, and the x-only public key itself, from a full public key
 `hashes` provides the BIP340 tagged hash, the domain separation the
 taproot tags are built on.
 
+Wherever one of these answers a *secret* — a tweaked or negated private
+key, a shared secret, a nonce — it also takes a keyword-only `into`: a
+writable buffer of exactly 32 contiguous octets, which receives the
+secret in place of the `bytes` the call would otherwise return, so that
+the copy the caller is left holding is one they can overwrite. It is an
+addition and not a change; omit it and nothing differs. SECURITY.md is
+where what it does and does not buy is stated, and names the two
+`silentpayments` secrets it does not reach.
+
 Two of those have a second spelling for a caller doing arithmetic rather
 than holding a key. `keys.pubkey_sum` is `pubkey_combine` with the point
 at infinity answered as `None` instead of refused: `P + (-P)` is the

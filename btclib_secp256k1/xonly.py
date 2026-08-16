@@ -30,7 +30,9 @@ square root at 2.326.
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, keys, lib
+from typing import overload
+
+from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import in_range, octets, scalar
 from ._secret import keypair, take, wipe
 from .context import ctx, guarded
@@ -333,7 +335,22 @@ def tweak_add_check(
     )
 
 
-def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
+@overload
+def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes: ...
+@overload
+def prvkey_tweak_add(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike
+) -> None: ...
+@overload
+def prvkey_tweak_add(
+    prvkey: BytesLike | int, tweak: BytesLike | int, *, into: MutableBytesLike | None
+) -> bytes | None: ...
+def prvkey_tweak_add(
+    prvkey: BytesLike | int,
+    tweak: BytesLike | int,
+    *,
+    into: MutableBytesLike | None = None,
+) -> bytes | None:
     """Add a tweak to the private key of an x-only public key.
 
     The private key is first negated, if needed, to be the one of the
@@ -345,14 +362,21 @@ def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
         prvkey: the internal private key, 32 bytes or an int below
             2**256.
         tweak: the tweak, 32 bytes or an int below 2**256.
+        into: a writable 32-byte buffer to receive the result, instead
+            of the `bytes` this otherwise returns. See `_secret.take`
+            and SECURITY.md for what that does and does not buy.
 
     Returns:
-        The 32-byte tweaked private key.
+        The 32-byte tweaked private key -- or None where `into` was
+        given and holds it.
 
     Raises:
+        TypeError: if `into` is not a writable bytearray or memoryview
+            of octets.
         ValueError: if either value is not 32 bytes or does not fit in
-            them, if the private key is not in [1, n-1], or if the tweak
-            or the resulting key is invalid.
+            them, if the private key is not in [1, n-1], if the tweak
+            or the resulting key is invalid, or if `into` is not 32
+            bytes.
         RuntimeError: if libsecp256k1 fails to extract the key, which no
             valid input can make it do.
     """
@@ -365,7 +389,7 @@ def prvkey_tweak_add(prvkey: BytesLike | int, tweak: BytesLike | int) -> bytes:
 
         if not lib.secp256k1_keypair_sec(ctx, prvkey_buffer, keypair_obj):
             raise RuntimeError("private key extraction failed")
-        return take(prvkey_buffer)
+        return take(prvkey_buffer, into=into)
     finally:
         # a keypair carries the private key -- the tweaked one here,
         # which is the one that signs -- so it is overwritten on the way

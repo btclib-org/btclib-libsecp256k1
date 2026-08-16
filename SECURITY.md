@@ -77,6 +77,43 @@ These are known and inherent, not vulnerabilities:
     and the buffer zeroed before it is dropped. That is one copy taken back,
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
+- **`into` moves that last copy somewhere the caller can overwrite,**
+    and is the whole of what it does. Eight entry points take a
+    keyword-only `into` — a writable buffer of exactly the secret's
+    length, contiguous and one octet an item, `bytearray` and
+    `memoryview` and `mmap` and `array.array("B")` alike — write the
+    secret there and return None, so no `bytes` of it is ever made.
+    That breadth is the run time's: the annotation is a `bytearray` or a
+    `memoryview`, `collections.abc.Buffer` being python 3.12 where the
+    floor here is 3.10, so a caller running `mypy --strict` passes
+    anything else as `memoryview(x)`, which copies nothing. The eight
+    are `keys.prvkey_negate`, `keys.prvkey_tweak_add`,
+    `keys.prvkey_tweak_mul`, `xonly.prvkey_tweak_add`,
+    `ecdh.shared_secret`, `ellswift.xdh`, `dsa.nonce_rfc6979` and
+    `ssa.nonce_bip340`. **The two secrets `silentpayments` answers do
+    not**, each being one member of a returned tuple, where an argument
+    could not say which: the tweak of `label`, and the per-output tweak
+    `scan_outputs` hands back. Both are `bytes` and neither can be
+    zeroed, which is the limitation above and not this narrowing of it.
+    What the caller then does with the buffer is theirs: this does not
+    wipe it for them, and a buffer they never overwrite is exactly the
+    un-zeroizable copy `into` was reached for to avoid. Nor does it
+    touch the *entry* side, which is the half that cannot be improved
+    from inside this package: the `bytes` or `int` handed in already
+    existed before the call, and the arithmetic that produced it
+    happened where this package cannot see. The obligation is stated
+    rather than enforced, for the reason `ssa.Signer` has no finalizer:
+    a guarantee nothing keeps is worse than none
+
+    ```python
+    prvkey = bytearray(32)
+    keys.prvkey_tweak_add(parent, tweak, into=prvkey)
+    try:
+        ...                       # use it
+    finally:
+        prvkey[:] = bytes(32)     # the caller's wipe, and only theirs
+    ```
+
 - the one buffer whose zeroing is the caller's to ask for is
     `ssa.Signer`'s. Everything above is wiped inside the call that made
     it — read out and zeroed in the one operation, or wiped in a
