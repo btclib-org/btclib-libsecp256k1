@@ -27,13 +27,25 @@ measured -- so that is what it is declared to return.
 `addressof` is how a field of a struct is passed where libsecp256k1 wants
 a pointer to it: the found outputs of `silentpayments` carry an x-only
 public key and a label by value, and each has to reach its own serializer.
+
+`typeof` resolves a cdecl once, at import, for the buffers whose
+declaration is built by an f-string, and `new` takes what it answers as
+well as a string. `_CType` is what says so: with `Any` there instead,
+`new` accepts anything at all -- `ffi.new(_XONLY_SIZE)`, an int where a
+cdecl belongs, and the size and the type it was built from now sit a
+dozen lines apart in the same module -- which is the vacuous
+type-checking this file exists to prevent. It is opaque because nothing
+here reads what cffi answers; only where it may be passed matters.
 """
 
 from typing import Any
 
+class _CType: ...
+
 class _FFI:
     NULL: Any
-    def new(self, cdecl: str, init: Any = ...) -> Any: ...
+    def new(self, cdecl: str | _CType, init: Any = ...) -> Any: ...
+    def typeof(self, cdecl: str) -> _CType: ...
     def addressof(self, cdata: Any, field: str) -> Any: ...
     def sizeof(self, cdecl_or_cdata: Any) -> int: ...
     def buffer(self, cdata: Any, size: int = ...) -> memoryview: ...

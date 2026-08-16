@@ -190,18 +190,19 @@ release-notes length in the first place, and are still in
   or a `memoryview` needs, and are what the slow path still does; the
   exact type is asked once in front of them. `dsa.verify` passes three
   arguments through it.
-- **`keys.serialize` builds its buffer from a literal cdecl**, 0.313
-  microseconds against 0.356 with the guard already gone and 0.604
-  before it: `ffi.new` of an interpolated `f"char[{size}]"` parses that
+- **`keys.serialize` stopped building its buffer from an interpolated
+  cdecl**, 0.313 microseconds against 0.356 with the guard already gone
+  and 0.604 before it: `ffi.new` of an `f"char[{size}]"` parses that
   string on every call, and `ffi.sizeof` was called twice where the size
-  was in hand. The length buffer is still built per call and deliberately
-  not hoisted, though it holds the same number every time — libsecp256k1
-  writes 0 into it before it does anything and restores it only on
-  success, and it holds what it finds there against 33 or 65 on the way
-  in, so one
-  failed call would leave a shared buffer at zero and every later
-  serialization, on any thread and of a perfectly good key, would be
-  refused. That was measured rather than reasoned about.
+  was in hand. It went to a literal here and then to a hoisted type, for
+  the reason and at the price the entry below states; what follows is
+  what did not change. The length buffer is still built per call and
+  deliberately not hoisted, though it holds the same number every time —
+  libsecp256k1 writes 0 into it before it does anything and restores it
+  only on success, and it holds what it finds there against 33 or 65 on
+  the way in, so one failed call would leave a shared buffer at zero and
+  every later serialization, on any thread and of a perfectly good key,
+  would be refused. That was measured rather than reasoned about.
 - **What the entry points cost now.** Microseconds per call on the
   machine above, the quickest of two passes run in either order so that
   neither tree is the one measured on a warm machine, before against
@@ -308,6 +309,104 @@ release-notes length in the first place, and are still in
   list `__version__` until something reads it, and does afterwards.
   Nothing else changes: the attribute, the `from … import __version__`,
   and reading the metadata directly all answer what they answered.
+
+### What a wrapper works out per call, and now works out once
+
+- **An interpolated cdecl is resolved at import, not at every call**
+  (#212). `xonly.serialize` and `silentpayments.serialize_label` declared
+  their buffer with `ffi.new(f"char[{_XONLY_SIZE}]")`, which states the
+  width once — the reason it is an f-string — and costs twice what a
+  literal does, cffi having to hash a string built afresh each time:
+  0.1219 microseconds against 0.0681. `ffi.typeof` of the same f-string,
+  evaluated once at module level, is the literal's price with the width
+  still stated once.
+- **A literal cdecl is left exactly as it was**, and that is the measured
+  half of the same rule. cffi already caches the parse of one, so
+  hoisting a literal saves 0.003 microseconds — real, 4.3% on a noise row
+  of 0.5%, and an order below the 0.054 an interpolated cdecl gives back.
+  That is the size a hoist has to be worth to justify spelling a width
+  twice, or naming every cdecl in the package at module level, so every
+  `ffi.new` here still spells its cdecl in full — including the two
+  beside the hoisted types.
+- **`ffi.sizeof` of a buffer whose size is a constant is not asked per
+  call**, and that is what asked `keys.serialize` for a type at module
+  level: each size is `ffi.sizeof` of the very type beside it, so the
+  buffer and the length cannot say different numbers, and the 0.0175
+  microseconds is not paid at every call. `keys.serialize` also decides
+  its flag in the branch that picks its buffer, so the one condition is
+  asked once. The length *object* is still built per call, for the
+  thread-safety reason its comment gives.
+- **`_secret.take` zeroes through the view it already holds.** It built
+  an `ffi.buffer` to read the secret and then called `wipe`, which built
+  a second one over the same cdata. The statement that writes the zeros
+  is now `_zero`, which `wipe` calls too, so it is written once — and
+  that frame is paid for deliberately: `wipe` twice is 0.1826
+  microseconds, `_zero` is 0.1439 and the same statement inlined in both
+  places is 0.1314. A quarter of what was on the table, for one copy of
+  the line that overwrites a secret rather than two.
+- **The parity nobody reads is not allocated.**
+  `secp256k1_xonly_pubkey_from_pubkey` documents `pk_parity` as "can be
+  NULL", and the callers that want the object alone — `parse`, `_parsed`
+  and `_tweak_add_` — are why NULL is the default. `_drop_y` takes the
+  pointer as an argument now: 0.1747 microseconds against 0.2425 on the
+  conversion alone. `_from_pubkey_` and `to_pubkey` read a parity and go
+  through `_drop_y_with_parity`, which is that allocation written once,
+  and no saving lands on them — what it adds is some hundredths of a
+  microsecond, measurable against both. One figure rather than one per
+  caller: it is the same frame at each, and two harnesses put a different
+  one of the two ahead, which is the spread of a number this small and
+  not a structure. What they get out of this is the C call still written
+  once and the call site they had.
+- **Two sessions, and each is named where a figure comes from.** Every
+  wrapper figure this change quotes — in CHANGELOG.md, HISTORY.md and in
+  the comments of `keys.py`, `xonly.py`, `silentpayments.py` and
+  `_secret.py` alike — is the one below; every cffi-primitive figure is
+  the one after it. An Apple M5, macOS 26.6, arm64, CPython 3.14.6.
+
+  `main`'s spelling of each call written out and alternated against this
+  one in a single process over one build, minimum of 15 rounds of
+  200 000 calls, a noise row running `main`'s spelling twice, and every
+  pair asserted to answer alike before it is timed:
+
+  | | main | now |
+  | --- | --- | --- |
+  | `_drop_y`, the conversion alone | 0.2425 | 0.1747 |
+  | `xonly.serialize` | 0.2569 | 0.1969 |
+  | `silentpayments.serialize_label` | 0.2621 | 0.2023 |
+  | `_secret.take` | 0.1826 | 0.1439 |
+  | `xonly.parse`, 65 bytes | 0.5021 | 0.4295 |
+  | `xonly._from_pubkey_`, 65 bytes | 0.5127 | 0.4711 |
+  | `keys.prvkey_negate` | 0.3790 | 0.3380 |
+  | `keys.serialize`, compressed | 0.3106 | 0.2906 |
+  | `keys.serialize`, uncompressed | 0.3101 | 0.2903 |
+  | *noise* | 0.2578 | 0.2577 |
+
+  and the primitives, minimum of 15 rounds of 300 000 calls:
+
+  | | first | second |
+  | --- | --- | --- |
+  | `ffi.new` of an f-string, then of a literal `char[32]` | 0.1219 | 0.0681 |
+  | `ffi.new` of a literal, then of a hoisted `char[33]` | 0.0685 | 0.0656 |
+  | `ffi.new` of a literal, then of a hoisted `size_t *` | 0.0809 | 0.0774 |
+  | `ffi.unpack` with `ffi.sizeof`, then with the constant | 0.0764 | 0.0589 |
+  | *noise* | 0.0676 | 0.0680 |
+
+- **`_scalar.scalar` was measured and left alone**, which is the one
+  declined here. Asking `type(num) is int` instead of
+  `isinstance(num, int) and not isinstance(num, bool)` is one check where
+  those are two and excludes `bool` on its own, and it is 0.141
+  microseconds against 0.157 — but it needs the range check and the
+  serialization written twice, once for the exact type and once for the
+  subclass, and the int path is the one this module's own docstring says
+  is not the common one: a scalar handed to these bindings in a loop is
+  bytes, and that path does not reach the test at all.
+- **The stub gains an opaque `_CType`**, which is what `typeof` answers
+  and what `new` takes beside a string. Typing that argument `Any`
+  instead would be the vacuous type-checking
+  `stubs/_btclib_secp256k1.pyi` exists to prevent: `ffi.new(_XONLY_SIZE)`
+  — an int where a cdecl belongs, and the size and the type built from
+  it now sit a dozen lines apart in the same module — passes `--strict`
+  with `Any` and is an `[arg-type]` error with `_CType`.
 
 ### Signing under one key
 

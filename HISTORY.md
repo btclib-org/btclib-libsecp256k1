@@ -310,6 +310,21 @@ it, and does afterwards. Reading it — as the attribute, as
 metadata — answers what it always answered, and costs what it always
 cost, the first read and every one after it.
 
+**Serializing and parsing cost a little less, and nothing changed about
+what they answer.** Four things a wrapper used to work out at every call
+are worked out once: the cffi type of a buffer whose declaration was
+built by an f-string, the size of a buffer whose size is a constant, the
+second view of memory `_secret.take` was already looking at, and the
+parity `xonly._drop_y` allocated for `parse`, `_parsed` and
+`_tweak_add_`, which throw it away.
+What that is worth, against the same calls as they were and with a noise
+row beside each: `xonly.serialize` 0.197 microseconds against 0.257,
+`silentpayments.serialize_label` 0.202 against 0.262, `xonly.parse` of a
+65-byte key 0.430 against 0.502, `keys.serialize` 0.291 against 0.311.
+Nothing on a signature or a verification, which are twelve microseconds
+of libsecp256k1; something on a caller doing point arithmetic in a loop,
+which is who these calls are short for.
+
 ## v0.8.0.2
 
 Non-breaking, and two additions for a caller that verifies signatures it

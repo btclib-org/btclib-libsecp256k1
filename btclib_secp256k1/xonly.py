@@ -41,13 +41,75 @@ from .context import ctx
 # two lengths this module takes are a full public key, whose x it is
 _XONLY_SIZE = 32
 
+# the buffer `serialize` writes into, resolved here rather than at every
+# call. `ffi.new` of an f-string formats it and leaves cffi to hash the
+# result: 0.1219 microseconds against 0.0681 for a literal cdecl -- an
+# Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 15 rounds of
+# 300 000 calls, on a noise row that moved 0.5%. A literal here would
+# state the width a second time; `ffi.typeof` of the same f-string,
+# evaluated once, is the literal's price with the width still stated
+# once.
+#
+# A *literal* cdecl is already cached by cffi, and hoisting one saves
+# 0.003 -- 0.0656 against 0.0685, real at 4.3% and an order below the
+# 0.054 above. Too small to be worth a module-level name for every
+# cdecl in the package, so this is done where the string is built and
+# every other `ffi.new` here is spelled in full
+_XONLY_BUFFER_TYPE = ffi.typeof(f"char[{_XONLY_SIZE}]")
 
-def _drop_y(pubkey: CData) -> tuple[CData, int]:
-    """Convert a parsed public key into a parsed x-only key and the parity.
+
+def _drop_y(pubkey: CData, parity: CData = ffi.NULL) -> CData:
+    """Convert a parsed public key into a parsed x-only key.
 
     The conversion itself, which is where the y is dropped, without the
     serialization that follows it in `_from_pubkey_`: `_tweak_add_` wants
     the object and not the 32 bytes, having a tweak to add to it.
+
+    Args:
+        pubkey: the already-parsed public key, as `keys.parse` returns.
+        parity: an `int *` to receive the parity of the y being dropped,
+            0 for even and 1 for odd -- or the NULL that says nobody is
+            reading it, which is the default because the callers that
+            want the object alone are why it exists: `parse`, `_parsed`
+            and `_tweak_add_`. libsecp256k1 documents `pk_parity` as
+            "can be NULL", so the allocation is the caller's to make
+            rather than this function's, and skipping it is 0.4295
+            microseconds against 0.5021 on `xonly.parse` of a 65-byte
+            key -- CHANGELOG.md names the session every figure in this
+            module comes from. `_drop_y_with_parity` is the allocation,
+            written once, for the callers that read one.
+
+    Returns:
+        The libsecp256k1 x-only public key object.
+
+    Raises:
+        RuntimeError: if libsecp256k1 refuses the object -- one it
+            cannot read -- or fails to convert for any other reason,
+            which a key it produced cannot make it do. `context.check`
+            is what tells the two apart.
+    """
+    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
+    converted = lib.secp256k1_xonly_pubkey_from_pubkey(
+        ctx, xonly_pubkey, parity, pubkey
+    )
+    if not converted:
+        raise RuntimeError("x-only public key conversion failed")
+    return xonly_pubkey
+
+
+def _drop_y_with_parity(pubkey: CData) -> tuple[CData, int]:
+    """Convert a parsed public key, and read the parity of the y dropped.
+
+    `_drop_y` for the callers that want the parity, so that the
+    allocation is written once rather than at each of their call sites.
+    The NULL default above is where the saving is -- 0.1747 microseconds
+    against 0.2425 on the conversion alone -- and it lands on the callers
+    that discard the parity, not on these: no saving lands here, and what
+    this adds is some hundredths of a microsecond, measurable against
+    both. One figure and not one per caller: the same frame is added at
+    each, and two harnesses put a different one of the two ahead, which
+    is the spread and not a structure. What it buys is the C call written
+    once and these two call sites left as they read.
 
     Args:
         pubkey: the already-parsed public key, as `keys.parse` returns.
@@ -57,21 +119,11 @@ def _drop_y(pubkey: CData) -> tuple[CData, int]:
         y that was dropped: 0 for even, 1 for odd.
 
     Raises:
-        RuntimeError: if libsecp256k1 refuses the object -- one it
-            cannot read -- or fails to convert for any other reason,
-            which a key it produced cannot make it do. `context.check`
-            is what tells the two apart.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            no valid key can make it do.
+        RuntimeError: if libsecp256k1 refuses the object or fails to
+            convert it, as `_drop_y` says.
     """
-    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     parity = ffi.new("int *")
-    converted = lib.secp256k1_xonly_pubkey_from_pubkey(
-        ctx, xonly_pubkey, parity, pubkey
-    )
-    if not converted:
-        raise RuntimeError("x-only public key conversion failed")
-    return xonly_pubkey, parity[0]
+    return _drop_y(pubkey, parity), parity[0]
 
 
 def _from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
@@ -92,7 +144,7 @@ def _from_pubkey_(pubkey: CData) -> tuple[bytes, int]:
         RuntimeError: if libsecp256k1 fails to convert or serialize it,
             which no valid key can make it do.
     """
-    xonly_pubkey, parity = _drop_y(pubkey)
+    xonly_pubkey, parity = _drop_y_with_parity(pubkey)
     return serialize(xonly_pubkey), parity
 
 
@@ -258,7 +310,7 @@ def _tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:
         RuntimeError: if libsecp256k1 fails to convert or serialize the
             result, which no valid input can make it do.
     """
-    return _tweak_xonly(_drop_y(pubkey)[0], tweak)
+    return _tweak_xonly(_drop_y(pubkey), tweak)
 
 
 def tweak_add(pubkey_bytes: BytesLike, tweak: BytesLike | int) -> tuple[bytes, int]:
@@ -467,7 +519,7 @@ def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
         pubkey = keys._parsed(pubkey_bytes, name)
         if pubkey is None:
             raise ValueError(f"invalid {name}")
-        return _drop_y(pubkey)[0]
+        return _drop_y(pubkey)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
@@ -499,7 +551,7 @@ def _parsed(pubkey_bytes: BytesLike, name: str) -> CData | None:
     pubkey_bytes = octets(pubkey_bytes, name)
     if len(pubkey_bytes) != _XONLY_SIZE:
         pubkey = keys._parsed(pubkey_bytes, name)
-        return None if pubkey is None else _drop_y(pubkey)[0]
+        return None if pubkey is None else _drop_y(pubkey)
 
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
     if not lib.secp256k1_xonly_pubkey_parse(ctx, xonly_pubkey, pubkey_bytes):
@@ -583,9 +635,11 @@ def to_pubkey(pubkey_bytes: BytesLike, compressed: bool = True) -> bytes:
 
     # the point is already lifted, so the y is read rather than found:
     # an odd one is negated in the field, where reaching the even-y point
-    # through the 32 octets would be a square root of an x in hand
+    # through the 32 octets would be a square root of an x in hand. The
+    # x-only key the conversion builds is what is thrown away here, the
+    # parity being the whole of what this asks for
     pubkey = keys.parse(pubkey_bytes)
-    if _drop_y(pubkey)[1]:
+    if _drop_y_with_parity(pubkey)[1]:
         keys._pubkey_negate_(pubkey)
     return keys.serialize(pubkey, compressed)
 
@@ -613,8 +667,12 @@ def serialize(xonly_pubkey: CData) -> bytes:
         RuntimeError: if libsecp256k1 fails for any other reason, which
             a key it produced cannot make it do.
     """
-    output = ffi.new(f"char[{_XONLY_SIZE}]")
+    output = ffi.new(_XONLY_BUFFER_TYPE)
     serialized = lib.secp256k1_xonly_pubkey_serialize(ctx, output, xonly_pubkey)
     if not serialized:
         raise RuntimeError("x-only public key serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    # the length is the constant the buffer's type was built from, so
+    # the two cannot say different numbers, and `ffi.sizeof` of the
+    # cdata would be 0.0175 microseconds nothing reads, measured as the
+    # comment above says
+    return ffi.unpack(output, _XONLY_SIZE)

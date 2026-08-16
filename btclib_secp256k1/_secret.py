@@ -41,6 +41,37 @@ from ._scalar import scalar
 from .context import ctx
 
 
+def _zero(memory: memoryview) -> None:
+    """Overwrite what a cffi buffer views.
+
+    The statement that writes the zeros, written once: `wipe` builds the
+    view over a cdata, and `take` is already holding one it read the
+    secret through, so calling `wipe` from there would build a second
+    over the same memory.
+
+    That it is a function and not the statement inlined in both places
+    is a trade made deliberately and against the faster spelling.
+    Measured over the same session as every other figure of this change,
+    which CHANGELOG.md names: calling `wipe` a second time is 0.1826
+    microseconds, this is 0.1439, and the inlined statement is 0.1314.
+    So the frame gives up about a quarter of what is on the table, and
+    what it buys is that the line which overwrites a secret exists once:
+    two copies are two things to keep true, in the one facility whose
+    whole claim is about what is left in memory.
+
+    Args:
+        memory: the `ffi.buffer` to overwrite, and a view of the whole
+            cdata rather than a slice of one -- `wipe` builds it from
+            the cdata for the reason its own docstring gives, and
+            `_zero(ffi.buffer(buffer, 8))` would zero a quarter of the
+            private key inside a keypair and report success, which is
+            the failure that docstring records. Typed as the stub
+            declares `ffi.buffer` to answer, this being the module that
+            reads both a slice and a length off one.
+    """
+    memory[:] = bytes(len(memory))
+
+
 def wipe(buffer: CData) -> None:
     """Overwrite a buffer that held a secret.
 
@@ -54,8 +85,7 @@ def wipe(buffer: CData) -> None:
     Args:
         buffer: the cffi buffer to overwrite, as `ffi.new` returned it.
     """
-    memory = ffi.buffer(buffer)
-    memory[:] = bytes(len(memory))
+    _zero(ffi.buffer(buffer))
 
 
 def into_buffer(into: object, size: int) -> memoryview:
@@ -172,12 +202,15 @@ def take(buffer: CData, *, into: MutableBytesLike | None = None) -> bytes | None
             one-dimensional octets.
         ValueError: if `into` is not the secret's length.
     """
+    # the zeroing goes through this view rather than through `wipe`,
+    # which would build a second one over the same cdata: what `wipe`
+    # writes is `_zero`, and it is that statement both paths reach
     memory = ffi.buffer(buffer)
     if into is None:
         secret = bytes(memory)
-        wipe(buffer)
+        _zero(memory)
         return secret
-    # the wipe is in a `finally` because `into_buffer` can refuse, and
+    # the zeroing is in a `finally` because `into_buffer` can refuse, and
     # this is the one call here with a failure path: without it a
     # rejected buffer returns through the entry point leaving a live
     # private key in cffi memory that is freed without being
@@ -189,7 +222,7 @@ def take(buffer: CData, *, into: MutableBytesLike | None = None) -> bytes | None
         view = into_buffer(into, len(memory))
         view[:] = memory
     finally:
-        wipe(buffer)
+        _zero(memory)
     return None
 
 

@@ -43,6 +43,16 @@ from .context import ctx
 SUMMARY_SIZE = ffi.sizeof("secp256k1_silentpayments_prevouts_summary")
 LABEL_SIZE = 33
 
+# the buffer `serialize_label` writes into, resolved here rather than at
+# every call: `ffi.new` of an f-string formats it and leaves cffi to
+# hash the result, where `ffi.typeof` of the same string, evaluated
+# once, costs what a literal cdecl does and still states the width once.
+# 0.2023 microseconds against 0.2621 on this serialization -- one
+# session with every other figure of this change, which CHANGELOG.md
+# names. `xonly.py` says the rest, the reason a literal cdecl is left
+# alone included
+_LABEL_BUFFER_TYPE = ffi.typeof(f"char[{LABEL_SIZE}]")
+
 
 def _create_outputs_(
     recipients: Sequence[tuple[CData, CData]],
@@ -805,10 +815,12 @@ def serialize_label(label_obj: CData) -> bytes:
             which a label it produced cannot make it do.
             `context.check` is what tells the two apart.
     """
-    output = ffi.new(f"char[{LABEL_SIZE}]")
+    output = ffi.new(_LABEL_BUFFER_TYPE)
     serialized = lib.secp256k1_silentpayments_recipient_label_serialize(
         ctx, output, label_obj
     )
     if not serialized:
         raise RuntimeError("label serialization failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    # the length is the constant the buffer's type was built from, so the
+    # two still cannot say different numbers
+    return ffi.unpack(output, LABEL_SIZE)
