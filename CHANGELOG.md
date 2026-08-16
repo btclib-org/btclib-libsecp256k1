@@ -28,9 +28,9 @@ release-notes length in the first place, and are still in
   call.** It cleared the thread, ran the libsecp256k1 call, and raised
   whatever the illegal callback had recorded, which turned a refused
   object into an exception at each of the twenty-six places it was
-  used. Measured around one trivial C call, it cost 0.175 microseconds
-  of the 0.266 that call took — an Apple M5, macOS 26.6, arm64, CPython
-  3.13.14, minimum of 7 rounds of a million calls — and an entry point
+  used. Measured around one trivial C call, it cost 0.201 microseconds
+  of the 0.292 that call took — an Apple M5, macOS 26.6, arm64, CPython
+  3.13.14, minimum of 9 rounds of a million calls — and an entry point
   crossing twice, as `keys.pubkey_tweak_add` does, paid it twice.
   `context.check` is unchanged and still exported: what it reports is
   now every caller's to ask for, and its docstring says when.
@@ -62,14 +62,14 @@ release-notes length in the first place, and are still in
   and `keys.pubkey_verify` on the octets it came from is what settles it
   once instead of at every call.
 - **`_scalar.octets` and `_scalar.scalar` answer `bytes` without asking
-  the questions `bytes` already answers**, 0.031 microseconds against
-  0.078 on the same machine. The two `isinstance` tests, the
+  the questions `bytes` already answers**, 0.034 microseconds against
+  0.080 on the same machine. The two `isinstance` tests, the
   `memoryview` width test and the defensive copy are what a `bytearray`
   or a `memoryview` needs, and are what the slow path still does; the
   exact type is asked once in front of them. `dsa.verify` passes three
   arguments through it.
-- **`keys.serialize` builds its buffer from a literal cdecl**, 0.287
-  microseconds against 0.381 with the guard already gone and 0.590
+- **`keys.serialize` builds its buffer from a literal cdecl**, 0.313
+  microseconds against 0.356 with the guard already gone and 0.604
   before it: `ffi.new` of an interpolated `f"char[{size}]"` parses that
   string on every call, and `ffi.sizeof` was called twice where the size
   was in hand. The length buffer is still built per call and deliberately
@@ -81,12 +81,17 @@ release-notes length in the first place, and are still in
   serialization, on any thread and of a perfectly good key, would be
   refused. That was measured rather than reasoned about.
 - **What the entry points cost now.** Microseconds per call on the
-  machine above, minimum of 9 rounds, before against after:
-  `keys.parse` of 65 bytes 0.261 and 0.197, `keys.serialize` 0.590 and
-  0.303, `xonly.parse` of 65 bytes 0.835 and 0.478,
-  `keys.pubkey_tweak_add` 4.146 and 3.469, `dsa.verify` 12.260 and
-  11.818, `dsa.sign` 12.165 and 11.801, `ssa.verify` of a 65-byte key
-  13.157 and 12.456, of an x-only key 14.638 and 14.308.
+  machine above, the quickest of two passes run in either order so that
+  neither tree is the one measured on a warm machine, before against
+  after: `keys.parse` of 65 bytes 0.258 and 0.213, of 33 bytes 2.314 and
+  2.294, `xonly.parse` of 65 bytes 0.832 and 0.500,
+  `keys.pubkey_tweak_add` 4.179 and 3.480, `dsa.sign` in DER 12.063 and
+  11.766, in the compact form 12.072 and 11.733, `dsa.verify` in DER
+  12.221 and 11.846, in the compact form 12.203 and 11.880, `ssa.sign`
+  15.724 and 15.631, `ssa.verify` of a 65-byte key 13.159 and 12.476, of
+  an x-only key 14.624 and 14.272. The 33-byte parse is where there was
+  nothing to win and the figures say so: the field square root is what
+  that row is.
 
 ### Signing under one key
 

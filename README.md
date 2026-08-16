@@ -778,7 +778,7 @@ That example is the one that matters: partial signing zeroes the secret
 nonce, so signing twice with it is refused, and this is how a session
 learns why. The entry points taking octets need none of it, validating
 their arguments before calling; the private halves taking an object need
-exactly it, for the reason Parsing the key once gives. Either way the
+exactly it, for the reason *Parsing the key once* gives. Either way the
 abort()ing libsecp256k1 defaults are replaced by do-nothing stubs in the
 vendored build, so no illegal argument can take the hosting process
 down.

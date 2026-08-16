@@ -1033,9 +1033,9 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
     """
     # the buffer is declared by a literal and the size read back off it,
     # so the two cannot say different numbers: `ffi.new` of an
-    # interpolated cdecl parses that string on every call, which is 0.045
-    # microseconds of the 0.287 this costs -- an Apple M5, macOS 26.6,
-    # arm64, CPython 3.13.14, minimum of 7 rounds of 500 000 calls.
+    # interpolated cdecl parses that string on every call, which is 0.043
+    # microseconds of the 0.313 this costs -- an Apple M5, macOS 26.6,
+    # arm64, CPython 3.13.14, minimum of 9 rounds of 500 000 calls.
     #
     # What is unpacked is the buffer, not the length libsecp256k1 reports
     # back: this serialization has one length per flag, so a buffer of
