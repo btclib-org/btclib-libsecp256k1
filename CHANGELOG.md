@@ -746,6 +746,23 @@ release-notes length in the first place, and are still in
   rather than inverted from `*.md`; and `test-passed` takes `changes` as
   a `needs`, so an error listing the files fails the gate instead of
   skipping everything and reporting a pass
+- **The suite cells are one job per image, not one per interpreter**
+  (#190). In the same run, 30 of the 48 jobs were suite cells and they
+  were 11.8 of its 81.8 runner-minutes: what they cost is slots, of which
+  an organization on GitHub Free has twenty shared across every
+  repository in it, and not time. `suite-dynamic` (eight interpreters on
+  two images) and `suite-static` (seven on two) are two jobs each now,
+  walking their whole list. Per cell the marginal work is an install and
+  a suite, both under half a minute, against a checkout, a setup-python
+  and an artifact download paid once per job — so the collapse costs
+  little wall clock and pays back twenty-six slots. What it trades away
+  is that a cell named the interpreter in the check itself, and the loop
+  gives that back where it can: every version runs even after one has
+  failed, each inside a fold of its own, and the failures are named
+  together at the end rather than the first one aborting the job. The
+  list is stated once per job and read twice, by setup-python and by the
+  loop, so a version in one and not the other is either an interpreter
+  installed and never run or a run that fails on a missing executable
 - **`github-release` needed `always()` too, not just an explicit `if`.**
   The previous fix (v0.8.0.2's own CHANGELOG entry, right below) added
   `needs.publish-pypi.result == 'success' && needs.attest.result ==

@@ -243,7 +243,11 @@ command at all, for the reason above, and no longer gates.
   ```
 
 - `Run the suite on the static wheel, <version>, <os>`, and its dynamic
-  counterpart, one row of either matrix
+  counterpart, one row of either matrix. In `test.yml` those two jobs read
+  `every interpreter` where the version would be, one job per image
+  walking the whole list, so the version a failure names is in the log
+  rather than in the name of the check; `macos.yml` and `windows.yml`
+  still have a cell per version
 
   ```shell
   uv run --python 3.10 --no-cache pytest

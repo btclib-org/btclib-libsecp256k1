@@ -633,10 +633,33 @@ jobs:
     # no rule names it today
     name: >-
       Run the suite on the dynamic wheel,
-      ${{ matrix.python-version }}, ${{ matrix.os }}
+      every interpreter, ${{ matrix.os }}
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # one job now walks what eight did, so the cap is the sum of theirs
+    # rather than one of them: eight installs and eight suites in
+    # sequence, where each cell was under two minutes
+    timeout-minutes: 30
+    env:
+      # one statement of which interpreters are tested, read twice in this
+      # job: setup-python installs the list, and the loop below walks it.
+      # A version added to one and not the other is either an interpreter
+      # installed and never run or a run that fails on a missing
+      # executable, and both say so immediately.
+      # 3.14t, the free-threaded interpreter, matters here in particular:
+      # the dynamic wheel is tagged py3-none, so it is what a
+      # free-threaded interpreter installs, and unlike the static wheels
+      # nothing else exercises it (cibuildwheel tests every wheel it
+      # builds, including cp314t; this job has no such counterpart)
+      PYTHONS: |
+        3.10
+        3.11
+        3.12
+        3.13
+        3.14
+        3.14t
+        pypy-3.10
+        pypy-3.11
     strategy:
       fail-fast: false
       matrix:
@@ -645,20 +668,6 @@ jobs:
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-        # 3.14t, the free-threaded interpreter, matters here in particular:
-        # the dynamic wheel is tagged py3-none, so it is what a
-        # free-threaded interpreter installs, and unlike the static wheels
-        # nothing else exercises it (cibuildwheel tests every wheel it
-        # builds, including cp314t; this job has no such counterpart)
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-          - "3.14t"
-          - "pypy-3.10"
-          - "pypy-3.11"
     needs: [build-windows, build-dynamic]
 
     steps:
@@ -666,20 +675,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python ${{ matrix.python-version }}
+      # every interpreter of PYTHONS at once: setup-python takes a list and
+      # puts each on the PATH under its own name, which is what lets one
+      # job do what one cell per version did
+      - name: Set up every interpreter
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-
-      # unpinned, and for the reason spelled out in test-sdist: a user's
-      # environment rather than the locked one
-      - name: Upgrade Python packaging tools
-        run: python -m pip install -U pip pytest
-
-      - name: Show runner information
-        run: |
-          python --version
-          pip --version
+          python-version: ${{ env.PYTHONS }}
 
       # only the wheel built for this platform: downloading all of them
       # meant every job in the matrix listing and fetching four
@@ -691,22 +693,65 @@ jobs:
           name: dynamic-wheels-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os }}
           path: dist
 
-      - name: Install lib
+      # pip and pytest unpinned, and for the reason spelled out in
+      # suite-sdist: a user's environment rather than the locked one.
+      #
+      # What a red check says is what this trades away, and the loop is
+      # written to give it back: a matrix cell named the interpreter in the
+      # check itself, where this job names the image and leaves the
+      # interpreter to the log. So every version runs even after one has
+      # failed -- `fail-fast: false` between cells, kept between iterations
+      # -- each inside a fold of its own, and the failures are named
+      # together at the end rather than being the first one to abort
+      - name: Install the wheel and run the suite under each interpreter
         run: |
-          python -m pip install cffi
-          python -m pip install --verbose --no-index --find-links dist/ btclib_secp256k1
-
-      - name: Test
-        run: pytest
+          failed=""
+          for version in $PYTHONS; do
+            case $version in
+              pypy-*) python=pypy${version#pypy-} ;;
+              *) python=python$version ;;
+            esac
+            echo "::group::$version ($python)"
+            if "$python" --version \
+              && "$python" -m pip install -U pip pytest cffi \
+              && "$python" -m pip install --verbose --no-index \
+                --find-links dist/ btclib_secp256k1 \
+              && "$python" -m pytest; then
+              echo "$version passed"
+            else
+              failed="$failed $version"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::the suite failed under:$failed"
+            exit 1
+          fi
 
   suite-static:
     # the linkage is in the name: see suite-dynamic
     name: >-
       Run the suite on the static wheel,
-      ${{ matrix.python-version }}, ${{ matrix.os }}
+      every interpreter, ${{ matrix.os }}
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # see suite-dynamic, one interpreter fewer
+    timeout-minutes: 30
+    env:
+      # one statement of the interpreters, as in suite-dynamic, and one
+      # shorter by pypy-3.10: no static wheel is built for it.
+      # cibuildwheel already runs the suite against every wheel it builds,
+      # cp314t included: what this job adds is that pip, given a directory
+      # holding all of them, selects the right one, which for the
+      # free-threaded interpreter nothing checked
+      PYTHONS: |
+        3.10
+        3.11
+        3.12
+        3.13
+        3.14
+        3.14t
+        pypy-3.11
     strategy:
       fail-fast: false
       matrix:
@@ -723,12 +768,6 @@ jobs:
         os:
           - ubuntu-latest
           - ubuntu-24.04-arm
-        python-version:
-          ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "pypy-3.11"]
-        # cibuildwheel already runs the suite against every wheel it
-        # builds, cp314t included: what this job adds is that pip, given a
-        # directory holding all of them, selects the right one, which for
-        # the free-threaded interpreter nothing checked
     needs: build-cibuildwheel
 
     steps:
@@ -736,19 +775,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python ${{ matrix.python-version }}
+      # see suite-dynamic
+      - name: Set up every interpreter
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-
-      # unpinned, as in test-dynamic
-      - name: Upgrade Python packaging tools
-        run: python -m pip install -U pip pytest
-
-      - name: Show runner information
-        run: |
-          python --version
-          pip --version
+          python-version: ${{ env.PYTHONS }}
 
       # only the wheels built for this platform, as above
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -756,13 +787,34 @@ jobs:
           name: static-wheels-${{ matrix.os }}
           path: dist
 
-      - name: Install lib
+      # the loop, the folds and the failures named together: see
+      # suite-dynamic. The install is the point of this job rather than a
+      # step before it -- pip choosing among a directory of wheels tagged
+      # for seven interpreters -- so it stays inside the loop with the run
+      - name: Install the wheel and run the suite under each interpreter
         run: |
-          python -m pip install cffi
-          python -m pip install --verbose --no-index --find-links dist/ btclib_secp256k1
-
-      - name: Test
-        run: pytest
+          failed=""
+          for version in $PYTHONS; do
+            case $version in
+              pypy-*) python=pypy${version#pypy-} ;;
+              *) python=python$version ;;
+            esac
+            echo "::group::$version ($python)"
+            if "$python" --version \
+              && "$python" -m pip install -U pip pytest cffi \
+              && "$python" -m pip install --verbose --no-index \
+                --find-links dist/ btclib_secp256k1 \
+              && "$python" -m pytest; then
+              echo "$version passed"
+            else
+              failed="$failed $version"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::the suite failed under:$failed"
+            exit 1
+          fi
 
   # one context for the branch rule, instead of the matrix's own. A rule
   # naming `Run the suite on the static wheel, 3.10, ubuntu-latest` names a
