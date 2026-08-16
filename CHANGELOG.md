@@ -1405,6 +1405,56 @@ release-notes length in the first place, and are still in
   against a 8.7 and 10.2 baseline — while the macOS images, whose default
   shell is bash, had already dropped to 1.5 and 1.2. A step that is green
   while doing nothing is why the comment above it now carries this
+- **The vendored library is no longer configured by what happens to be
+  installed on the machine that builds it** (#211).
+  `SECP256K1_VALGRIND` defaults to `AUTO`, and `AUTO` is
+  `find_package(Valgrind)` — the only `find_package` in the vendored
+  CMake. Where the header is on an include path, the library is compiled
+  with `-DVALGRIND`, which turns the `SECP256K1_CHECKMEM_*` of
+  `src/checkmem.h` from no-ops into valgrind client requests, and
+  `SECP256K1_BUILD_CTIME_TESTS` takes its default from it besides. So a
+  runner that happened to have one shipped a different library from the
+  same commit, in a wheel that says nothing about which one it is.
+  `scripts/cffi_build.py` passes `-DSECP256K1_VALGRIND=OFF` now.
+- **The defect was reproduced before it was fixed** rather than argued
+  from the CMake: configured against a directory holding a
+  `valgrind/memcheck.h`, `AUTO` reports `-- Found Valgrind`, puts
+  `Valgrind_INCLUDE_DIR` in the cache and `-DVALGRIND` in
+  `src/CMakeFiles/secp256k1.dir/flags.make`; `OFF` does none of the
+  three, `find_package` not running at all. An empty header is enough,
+  the module's compile check only rejecting `NVALGRIND`, so the trigger
+  is a header on an include path and not an installed valgrind. Every
+  wheel job's configure summary carries the answer —
+  `Valgrind .............................. OFF` — which is the audit,
+  `scripts/` being outside the coverage gate.
+- **The instrumentation in such a wheel runs rather than merely being
+  present, and the pin is still not about what it costs.**
+  `SECP256K1_CHECKMEM_RUNNING()` is itself a client request under
+  `VALGRIND` — `src/checkmem.h` defines it as
+  `(VALGRIND_MAKE_MEM_DEFINED(NULL, 0) != 0)` deliberately, memcheck
+  having to be detected specifically rather than valgrind in general —
+  and it is the left operand of the `&&` at `src/secp256k1.c:104`,
+  behind no flag and no `VERIFY`. `secp256k1_context_create` reaches
+  that line twice, so a wheel built with `-DVALGRIND` executes two of
+  them at import and none afterwards: the other call site is
+  `secp256k1_declassify` (`src/secp256k1.c:254`), behind
+  `ctx->declassify`, which line 104 refuses to set outside memcheck at
+  all. Everything else is `CHECK_VERIFY`, `MSAN_DEFINE`, or under
+  `#ifdef VERIFY`. A handful of instructions, once — and what the pin is
+  about is that the wheel be a function of the source.
+- **`SECP256K1_ASM`, `SECP256K1_ECMULT_WINDOW_SIZE` and
+  `SECP256K1_ECMULT_GEN_KB` stay at upstream's defaults, and that is now
+  written down** rather than left as three options nobody named. The two
+  table sizes (15, and 86 KiB reaching the compiler as `COMB_BLOCKS=43
+  COMB_TEETH=6`) are what upstream recommends for a desktop. `ASM` asks
+  the build machine a question too — `AUTO` is a compile check, and it
+  falls back to `OFF` in silence where that check fails, which a pinned
+  `x86_64` would turn into a build error — but it cannot be pinned in a
+  line: the macOS `universal2` cell compiles two architectures in one
+  pass and the mingw one cross-compiles, so naming an architecture there
+  would break the cells that are not it. So one machine question stays
+  open, by choice, and the headline above is scoped to the one that is
+  closed.
 - **The vendored library is compiled once per wheel job, not once per
   wheel** (#192). The six wheel jobs were 59.5 of that run's 81.8
   runner-minutes, and each of them built the whole of libsecp256k1 once

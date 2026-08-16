@@ -409,6 +409,37 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_USE_EXTERNAL_DEFAULT_CALLBACKS=ON",
             f"-DCMAKE_PROJECT_INCLUDE={project_include}",
             f"-DBTCLIB_CALLBACKS={callbacks}",
+            # the one upstream option whose answer is what happens to be
+            # *installed* on the machine: AUTO means
+            # find_package(Valgrind), which is the only find_package in
+            # the vendored CMake, and a header on an include path is
+            # enough -- the module's compile check only rejects
+            # NVALGRIND, so valgrind itself need not be there. Where one
+            # is, the library is compiled with -DVALGRIND, which turns
+            # the SECP256K1_CHECKMEM_* of src/checkmem.h from no-ops into
+            # valgrind client requests, and SECP256K1_BUILD_CTIME_TESTS
+            # defaults to it besides (already pinned OFF below). So a
+            # runner that happens to have a header ships a different
+            # library from the same commit, in a wheel that says nothing
+            # about which one it is, and this package exists to behave
+            # identically everywhere.
+            #
+            # The instrumentation in such a wheel runs rather than merely
+            # being present: SECP256K1_CHECKMEM_RUNNING() is a client
+            # request under VALGRIND (checkmem.h, deliberately, memcheck
+            # having to be detected specifically), it is the left operand
+            # of the && that secp256k1_context_preallocated_size guards
+            # its DECLASSIFY flag with, and secp256k1_context_create
+            # reaches that function twice. So two of them at import, and
+            # none afterwards: the other call site is
+            # secp256k1_declassify, behind ctx->declassify, which that
+            # same guard refuses to set outside memcheck at all. A
+            # handful of instructions, once -- and the pin is not about
+            # the cost but about the wheel being a function of the
+            # source. Functions rather than line numbers: a vendored
+            # file's lines move with the next submodule bump and nothing
+            # here would notice, where these names survive it
+            "-DSECP256K1_VALGRIND=OFF",
             # all the modules wrapped by the bindings are requested
             # explicitly: upstream defaults are not part of its API
             # (recovery, in particular, is disabled by default)
@@ -427,6 +458,19 @@ class Secp256k1CFFIExtension(FFIExtension):
             "-DSECP256K1_INSTALL=OFF",
             *self.target_architecture_options(),
         ]
+        # not in that list, and deliberately: SECP256K1_ASM,
+        # SECP256K1_ECMULT_WINDOW_SIZE and SECP256K1_ECMULT_GEN_KB are
+        # the three options that decide how fast the result is, and all
+        # three are left at upstream's defaults. The two table sizes are
+        # what upstream recommends for a desktop. ASM asks the build
+        # machine a question too -- AUTO is a compile check, and it falls
+        # back to OFF in silence where that check fails -- but it cannot
+        # be pinned in one line: the mingw cell cross-compiles, and the
+        # macOS universal2 one compiles two architectures in a single
+        # pass, which is the `x86_64;arm64` target_architecture_options
+        # names above. Pinning an architecture here would contradict it.
+        # #211 records the values, and why they are left alone
+
         if cross_compile:
             # the toolchain file is the vendored one, upstream tested
             toolchain = self.wd / "cmake" / "x86_64-w64-mingw32.toolchain.cmake"

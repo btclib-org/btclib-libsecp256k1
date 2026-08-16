@@ -59,11 +59,17 @@ The cffi build description named in `cffi_modules`, exposing the
 **Build the vendored library.** CMake, on every platform, out of tree
 into `build/secp256k1`: the submodule is only ever read from. The
 configure line requests each module the bindings wrap
-(`ecdh`, `recovery`, `extrakeys`, `schnorrsig`, `musig`, `ellswift`)
-explicitly, rather than relying on upstream defaults, which are not part
-of upstream's API and which leave `recovery` off. Upstream's own tests,
-benchmarks and install rules are all turned off. A stale CMake cache is
-deleted first, because it remembers the previous configuration.
+(`ecdh`, `recovery`, `extrakeys`, `schnorrsig`, `musig`, `ellswift`,
+`silentpayments`) explicitly, rather than relying on upstream defaults,
+which are not part of upstream's API and which leave `recovery` off.
+One option is named for a different reason: `SECP256K1_VALGRIND` is
+pinned `OFF` because its default answers with the build machine rather
+than with a value — `AUTO` is `find_package(Valgrind)`, so a runner that
+happens to have the header ships a library compiled with `-DVALGRIND`,
+which is a wheel this repository cannot tell from any other. Upstream's
+own tests, benchmarks and install rules are all turned off. A stale
+CMake cache is deleted first, because it remembers the previous
+configuration.
 
 The build also replaces libsecp256k1's default callbacks, which
 `abort()`, with do-nothing ones, so that an illegal input can never take
