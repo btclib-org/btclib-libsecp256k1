@@ -783,6 +783,18 @@ release-notes length in the first place, and are still in
   paid on #930: branch deleted first, pull request Closed with its commit
   on `main` all the same. Two counts were stale besides, both saying four
   required checks where the rule has named three since `codeql` left it
+- **and CONTRIBUTING.md was the file that pass did not reach** (#200). It
+  said "the one force-push that stays right", and there are two: the
+  rebase a contributor makes when their base has moved, and the squash
+  the maintainer pushes to their branch at the end — which is the one
+  they will actually see, arriving on work they thought was finished. It
+  is now named there as the second, and the paragraph on the maintainer's
+  path carries the step it was missing: the squash reaches the branch
+  before it reaches `main`, which is what leaves the pull request naming
+  the commit that lands, so GitHub marks it Merged and the `Closes #N` in
+  the description fires. A contributor reading only this file would have
+  expected the other outcome, and the two pull requests that landed the
+  rule went the way it now describes
 
 - **The sentinel table names `windows` too** (#184). `windows.yml` became
   a workflow of its own two changes after `macos.yml` did, and the table

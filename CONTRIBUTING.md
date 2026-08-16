@@ -569,10 +569,14 @@ commits the review is attached to: the reviewer loses the diff they read,
 "changes since your last review" has nothing to compare against, and every
 one of those matrix jobs starts again from a commit nobody has seen. Add
 the fix on top, with a message saying what it fixes, and reply to the
-comment with the sha. The one force-push that stays right is the one
-carrying no new work — a `git rebase origin/main` on a branch whose base
-has moved — and it wants the gates re-run after it, not only before, and a
-note in the pull request saying the head moved.
+comment with the sha. Two force-pushes carry no new work, and stay right
+for that reason. One is yours: a `git rebase origin/main` on a branch
+whose base has moved, which wants the gates re-run after it, not only
+before, and a note in the pull request saying the head moved. The other
+is the maintainer's and comes at the end, your branch's own commits
+collapsed into the one about to land — the paragraph after next is where
+that is, and it is worth expecting rather than reading as a rewrite of
+the review.
 
 Nothing is lost in `main`'s history by working that way, because a pull
 request lands as one commit: a branch of several is squashed into one
@@ -585,16 +589,23 @@ branch rule, and one change is one commit there.
 **How that commit reaches `main` is a push rather than a button**, which
 is the maintainer's own path and needs the `main-self-merge` bypass no
 contributor has: REPOSITORY.md describes it, squashing the branch locally
-where it carries more than one commit and fast-forwarding it. Two things
-about it are worth knowing from here. The commit that lands is signed by
-the maintainer rather than by GitHub's web-flow key; and where your
-branch is already a single commit and needs no rebase to land, its sha
-does not change, so `main` receives the very commit the gates ran on and
-a branch stacked on it keeps applying. A rebase moves the sha like any
-other force-push, which is why the gates are asked for after one and not
-only before. Neither changes the shape of a correction: whether a branch
-is squashed or fast-forwarded is decided when it lands, and by then the
-review has its record either way.
+where it carries more than one commit, pushing that squash to the branch,
+and fast-forwarding the branch from there. Three things about it are
+worth knowing from here. The commit that lands is signed by the
+maintainer rather than by GitHub's web-flow key. Where your branch is
+already a single commit and needs no rebase to land, its sha does not
+change, so `main` receives the very commit the gates ran on and a branch
+stacked on it keeps applying — a rebase moves the sha like any other
+force-push, which is why the gates are asked for after one and not only
+before. And the squash reaches your branch before it reaches `main`,
+which is the second of those two force-pushes: that order is what leaves
+the pull request naming the commit that lands, so GitHub marks it
+**Merged** on its own and the `Closes #N` in the description closes the
+issue. Landed from a worktree instead, the pull request would name an
+object `main` never received, and would be closed by hand with the change
+in it all the same. None of the three changes the shape of a correction:
+whether a branch is squashed or fast-forwarded is decided when it lands,
+and by then the review has its record either way.
 
 Squash is the only merge *button* this repository enables, so there is no
 other to read; REPOSITORY.md has that setting, what the other two would
