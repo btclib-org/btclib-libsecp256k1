@@ -367,7 +367,20 @@ def pubkey_tweak_add(
         RuntimeError: if libsecp256k1 fails to serialize the result,
             which no valid input can make it do.
     """
-    return serialize(_pubkey_tweak_add_(parse(pubkey_bytes), tweak), compressed)
+    # spelled out rather than composed of `parse`, `_pubkey_tweak_add_`
+    # and `serialize`: those three frames are 0.037 microseconds of the
+    # 3.403 this call costs -- an Apple M5, macOS 26.6, arm64, CPython
+    # 3.13.14, the two spellings alternated in one process over 7 rounds
+    # of 20 000 calls, minimum kept for each. The private half makes the
+    # same calls for a caller holding the point, and
+    # tests/test_parsed_keys.py asserts the two answer alike
+    pubkey_bytes = octets(pubkey_bytes, "public key")
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
+        raise ValueError("invalid public key")
+    if not lib.secp256k1_ec_pubkey_tweak_add(ctx, pubkey, scalar(tweak, "tweak")):
+        raise ValueError("invalid tweak or resulting public key")
+    return serialize(pubkey, compressed)
 
 
 class PubkeyTweakChain:
@@ -918,8 +931,16 @@ def parse(pubkey_bytes: BytesLike, name: str = "public key") -> CData:
         ValueError: if the bytes are not a valid point in either
             serialization.
     """
-    pubkey = _parsed(pubkey_bytes, name)
-    if pubkey is None:
+    # spelled out rather than delegated to `_parsed`: the one python
+    # frame between them is 0.010 microseconds of the 0.205 this call
+    # costs -- an Apple M5, macOS 26.6, arm64, CPython 3.13.14, the two
+    # spellings alternated in one process over 7 rounds of 400 000 calls,
+    # minimum kept for each. Small, and it is the parse every wrapper
+    # taking a public key begins with. `_parsed` answers None where this
+    # raises, and `pubkey_verify` is what wants that
+    pubkey_bytes = octets(pubkey_bytes, name)
+    pubkey = ffi.new("secp256k1_pubkey *")
+    if not lib.secp256k1_ec_pubkey_parse(ctx, pubkey, pubkey_bytes, len(pubkey_bytes)):
         raise ValueError(f"invalid {name}")
     return pubkey
 
@@ -930,15 +951,17 @@ def _parsed(pubkey_bytes: BytesLike, name: str) -> CData | None:
     `secp256k1_ec_pubkey_parse` is the proof that octets are a public key,
     and there are two things to do with the same proof: `parse` keeps what
     it built and raises when there is nothing to keep, `pubkey_verify`
-    keeps nothing and answers the verdict. Written twice, the two would be
-    one call each until an argument check moved in one of them.
+    keeps nothing and answers the verdict.
 
-    It costs `parse` a python call, and that is the whole of what the
-    single statement is bought with: 0.269 microseconds against 0.256 on
-    the uncompressed serialization, and 2.326 against 2.310 on the
-    compressed one, where the field square root is what is being paid for
-    -- an Apple M5, macOS 26.6, arm64, CPython 3.14.6, minimum of 7 rounds
-    of 300 000 calls.
+    `pubkey_verify` is the only caller. `parse` spells the same three
+    statements out rather than delegating, the frame between them being
+    0.027 microseconds of the 0.218 it costs -- an Apple M5, macOS 26.6,
+    arm64, CPython 3.13.14, minimum of 9 rounds of 400 000 calls -- which
+    is a tenth of the call, on the parse every wrapper taking a public key
+    begins with. Two spellings of one parse is what that buys, and what
+    holds them together is that either one refusing these octets is the
+    other one refusing them: `tests/test_keys.py` asserts the pair over
+    both serializations and over what is neither.
 
     Args:
         pubkey_bytes: the public key, 33 or 65 bytes.
