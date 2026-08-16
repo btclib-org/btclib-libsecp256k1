@@ -55,6 +55,19 @@ release-notes length in the first place, and are still in
   What is new is a measured cost, and it is paid by every caller signing
   more than once under one key. BIP340 only: `secp256k1_ecdsa_sign`
   takes the private key directly, so `dsa.sign` has no keypair to hoist
+- **and a signer that is dropped rather than wiped is named where the
+  guarantee is made** (#177). SECURITY.md said the cffi buffer holding a
+  secret is zeroed before it is dropped, which is true of every one of
+  them except this: a signer told neither `wipe` nor `with` is collected
+  with the keypair still holding the private key, cffi freeing that
+  memory without overwriting it. The sentence now names the exception,
+  `Signer`'s own docstring says it where a caller meets the class, and
+  `tests/test_signer.py` asserts it — the keypair kept alive by a
+  reference of its own, the signer dropped and collected, the key still
+  in those octets. A `weakref.finalize` would close it in three lines and
+  is deliberately not there: it runs at a time nothing specifies, which
+  reads as a guarantee without being one, and the test is what makes
+  adding it a decision to reread rather than a silent reversal
 - **the two functions are now the signer's two calls with the keypair
   built and wiped around them**, `_sign32` and `_sign_custom` being the
   shared body, so neither side can drift into a second spelling of the

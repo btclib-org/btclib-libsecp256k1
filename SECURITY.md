@@ -77,6 +77,17 @@ These are known and inherent, not vulnerabilities:
     and the buffer zeroed before it is dropped. That is one copy taken back,
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
+- the one buffer whose zeroing is the caller's to ask for is
+    `ssa.Signer`'s. Everything above is wiped inside the call that made
+    it — read out and zeroed in the one operation, or wiped in a
+    `finally` where it is a keypair; a signer holds its
+    `secp256k1_keypair` across calls, which is what it is for, and wipes
+    it when told — `wipe`, or the `with` statement that calls it on the
+    way out of the block. A signer told neither is dropped with the
+    keypair still holding the private key, and cffi frees that memory
+    without overwriting it. There is no finalizer behind it on purpose:
+    one would run at a time nothing specifies, which reads as a guarantee
+    and is not one. `with` is the guarantee
 - a nonce is the private key, given the signature it made. The two nonce
     entry points exist so that an implementation of RFC6979 or of BIP340's
     derivation can be checked against libsecp256k1's own, and what they

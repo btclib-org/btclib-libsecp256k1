@@ -92,9 +92,13 @@ What a signer holds is a secret, and it is the caller's for as long as
 they hold it: use it in a `with` block, which overwrites the keypair on
 the way out whether the block ended in a signature or in an exception.
 `signer.wipe()` says the same thing by hand, and a wiped signer refuses
-to sign rather than signing with what the wipe left. The private key
-handed to the constructor is a python `bytes` or `int` and is no more
-zeroizable than before: SECURITY.md's limits are unchanged.
+to sign rather than signing with what the wipe left. Neither is a
+formality: a signer that is simply dropped is collected with the keypair
+still holding the key, cffi freeing that memory without overwriting it,
+and nothing runs behind the caller to do it — SECURITY.md now names this
+as the one buffer of the package whose zeroing is asked for rather than
+done. The private key handed to the constructor is a python `bytes` or
+`int` and is no more zeroizable than before.
 
 `xonly._tweak_add_` is the private half of `xonly.tweak_add`: it takes
 the parsed point `keys.parse` returns, rather than the x-only form, and

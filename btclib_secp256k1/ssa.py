@@ -215,6 +215,13 @@ class Signer:
     nowhere else here, which is the point -- so signing again means
     building another one.
 
+    A signer told neither way is dropped holding the key: cffi frees the
+    keypair without overwriting it, and nothing here runs behind it to
+    do so. A finalizer would, at a time nothing specifies, which is a
+    guarantee in the shape of one and not in fact -- so the instruction
+    stays the caller's to give, and SECURITY.md records this as the one
+    buffer of the package whose zeroing is asked for rather than done.
+
     What it does not change is the python side: the `bytes` or `int`
     handed in here is a python object like any other, and SECURITY.md
     records why that copy cannot be taken back.

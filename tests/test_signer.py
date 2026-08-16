@@ -17,12 +17,16 @@ What is left for this file is the half a vector cannot state: the
 lifetime the signer hands the caller. The keypair is the private key in
 libsecp256k1's layout, in memory this package owns, so what is asserted
 here is that it is still there while the signer is usable, that `wipe`
-and the `with` block each overwrite it, and that a wiped signer refuses
-to sign instead of signing with the zeros.
+and the `with` block each overwrite it, that a wiped signer refuses to
+sign instead of signing with the zeros, and that a signer told neither is
+dropped with the secret still in it -- the limit SECURITY.md names, held
+to by a test so that closing it later is a decision rather than a
+sentence quietly made false.
 """
 
 from __future__ import annotations
 
+import gc
 import hashlib
 
 import pytest
@@ -216,3 +220,27 @@ def test_a_wiped_signer_refuses_to_sign() -> None:
         signer.sign(MSG, AUX)
     with pytest.raises(ValueError, match="wiped"):
         signer.sign_custom(MSG, AUX)
+
+
+def test_a_dropped_signer_leaves_the_keypair_as_it_was() -> None:
+    """Nothing wipes behind a caller who neither wipes nor uses `with`.
+
+    SECURITY.md names this as the one buffer of the package whose
+    zeroing is asked for rather than done, and this is that sentence as
+    an assertion: the keypair is kept alive here by a reference of its
+    own, the signer is dropped and collected, and the private key is
+    still in those octets. A finalizer added later would wipe them and
+    fail this test, which is where the decision would be reread rather
+    than silently reversed.
+    """
+    signer = ssa.Signer(PRVKEY)
+    # `keypair_memory` asks a signer, and there is no signer left to ask
+    # by the time the question matters. This reference is also what keeps
+    # cffi from freeing the memory out from under the assertion
+    held = signer._keypair
+    assert held is not None
+
+    del signer
+    gc.collect()  # refcounting has dropped it already; PyPy needs asking
+
+    assert PRVKEY in bytes(ffi.buffer(held))
