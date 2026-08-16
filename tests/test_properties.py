@@ -77,14 +77,12 @@ def compress(pubkey_bytes: bytes) -> bytes:
 def test_serialization_round_trips() -> None:
     """Either form parses and comes back, and negation is an involution.
 
-    The coordinates are checked against the curve equation and the parity
-    the compressed form carries,
-    and negating the private key is checked to flip the y while leaving
-    the x alone -- which is the point-level meaning of the scalar
-    operation, asserted rather than assumed. What
-    `keys.pubkey_from_prvkey` serializes in C is checked against the
-    compression composed here, over a sweep in which both parities occur:
-    a fixed key exercises one of them.
+    The coordinates are checked against the curve equation, and negating
+    the private key is checked to flip the y while leaving the x alone --
+    which is the point-level meaning of the scalar operation, asserted
+    rather than assumed. What `keys.pubkey_from_prvkey` serializes in C
+    is checked against the compression composed here, over a sweep in
+    which both parities occur: a fixed key exercises one of them.
     """
     for prvkey in derived(b"serialization"):
         uncompressed = keys.pubkey_from_prvkey(prvkey, compressed=False)
@@ -96,13 +94,13 @@ def test_serialization_round_trips() -> None:
         # and both are what pubkey_from_prvkey answers, whose compressed
         # form libsecp256k1 writes where this file composes it
         assert keys.pubkey_from_prvkey(prvkey) == compressed
-        # the coordinates a caller reads out of those octets are the ones
-        # the point has: y is even where the compressed form says 0x02,
-        # and the pair satisfies the curve equation. Read here rather
-        # than compared with the same call a second time
+        # the coordinates a caller reads out of those octets are those
+        # of a point: the pair satisfies the curve equation. Parity is
+        # not asserted beside it -- `compress` composes the prefix out of
+        # the very octet such an assertion would read, so what holds that
+        # prefix to libsecp256k1's own is the equality above
         x = int.from_bytes(uncompressed[1:33], "big")
         y = int.from_bytes(uncompressed[33:], "big")
-        assert y % 2 == compressed[0] - 2
         assert (y * y - x * x * x - 7) % P == 0
 
         # negation is an involution, on both sides

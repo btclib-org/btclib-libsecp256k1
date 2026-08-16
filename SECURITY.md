@@ -77,13 +77,17 @@ These are known and inherent, not vulnerabilities:
     and the buffer zeroed before it is dropped. That is one copy taken back,
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
-- **a nonce is the private key, given the signature it made.** The two
-    nonce entry points exist so that an implementation of RFC6979 or of
-    BIP340's derivation can be checked against libsecp256k1's own, and
-    what they answer is not a value to publish, log or store beside a
-    signature: `d = (s·k − h)/r mod n` recovers the private key from one
-    of each. Reading a nonce also takes it out of constant-time code,
-    which is the limit above; this is the one that has an equation
+- a nonce is the private key, given the signature it made. The two nonce
+    entry points exist so that an implementation of RFC6979 or of BIP340's
+    derivation can be checked against libsecp256k1's own, and what they
+    answer is not a value to publish, log or store beside a signature.
+    Each scheme has its own equation: ECDSA signs `s = k⁻¹(h + r·d)`, so
+    `d = (s·k − h)/r mod n`, and BIP340 signs `s = k + e·d` with
+    `e = H(R ‖ P ‖ m)`, so `d = (s − k)/e mod n` — for the `k` and `d`
+    BIP340 negates to an even-y point, which is a parity whoever holds
+    the nonce computes rather than a step that stops them. Reading a
+    nonce also takes it out of constant-time code, which is the limit
+    above; this is the one that has the arithmetic to show for it
 - a scalar passed as an `int` leaks its magnitude. A Python integer is a
     variable-length object, so serializing one — and any arithmetic that
     produced it — takes a time that depends on the value; the argument
