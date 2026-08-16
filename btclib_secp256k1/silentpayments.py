@@ -804,8 +804,6 @@ def serialize_label(label_obj: CData) -> bytes:
             cannot read -- or fails to serialize for any other reason,
             which a label it produced cannot make it do.
             `context.check` is what tells the two apart.
-        RuntimeError: if libsecp256k1 fails for any other reason, which
-            a label it produced cannot make it do.
     """
     output = ffi.new(f"char[{LABEL_SIZE}]")
     serialized = lib.secp256k1_silentpayments_recipient_label_serialize(

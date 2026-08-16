@@ -145,6 +145,40 @@ def test_verification_of_an_unreadable_key_is_false_not_a_verdict() -> None:
         context.check()
 
 
+def test_schnorr_verification_of_an_unreadable_key_is_false_too() -> None:
+    """`ssa._verify_` answers False for the same reason `dsa._verify_` does.
+
+    Two entry points and one contract, and the second is driven rather
+    than inferred from the first: they read different libsecp256k1 calls
+    of different key types, so which of them leaves a reason on the
+    thread is a fact about each rather than about the shape they share.
+    """
+    msg = bytes(range(32))
+    signature = ssa.sign(msg, 7)
+
+    assert ssa._verify_(msg, ffi.new("secp256k1_xonly_pubkey *"), signature) is False
+    with pytest.raises(ValueError, match="illegal argument"):
+        context.check()
+
+
+def test_a_signature_libsecp256k1_cannot_read_is_low_s_like_any_other() -> None:
+    """`dsa._is_low_s_` answers True for a signature it was never shown.
+
+    Which is the True an already-normalized signature gets: the call
+    reports the input as unchanged either way, and nothing in the answer
+    separates the two.
+
+    NULL is what reaches that shape, and the zeroed object the tests
+    above prefer would not: an r and an s of zero are a signature
+    libsecp256k1 reads and normalizes -- answering True with the thread
+    left clean -- where a zeroed `secp256k1_pubkey` is a point it
+    refuses. The reachable mistake is not the same object twice.
+    """
+    assert dsa._is_low_s_(ffi.NULL) is True
+    with pytest.raises(ValueError, match="illegal argument: sigin != NULL"):
+        context.check()
+
+
 def test_ecdh_with_an_unreadable_key_answers_a_secret_with_nobody() -> None:
     """`ecdh._shared_secret_` answers 32 bytes, and they are worth nothing.
 

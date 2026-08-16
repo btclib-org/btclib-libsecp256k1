@@ -53,8 +53,8 @@ def octets(value: BytesLike, name: str, size: int | None = None) -> bytes:
     # the block below asks is already answered for it: it is one of the
     # three types, its items are octets, and the copy it would take is the
     # object itself. Asking the type once and skipping the rest measures
-    # 0.031 microseconds against 0.078 -- an Apple M5, macOS 26.6, arm64,
-    # CPython 3.13.14, minimum of 7 rounds of a million calls -- and every
+    # 0.034 microseconds against 0.080 -- an Apple M5, macOS 26.6, arm64,
+    # CPython 3.13.14, minimum of 9 rounds of a million calls -- and every
     # entry point here pays it at least once, several of them three times.
     # `type(...) is` rather than `isinstance`, deliberately: a subclass of
     # bytes may override `__len__`, so what the fast path is allowed to
