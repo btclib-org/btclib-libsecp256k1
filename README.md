@@ -577,6 +577,79 @@ microseconds, and a caller who wanted the other form never has to pay it:
 `compact=True` answers the 64 octets of `r ‖ s` directly, where reaching
 them through `to_compact` writes the DER and parses it straight back.
 
+## Checking the signature before answering with it
+
+`dsa.sign` and `ssa.sign` verify what they just made, under the public
+key of the very key that made it, and a signature that fails is raised
+on rather than returned. It is the one argument here that defaults to
+on, and `verify=False` is how a caller declines it.
+
+The two have the same reasoning behind them and did not arrive by the
+same route. For BIP340 it is a step of the algorithm: *Default Signing*
+ends with "If Verify(bytes(P), m, sig) returns failure, abort", and the
+note beside it says why — "Verifying the signature before leaving the
+signer prevents random or attacker provoked computation errors. This
+prevents publishing invalid signatures which may leak information about
+the secret key. It is recommended, but can be omitted if the computation
+cost is prohibitive." Schnorr is linear, so what leaks is not vague: two
+signatures over one nonce and two challenges give up `d` by subtraction.
+For ECDSA no standard asks for it and Bitcoin Core does it anyway, at the
+end of `CKey::Sign`, under a comment reading "Additional verification
+step to prevent using a potentially corrupted signature" — and Core
+offers no way to turn it off, where this does.
+
+What it catches is not a bad argument: those have all raised by the time
+it runs. It catches the computation itself going wrong, whether by bad
+memory or by a fault induced on purpose, and the whole of the protection
+is not publishing the result.
+
+It costs what a verification costs, and in ECDSA a point multiplication
+besides — the public key, which BIP340 needs to sign at all and ECDSA
+needs for neither of the two things `sign` does. Measured with the
+variants alternated in one process, an Apple M5, macOS 26.6, arm64,
+CPython 3.13.14, seven rounds of 20 000 calls with the minimum of each
+kept, and a last row running one of them a second time so that the noise
+has a figure of its own:
+
+| the call | `verify=False` | `verify=True` |
+| --- | --- | --- |
+| `dsa.sign` | 12.15 | 31.67 |
+| `ssa.sign` | 15.87 | 28.57 |
+| `ssa.Signer.sign` | 8.18 | 20.82 |
+| `ssa.sign` again (the noise) | | ±0.04 |
+
+Microseconds per signature. The finding is the gap between the two
+increments: 19.5 for ECDSA against 12.7 for BIP340, and the 6.8 between
+them is the multiplication `secp256k1_ec_pubkey_create` does and
+`secp256k1_keypair_xonly_pub` does not — the keypair holds the point
+already, which is the same 7.55 the [signer](#two-outposts-past-the-boundary)
+hoists. So the step the specification prescribes is also the cheaper of
+the two, and a `Signer` pays it at the same price as a bare `ssa.sign`.
+
+**`recovery.sign` has no `verify`, and answers a signature nothing here
+has checked.** It is the one signing entry point this does not cover, and
+saying so is the point: the two sections above read as a policy of the
+package, and a caller reaching for a recoverable signature would
+otherwise conclude it was checked. The reason is that the check is a
+different one. Core closes the same hole in `CKey::SignCompact`, and not
+with a verification: it recovers the public key from the signature and
+compares it with `secp256k1_ec_pubkey_cmp`, which is the natural question
+to ask of a signature carrying a recovery id, and it is its own design,
+its own tests and its own measurement rather than this argument applied
+twice.
+
+What each half checks is not quite the same region either. `ssa` verifies
+the very 64 octets it answers with; `dsa` verifies the signature *object*
+and serializes it afterwards, so the DER or compact encoding is outside
+what was checked — as it is in Core, whose `CKey::Sign` verifies the
+`secp256k1_ecdsa_signature` and serializes after. Both are defensible,
+the serializers being memcpy-shaped where the signing is arithmetic, and
+the difference is worth a sentence rather than a change.
+
+Every other microsecond figure in this file was measured before this
+argument existed and is therefore the signature without the check:
+`verify=False` is the column they are in.
+
 ## Grinding for a low r
 
 `dsa.sign(grind=True)` answers the signature of the same key and message

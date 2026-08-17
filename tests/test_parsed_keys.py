@@ -37,6 +37,7 @@ from btclib_secp256k1 import (
     ssa,
     xonly,
 )
+from btclib_secp256k1._secret import keypair, wipe
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -345,6 +346,25 @@ def test_the_schnorr_pair_parses_the_x_only_key() -> None:
     assert not ssa._verify_(MSG, xonly.parse(XONLY), tampered)
 
 
+def test_the_keypair_pair_reads_the_point_it_already_holds() -> None:
+    """`xonly.from_keypair` is `xonly._from_keypair_` behind a serialize.
+
+    The one pair whose object is a keypair rather than a parsed key, so
+    the equality is over one this test builds and not over octets a
+    caller could have handed in. What the private half saves is that
+    serialize and the lift back that reading it again would cost, which
+    is what `ssa.sign(verify=True)` takes it for.
+    """
+    keypair_obj = keypair(PRVKEY)
+    try:
+        xonly_pubkey, parity = xonly._from_keypair_(keypair_obj)
+        assert (xonly.serialize(xonly_pubkey), parity) == xonly.from_keypair(
+            keypair_obj
+        )
+    finally:
+        wipe(keypair_obj)
+
+
 def test_the_taproot_pair_starts_from_the_point_the_x_belongs_to() -> None:
     """`xonly._tweak_add_` is `xonly.tweak_add` of the key's own x.
 
@@ -512,11 +532,12 @@ def test_every_private_half_is_paired() -> None:
     the tables are checked against what the modules carry rather than
     trusted to have been kept up to date.
 
-    `ssa._verify_` and `xonly._tweak_add_` are paired in tests of their
-    own rather than in a table: the parsed key of the first is
-    `xonly.parse`'s and not `keys.parse`'s, and the second takes the
-    point whose x its public half is given, so neither equality is the
-    one parametrized above.
+    `ssa._verify_`, `xonly._tweak_add_` and `xonly._from_keypair_` are
+    paired in tests of their own rather than in a table: the parsed key
+    of the first is `xonly.parse`'s and not `keys.parse`'s, the second
+    takes the point whose x its public half is given, and the third
+    takes a keypair, which is the one object with no serialization to
+    parametrize over. None of the three is the equality above.
     """
     modules = {
         "dsa": dsa,
@@ -531,7 +552,7 @@ def test_every_private_half_is_paired() -> None:
     paired = (
         {name for name, *_ in PAIRS}
         | {name for name, *_ in EQUALITIES}
-        | {"ssa._verify_", "xonly._tweak_add_"}
+        | {"ssa._verify_", "xonly._tweak_add_", "xonly._from_keypair_"}
     )
     private_halves = {
         f"{module_name}.{name}"

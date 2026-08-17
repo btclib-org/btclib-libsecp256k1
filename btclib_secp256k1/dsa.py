@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import overload
 
-from . import BytesLike, CData, MutableBytesLike, ffi, lib
+from . import BytesLike, CData, MutableBytesLike, ffi, keys, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
 from ._secret import take
 from .context import ctx
@@ -226,6 +226,8 @@ def _sign_(
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
     grind: bool = False,
+    *,
+    verify: bool = True,
 ) -> CData:
     """Create an ECDSA signature, as the parsed signature.
 
@@ -244,6 +246,12 @@ def _sign_(
             documents. Not with aux_rand32: the two write the same 32
             octets, so asking for both is refused rather than resolved
             here.
+        verify: whether to check the signature under the public key of
+            the key that made it before answering with it, as `sign`
+            documents. Where `grind` asks too, what is checked is the
+            signature the grinding settled on: the attempts it discarded
+            are never answered with, so a fault in one of them is a
+            wasted attempt rather than a published signature.
 
     Returns:
         The libsecp256k1 signature object, in the lower-s form
@@ -255,7 +263,8 @@ def _sign_(
             together, or if the private key is not 32 bytes, does not fit
             in them, or is not in [1, n-1].
         RuntimeError: if libsecp256k1 fails to serialize an attempt while
-            grinding, which a signature it has just made cannot do.
+            grinding, which a signature it has just made cannot do, or if
+            `verify` asks and the signature does not verify.
     """
     prvkey_bytes = scalar(prvkey, "private key")
     msg_bytes = octets(msg_bytes, "message hash", 32)
@@ -266,15 +275,33 @@ def _sign_(
     _signed(signature, msg_bytes, prvkey_bytes, optional_entropy(aux_rand32))
     if grind:
         _grind(signature, msg_bytes, prvkey_bytes)
+    if verify:
+        # through `_verify_` and `keys._pubkey_from_prvkey_` rather than
+        # through the two public halves, which would serialize this
+        # signature into DER and the point into octets only to parse both
+        # straight back -- and for a compressed key that parse is a field
+        # square root. `normalize` is not passed: libsecp256k1 has just
+        # answered the lower-s form, so there is nothing to normalize
+        pubkey = keys._pubkey_from_prvkey_(prvkey_bytes)
+        if not _verify_(msg_bytes, pubkey, signature):
+            raise RuntimeError("signing produced a signature that does not verify")
     return signature
 
 
-def sign(
+# six arguments, where PLR0913 allows five. The alternative is an options
+# object, and it would be one for this function alone: `aux_rand32`,
+# `compact` and `grind` are ECDSA's own three questions, `verify` is the
+# fourth these bindings add, and none of the four is a group with either
+# of the others. `verify` is keyword-only, as the two before it should
+# have been, so what a call site actually carries is named
+def sign(  # noqa: PLR0913
     msg_bytes: BytesLike,
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
     compact: bool = False,
     grind: bool = False,
+    *,
+    verify: bool = True,
 ) -> bytes:
     """Create an ECDSA signature.
 
@@ -297,6 +324,23 @@ def sign(
     and never done by default. `s` is not ground for and could not be:
     libsecp256k1 has already returned the lower of the two.
 
+    `verify` is the second thing beyond a libsecp256k1 call, and it is
+    the other half of that same `CKey::Sign`: the signature is checked
+    under the public key of the very key that made it, and one that
+    fails is never answered with. What it catches is not a bad argument
+    -- those have all raised by then -- but a computation that went
+    wrong, a bit flipped in memory or a fault induced on purpose, whose
+    cost is a published signature that is invalid and may say something
+    about the key. It is the one argument here that is on by default,
+    and the asymmetry with `grind` is the point: grinding buys an octet
+    of DER, this buys the guarantee that what was answered is a
+    signature. Core pays it on every signature and offers no way not to;
+    here there is one, because the check is a point multiplication and a
+    verification and the caller who has measured that against its own
+    threat model is the one entitled to refuse it -- `ssa.sign` refuses
+    it more cheaply, BIP340 needing the public key to sign at all where
+    ECDSA needs it for neither of the two things `sign` does.
+
     Args:
         msg_bytes: the 32-byte hash of the message.
         prvkey: the private key, 32 bytes or an int below 2**256.
@@ -310,6 +354,11 @@ def sign(
             32 octets, so a caller asking for both is asking for two
             different values of one argument, and Core's counter is what
             makes the result reproducible by anyone else.
+        verify: whether to check the signature under the public key of
+            the key that made it before returning it. It costs a point
+            multiplication and a verification, and False is what a
+            caller that has measured those against its own threat model
+            passes.
 
     Returns:
         The signature, in the lower-s form libsecp256k1 always produces:
@@ -341,7 +390,7 @@ def sign(
     # three land within 0.03 microseconds of this one and on the wrong
     # side of it. A signature is 11.9 microseconds of libsecp256k1, and
     # two python frames do not show against it
-    signature = _sign_(msg_bytes, prvkey, aux_rand32, grind)
+    signature = _sign_(msg_bytes, prvkey, aux_rand32, grind, verify=verify)
     return serialize_compact(signature) if compact else serialize_der(signature)
 
 

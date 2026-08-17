@@ -72,6 +72,36 @@ them `ndata` and `ellswift.encode` called them `rnd32`, and
 `pubkeys_bytes`. All four are keyword names; a positional call is
 unaffected.
 
+**Signing now verifies, and that is the one change to act on that is not
+a rename.** `dsa.sign`, `ssa.sign`, `ssa.sign_custom` and both methods of
+`ssa.Signer` check the signature they just made under the public key of
+the key that made it, and raise instead of returning one that fails. It
+is BIP340's own last step — *Default Signing* ends with it — and the end
+of Bitcoin Core's `CKey::Sign` for ECDSA, and what it protects against is
+a computation gone wrong, by bad memory or by an induced fault,
+publishing a signature that is invalid and may say something about the
+key.
+
+The signature is the same bytes it always was; what changed is the price
+and the guarantee. On the machine and with the method CHANGELOG.md
+states: `dsa.sign` 12.15 microseconds against 31.67, `ssa.sign` 15.87
+against 28.57, `ssa.Signer.sign` 8.18 against 20.82. ECDSA pays more than
+BIP340 because it has to derive the public key, which a BIP340 keypair
+already holds. A caller that measured the old cost, or that signs
+without publishing, passes the new keyword-only `verify=False` and is
+back where it was:
+
+```diff
+-sig = dsa.sign(msg, prvkey)
++sig = dsa.sign(msg, prvkey, verify=False)
+```
+
+`recovery.sign` is the one signing call this does not cover: it answers a
+signature nothing here has checked, and it takes no `verify`. The check a
+recoverable signature wants is a different one — recover the key from the
+signature and compare it, which is what Bitcoin Core's `CKey::SignCompact`
+does — so it is a change of its own rather than this one applied twice.
+
 What the rest of the release adds: one for a caller that signs more than
 once under one key, one for a caller whose ECDSA signatures go into a
 transaction, one for a caller computing a taproot output key from a

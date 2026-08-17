@@ -22,6 +22,82 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### A signer checks its own signature
+
+- **`dsa.sign` and `ssa.sign` verify what they made before answering
+  with it**, under the public key of the very key that made it, and take
+  a keyword-only `verify` that defaults to `True` to say so.
+  `ssa.sign_custom`, `ssa.Signer.sign`, `ssa.Signer.sign_custom` and the
+  private `dsa._sign_`, `ssa._sign32` and `ssa._sign_custom` take the
+  same argument with the same default, so no path reaches libsecp256k1
+  with a weaker policy than the one above it. A signature that fails is
+  a `RuntimeError` and is never returned.
+- **The two halves of that arrived by different routes.** For BIP340 it
+  is a step of the algorithm rather than a practice around it: *Default
+  Signing* ends with "If Verify(bytes(P), m, sig) returns failure,
+  abort", and the BIP's own note gives the reason and the escape --
+  computation errors, random or provoked, yield a signature that "may
+  leak information about the secret key", and the step "can be omitted
+  if the computation cost is prohibitive". For ECDSA no standard asks,
+  and Bitcoin Core does it anyway at the end of `CKey::Sign`, with no
+  way to decline; declining is what `verify=False` is here.
+- **What it costs was measured rather than reasoned about**, the
+  variants alternated in one process over 7 rounds of 20 000 calls with
+  the minimum kept for each -- an Apple M5, macOS 26.6, arm64, CPython
+  3.13.14, and a noise row of ±0.04. `dsa.sign` 12.15 against 31.67,
+  `ssa.sign` 15.87 against 28.57, `ssa.Signer.sign` 8.18 against 20.82.
+  The finding is the gap between the two increments: 19.5 for ECDSA
+  against 12.7 for BIP340, the 6.8 between them being the point
+  multiplication `secp256k1_ec_pubkey_create` does and
+  `secp256k1_keypair_xonly_pub` does not. The step the specification
+  prescribes is the cheaper of the two, which is why neither is opt-in.
+- **A caller that signs and does not publish pays for a guarantee it may
+  not want**, and `verify=False` is the whole of the remedy: the
+  signature is the same bytes either way, which
+  `tests/test_verified_signing.py` asserts for each of the eight entry
+  points rather than for one of them.
+- **`recovery.sign` is not in it, and the shipped documentation says so
+  rather than leaving it to a pull request description.** It answers a
+  signature nothing here has checked, and the reason is that the check
+  is a different one: Core closes the same hole in `CKey::SignCompact`
+  by recovering the public key and comparing it with
+  `secp256k1_ec_pubkey_cmp`, which is the question a recovery id invites
+  and is its own design, tests and measurement -- #217 carries it, and
+  names the three files to correct when it closes. README.md carries
+  the asymmetry beside the one it already carries for `grind`.
+- **The two halves do not check quite the same region**, which is worth
+  a sentence and not a change. `ssa` verifies the 64 octets it answers
+  with; `dsa` verifies the signature object and serializes it after, so
+  the encoding is outside what was checked -- as it is in Core, for the
+  same reason, the serializers being memcpy-shaped where the signing is
+  arithmetic.
+- **`xonly._from_keypair_` is new**, and is what makes the BIP340 half
+  cheap: `xonly.from_keypair` is now that call with a serialize behind
+  it, where reaching the key through the public half would have written
+  a point out only to lift it back, and a lift is a field square root.
+  It is the one private half whose object is a keypair, so
+  `test_every_private_half_is_paired` excuses it from the parametrized
+  tables the way it already excuses `ssa._verify_` and
+  `xonly._tweak_add_`, and a test of its own holds the equality.
+- **The fault itself is not tested, because no input produces one.** The
+  `raise RuntimeError` is excluded from coverage for the reason every
+  other one is. What is tested is the wiring around it: the verification
+  is substituted for one that refuses, and each entry point is held to
+  raising rather than returning -- and, in the other direction, to *not*
+  raising where `verify=False` was passed, which is the only assertion
+  that sees the flag at all: the signature is the same bytes whether or
+  not it was honoured, so a `verify` ignored altogether answers exactly
+  what it should. Replacing every `if verify:` with `if True:` leaves
+  the rest of the suite passing, which is how that hole was found rather
+  than argued for. The keys of both y parities are signed
+  with as well, both parities asserted to occur, because a check read
+  off the wrong half of the negation BIP340 prescribes would pass for
+  the wrong reason.
+- **`dsa.sign` carries a `noqa: PLR0913`** and the reason above it: six
+  arguments where the rule allows five, and the alternative is an
+  options object for one function whose four questions group with
+  nothing.
+
 ### The frames between an entry point and libsecp256k1
 
 - **Five entry points are spelled out rather than composed of their

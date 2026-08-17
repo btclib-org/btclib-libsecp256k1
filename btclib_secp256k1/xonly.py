@@ -155,6 +155,41 @@ def from_prvkey(prvkey: BytesLike | int) -> tuple[bytes, int]:
     return _from_pubkey_(keys._pubkey_from_prvkey_(prvkey))
 
 
+def _from_keypair_(keypair_obj: CData) -> tuple[CData, int]:
+    """Return the x-only public key of a keypair, as the parsed point.
+
+    The private half of `from_keypair`, for a caller about to hand the
+    key to another wrapper rather than to hold its bytes: see the package
+    docstring for what the two underscores mean throughout. The one this
+    package makes is `ssa`, verifying a signature it has just made, where
+    reaching the key through `from_keypair` would serialize a point only
+    to lift it straight back -- and that lift is a field square root,
+    where this is a read of what the keypair already holds.
+
+    Args:
+        keypair_obj: the libsecp256k1 keypair object, as `ssa.Signer`
+            holds and as `secp256k1_keypair_create` writes.
+
+    Returns:
+        The libsecp256k1 x-only public key object, and the parity of y:
+        0 for even, 1 for odd. The parity is of the point the private
+        key gives, the keypair being the negated key where that y is odd.
+
+    Raises:
+        RuntimeError: if libsecp256k1 will not read the object -- a NULL
+            pointer, or one that has been wiped -- or fails for any other
+            reason. It answers the same 0 for both, so this is a
+            RuntimeError rather than the ValueError a wiped keypair
+            deserves, and `context.check` is what tells the two apart.
+    """
+    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
+    parity = ffi.new("int *")
+    converted = lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair_obj)
+    if not converted:
+        raise RuntimeError("x-only public key conversion failed")
+    return xonly_pubkey, parity[0]
+
+
 def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
     """Return the x-only public key of a keypair, and the y parity.
 
@@ -187,12 +222,8 @@ def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
             fails to serialize the result, which a keypair it built
             cannot make it do.
     """
-    xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    parity = ffi.new("int *")
-    converted = lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair_obj)
-    if not converted:
-        raise RuntimeError("x-only public key conversion failed")
-    return serialize(xonly_pubkey), parity[0]
+    xonly_pubkey, parity = _from_keypair_(keypair_obj)
+    return serialize(xonly_pubkey), parity
 
 
 def _tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:

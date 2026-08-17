@@ -136,7 +136,11 @@ def nonce_bip340(
 
 
 def sign(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    verify: bool = True,
 ) -> bytes:
     """Create a Schnorr signature of a 32-byte message hash.
 
@@ -144,6 +148,17 @@ def sign(
     before returning, which is the right cost for one signature and
     half the cost of each of several: signing more than once under one
     key is `Signer`, which builds it once.
+
+    `verify` is BIP340's own last step -- "If Verify(bytes(P), m, sig)
+    returns failure, abort" -- and the one thing here that is more than a
+    libsecp256k1 call. A computation gone wrong, memory gone bad or a
+    fault induced on purpose, yields a signature that is invalid and may
+    leak something about the secret key, and not answering with one is
+    the whole of the protection. It is on by default because the BIP
+    puts it inside the algorithm rather than beside it, and it can be
+    turned off because the BIP says that too, "if the computation cost
+    is prohibitive" -- which here is one verification and no
+    multiplication. `_abort_unless_verified` carries the rest of the reasoning.
 
     Args:
         msg_bytes: the 32-byte message hash.
@@ -154,6 +169,11 @@ def sign(
             or None for fresh randomness. Never a shorter value: BIP340
             defines a 32-byte a, and padding a short one would make a
             caller mistake a valid argument.
+        verify: whether to check the signature under its own public key
+            before returning it. It costs a verification and no point
+            multiplication, the keypair already holding the point, and
+            False is what a caller that has measured that against its
+            own threat model passes.
 
     Returns:
         The 64-byte signature.
@@ -163,18 +183,22 @@ def sign(
             is given and is not 32 bytes, or if the private key is not
             32 bytes, does not fit in them, or is not in [1, n-1].
         RuntimeError: if libsecp256k1 fails to sign, which no input can
-            make it do.
+            make it do, or if `verify` asks and the signature does not
+            verify.
 
     Example:
         >>> from btclib_secp256k1 import keys, ssa, xonly
         >>> msg, prvkey = bytes(32), 1
         >>> pubkey, _ = xonly.from_pubkey(keys.pubkey_from_prvkey(prvkey))
-        >>> ssa.verify(msg, pubkey, ssa.sign(msg, prvkey, bytes(32)))
+        >>> sig = ssa.sign(msg, prvkey, bytes(32))
+        >>> ssa.verify(msg, pubkey, sig)
+        True
+        >>> ssa.sign(msg, prvkey, bytes(32), verify=False) == sig
         True
     """
     keypair_obj = keypair(prvkey)
     try:
-        return _sign32(msg_bytes, keypair_obj, aux_rand32)
+        return _sign32(msg_bytes, keypair_obj, aux_rand32, verify=verify)
     finally:
         # a keypair carries the private key: overwrite it whether the
         # signature was made, refused, or never attempted, the argument
@@ -183,7 +207,11 @@ def sign(
 
 
 def sign_custom(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    verify: bool = True,
 ) -> bytes:
     """Create a Schnorr signature of a message of any length.
 
@@ -200,6 +228,9 @@ def sign_custom(
         prvkey: the private key, 32 bytes or an int below 2**256.
         aux_rand32: the 32 bytes of auxiliary randomness, or None for
             fresh randomness.
+        verify: whether to check the signature under its own public key
+            before returning it, as `sign` documents and BIP340
+            prescribes.
 
     Returns:
         The 64-byte signature.
@@ -209,11 +240,12 @@ def sign_custom(
             the private key is not 32 bytes, does not fit in them, or is
             not in [1, n-1].
         RuntimeError: if libsecp256k1 fails to sign, which no input can
-            make it do.
+            make it do, or if `verify` asks and the signature does not
+            verify.
     """
     keypair_obj = keypair(prvkey)
     try:
-        return _sign_custom(msg_bytes, keypair_obj, aux_rand32)
+        return _sign_custom(msg_bytes, keypair_obj, aux_rand32, verify=verify)
     finally:
         # the keypair carries the private key: see sign
         wipe(keypair_obj)
@@ -285,7 +317,13 @@ class Signer:
         # wiped keypair is 96 zero octets and looks like any other
         self._keypair: CData | None = keypair(prvkey)
 
-    def sign(self, msg_bytes: BytesLike, aux_rand32: BytesLike | None = None) -> bytes:
+    def sign(
+        self,
+        msg_bytes: BytesLike,
+        aux_rand32: BytesLike | None = None,
+        *,
+        verify: bool = True,
+    ) -> bytes:
         """Create a Schnorr signature of a 32-byte message hash.
 
         The signature `ssa.sign` makes of the same arguments, over the
@@ -295,6 +333,11 @@ class Signer:
             msg_bytes: the 32-byte message hash.
             aux_rand32: the 32 bytes of auxiliary randomness BIP340
                 defines, or None for fresh randomness.
+            verify: whether to check the signature under this signer's
+                own public key before returning it, as `ssa.sign`
+                documents and BIP340 prescribes. It is the same cost
+                here as there, the point being read off the keypair
+                either way.
 
         Returns:
             The 64-byte signature.
@@ -304,12 +347,17 @@ class Signer:
                 aux_rand32 is given and is not 32 bytes, or if this
                 signer has been wiped.
             RuntimeError: if libsecp256k1 fails to sign, which no input
-                can make it do.
+                can make it do, or if `verify` asks and the signature
+                does not verify.
         """
-        return _sign32(msg_bytes, self._held(), aux_rand32)
+        return _sign32(msg_bytes, self._held(), aux_rand32, verify=verify)
 
     def sign_custom(
-        self, msg_bytes: BytesLike, aux_rand32: BytesLike | None = None
+        self,
+        msg_bytes: BytesLike,
+        aux_rand32: BytesLike | None = None,
+        *,
+        verify: bool = True,
     ) -> bytes:
         """Create a Schnorr signature of a message of any length.
 
@@ -321,6 +369,9 @@ class Signer:
             msg_bytes: the message, of any length.
             aux_rand32: the 32 bytes of auxiliary randomness, or None
                 for fresh randomness.
+            verify: whether to check the signature under this signer's
+                own public key before returning it, as `ssa.sign`
+                documents and BIP340 prescribes.
 
         Returns:
             The 64-byte signature.
@@ -329,9 +380,10 @@ class Signer:
             ValueError: if aux_rand32 is given and is not 32 bytes, or
                 if this signer has been wiped.
             RuntimeError: if libsecp256k1 fails to sign, which no input
-                can make it do.
+                can make it do, or if `verify` asks and the signature
+                does not verify.
         """
-        return _sign_custom(msg_bytes, self._held(), aux_rand32)
+        return _sign_custom(msg_bytes, self._held(), aux_rand32, verify=verify)
 
     def pubkey(self) -> tuple[bytes, int]:
         """Return the x-only public key this signer signs under.
@@ -500,8 +552,60 @@ def verify(
     )
 
 
+def _abort_unless_verified(
+    keypair_obj: CData, msg_bytes: BytesLike, signature_bytes: bytes
+) -> None:
+    """Check a signature just made, under the keypair that made it.
+
+    Named for what it does rather than for what it asks: `_verify_` is
+    thirty lines up, answers `bool` and is what a caller composes with,
+    where this one raises and answers nothing. Two neighbours told apart
+    by tense would invite `if _abort_unless_verified(...)`, which is
+    syntactically fine and means nothing at all. The verb is BIP340's
+    own -- "returns failure, abort".
+
+    BIP340's *Default Signing* ends with this step -- "If Verify(bytes(P),
+    m, sig) returns failure, abort" -- and says what it is for: a random
+    or attacker provoked computation error yields a signature that is
+    invalid and may leak something about the secret key, and not
+    publishing one is the whole of the protection. Schnorr is linear, so
+    what leaks is not vague: two signatures over one nonce and two
+    challenges give up `d` by subtraction. The BIP puts the step inside
+    the algorithm and allows omitting it where the cost is prohibitive,
+    which is why `sign` does it unless told not to rather than the other
+    way round.
+
+    Written once because `_sign32` and `_sign_custom` both end in it, and
+    because the key has to be the one that signed: two spellings would be
+    two chances for it to be some other key, and a check against the
+    wrong key proves nothing while looking like proof.
+
+    The key is read off the keypair rather than derived, which is what
+    makes this cheaper than the same step is in `dsa`: BIP340 needs the
+    public key to sign at all, so the multiplication is already paid and
+    what is left is the verification.
+
+    Args:
+        keypair_obj: the keypair that made the signature.
+        msg_bytes: the message it was made of, already checked.
+        signature_bytes: the 64-byte signature just made.
+
+    Raises:
+        RuntimeError: if the signature does not verify, which no input
+            can make happen: what it reports is the computation itself
+            having gone wrong.
+    """
+    xonly_pubkey, _ = xonly._from_keypair_(keypair_obj)
+    if not _verify_(msg_bytes, xonly_pubkey, signature_bytes):
+        raise RuntimeError("signing produced a signature that does not verify")
+
+
 def _sign32(
-    msg_bytes: BytesLike, keypair_obj: CData, aux_rand32: BytesLike | None
+    msg_bytes: BytesLike,
+    keypair_obj: CData,
+    aux_rand32: BytesLike | None,
+    *,
+    verify: bool = True,
 ) -> bytes:
     """Sign a 32-byte message hash with a keypair somebody else owns.
 
@@ -517,6 +621,8 @@ def _sign32(
             whoever built it and not here.
         aux_rand32: the 32 bytes of auxiliary randomness, or None for
             fresh randomness.
+        verify: whether to check the signature before answering with it,
+            as `_abort_unless_verified` documents and BIP340 prescribes.
 
     Returns:
         The 64-byte signature.
@@ -525,7 +631,8 @@ def _sign32(
         ValueError: if the message hash is not 32 bytes, or if
             aux_rand32 is given and is not 32 bytes.
         RuntimeError: if libsecp256k1 fails to sign, which no input can
-            make it do.
+            make it do, or if `verify` asks and the signature does not
+            verify.
     """
     msg_bytes = octets(msg_bytes, "message hash", 32)
 
@@ -534,11 +641,18 @@ def _sign32(
         ctx, sig, msg_bytes, keypair_obj, entropy(aux_rand32)
     ):
         raise RuntimeError("schnorr signing failed")
-    return ffi.unpack(sig, ffi.sizeof(sig))
+    signature_bytes = ffi.unpack(sig, ffi.sizeof(sig))
+    if verify:
+        _abort_unless_verified(keypair_obj, msg_bytes, signature_bytes)
+    return signature_bytes
 
 
 def _sign_custom(
-    msg_bytes: BytesLike, keypair_obj: CData, aux_rand32: BytesLike | None
+    msg_bytes: BytesLike,
+    keypair_obj: CData,
+    aux_rand32: BytesLike | None,
+    *,
+    verify: bool = True,
 ) -> bytes:
     """Sign a message of any length with a keypair somebody else owns.
 
@@ -550,6 +664,8 @@ def _sign_custom(
             whoever built it and not here.
         aux_rand32: the 32 bytes of auxiliary randomness, or None for
             fresh randomness.
+        verify: whether to check the signature before answering with it,
+            as `_abort_unless_verified` documents and BIP340 prescribes.
 
     Returns:
         The 64-byte signature.
@@ -557,7 +673,8 @@ def _sign_custom(
     Raises:
         ValueError: if aux_rand32 is given and is not 32 bytes.
         RuntimeError: if libsecp256k1 fails to sign, which no input can
-            make it do.
+            make it do, or if `verify` asks and the signature does not
+            verify.
     """
     msg_bytes = octets(msg_bytes, "message")
 
@@ -574,4 +691,7 @@ def _sign_custom(
         ctx, sig, msg_bytes, len(msg_bytes), keypair_obj, extraparams
     ):
         raise RuntimeError("schnorr signing failed")
-    return ffi.unpack(sig, ffi.sizeof(sig))
+    signature_bytes = ffi.unpack(sig, ffi.sizeof(sig))
+    if verify:
+        _abort_unless_verified(keypair_obj, msg_bytes, signature_bytes)
+    return signature_bytes

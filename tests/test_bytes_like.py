@@ -436,6 +436,7 @@ NOT_SWEPT = {
     "xonly.from_keypair",
     "xonly.parse",
     "xonly.serialize",
+    "xonly._from_keypair_",
     "xonly._from_pubkey_",
 }
 
