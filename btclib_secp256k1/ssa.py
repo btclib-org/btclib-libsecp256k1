@@ -168,7 +168,11 @@ def sign(
     puts it inside the algorithm rather than beside it, and it can be
     turned off because the BIP says that too, "if the computation cost
     is prohibitive" -- which here is one verification and no
-    multiplication. `_abort_unless_verified` carries the rest of the reasoning.
+    multiplication: 28.57 microseconds against 15.87, where ECDSA's same
+    check is 31.67 against 12.15 for having to derive the public key
+    first. The cheaper of the two is the one a specification asks for.
+    CHANGELOG.md names the session those come from, and
+    `_abort_unless_verified` carries the rest of the reasoning.
 
     Args:
         msg_bytes: the 32-byte message hash.
@@ -240,7 +244,11 @@ def sign_custom(
             fresh randomness.
         verify: whether to check the signature under its own public key
             before returning it, as `sign` documents and BIP340
-            prescribes.
+            prescribes. One verification and no point multiplication,
+            which on a 32-byte message is `sign`'s 28.57 microseconds
+            against 15.87, the extraparams struct this fills aside;
+            a longer message costs more to sign and to check by the
+            same hash.
 
     Returns:
         The 64-byte signature.
@@ -347,7 +355,16 @@ class Signer:
                 own public key before returning it, as `ssa.sign`
                 documents and BIP340 prescribes. It is the same cost
                 here as there, the point being read off the keypair
-                either way.
+                either way -- and because the signature is the cheaper,
+                the keypair being built already, it is the larger share:
+                20.82 microseconds against 8.18, where `ssa.sign` is
+                28.57 against 15.87. The check is more than half again
+                this signature and four fifths of that one, which is the
+                same increment either way. 1.545 of a signature here
+                against `dsa.sign`'s 1.607 is the reading worth having:
+                this is where BIP340's cheaper check costs what ECDSA's
+                does, the keypair already built having taken the
+                signature down to where the increment dominates.
 
         Returns:
             The 64-byte signature.

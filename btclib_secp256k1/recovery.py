@@ -187,6 +187,13 @@ def sign(
     induced on purpose, whose cost is a published signature that is
     invalid or attributes itself to somebody else.
 
+    It is also the dearest of the three, which is the other half of what
+    a caller weighing it needs: 34.41 microseconds against 12.02, where
+    `dsa.sign` measured beside it in the same session was 31.54 against
+    12.06 and `ssa.sign` is 28.57 against 15.87. A recovery is about a
+    verification's work, and the comparison and the derivation are the
+    rest. CHANGELOG.md names the session.
+
     Args:
         msg_bytes: the 32-byte hash of the message.
         prvkey: the private key, 32 bytes or an int below 2**256.

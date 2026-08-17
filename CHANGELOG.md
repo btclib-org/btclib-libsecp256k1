@@ -72,11 +72,10 @@ release-notes length in the first place, and are still in
   `r` and `s` verify, so an inconsistent pair does not fail, it comes
   back as a different key -- and fails only where `r` is not the x of a
   point at all, which a faulted `r` is about half the time. Which is the
-  stronger argument: the recovered
-  key is by construction the key that verifies the signature, so
-  `recovered == signer` **is** a verification, with the id checked
-  besides. Nothing is given up by not verifying, and that is provable
-  rather than argued.
+  stronger argument: the recovered key is by construction the key that
+  verifies the signature, so `recovered == signer` **is** a verification,
+  with the id checked besides. Nothing is given up by not verifying, and
+  that is provable rather than argued.
 - **What that check costs was measured in a session of its own**, which
   re-measured `dsa.sign` beside it rather than printing the two
   together: `recovery.sign` 12.02 against 34.41, `dsa.sign` 12.06
@@ -109,24 +108,105 @@ release-notes length in the first place, and are still in
   `test_every_private_half_is_paired` excuses it from the parametrized
   tables the way it already excuses `ssa._verify_` and
   `xonly._tweak_add_`, and a test of its own holds the equality.
-- **The fault itself is not tested, because no input produces one.** The
-  `raise RuntimeError` is excluded from coverage for the reason every
-  other one is. What is tested is the wiring around it: the verification
-  is substituted for one that refuses, and each entry point is held to
+- **The fault is out of reach for the two that verify, and reachable for
+  the one that recovers.** No input makes a fresh ECDSA or BIP340
+  signature fail its own verification, so in `dsa` and `ssa` the `raise
+  RuntimeError` is excluded from coverage for the reason every other one
+  is. What is tested there is the wiring around it: the verification is
+  substituted for one that refuses, and each entry point is held to
   raising rather than returning -- and, in the other direction, to *not*
   raising where `verify=False` was passed, which is the only assertion
   that sees the flag at all: the signature is the same bytes whether or
   not it was honoured, so a `verify` ignored altogether answers exactly
   what it should. Replacing every `if verify:` with `if True:` leaves
   the rest of the suite passing, which is how that hole was found rather
-  than argued for. The keys of both y parities are signed
-  with as well, both parities asserted to occur, because a check read
-  off the wrong half of the negation BIP340 prescribes would pass for
-  the wrong reason.
+  than argued for. The keys of both y parities are signed with as well,
+  both parities asserted to occur, because a check read off the wrong
+  half of the negation BIP340 prescribes would pass for the wrong
+  reason. `recovery` is the exception, and it is the test that says what
+  the check is for rather than that the raise is wired to it: what that
+  check reads is the recovery id, a wrong id is one `parse_compact`
+  away, and `test_the_recovery_id_is_what_the_check_catches` produces
+  the fault from an input and holds real libsecp256k1 to refusing it
+  with no stand-in anywhere — the other parity of the same `r` recovers
+  somebody else's key, ids 2 and 3 recover nothing, and the octets
+  refused three lines up still verify as a plain ECDSA signature.
 - **`dsa.sign` carries a `noqa: PLR0913`** and the reason above it: six
   arguments where the rule allows five, and the alternative is an
   options object for one function whose four questions group with
   nothing.
+- **The default is Bitcoin Core's, and what it costs is now in the
+  docstrings** (#224). Whether `dsa.sign` should default to
+  `verify=False` — no standard asking the check of ECDSA, and the caller
+  paying for a public key the signing itself did not need — was asked
+  and answered the other way: one policy across the three modules, which
+  is `CKey::Sign`'s, and a caller that has measured the check against
+  its own threat model turns it off by name. A default per scheme would
+  make the safer answer the one a reader has to look up, and
+  `verify=False` is already the whole of the remedy. What was missing is
+  the magnitude: the docstrings priced `grind` at "what the octet is
+  worth" and left the check that is on by default at "a point
+  multiplication and a verification", which is its shape and not its
+  size. `dsa.sign` says 31.67 microseconds against 12.15 now, `ssa.sign`
+  28.57 against 15.87 with the 6.8 between the two increments named as
+  the `secp256k1_ec_pubkey_create` ECDSA has to do and BIP340 does not,
+  and `recovery.sign` 34.41 against 12.02, the dearest of the three.
+  `ssa.Signer.sign` carries the ratio rather than a third increment —
+  20.82 against 8.18, the check being more than half again a signature
+  whose keypair was built already, where `ssa.sign`'s is four fifths of
+  one, and 1.545 against `dsa.sign`'s 1.607 is where BIP340's cheaper
+  check costs what ECDSA's does — and `ssa.sign_custom`, the entry point
+  btclib calls, carries `sign`'s figure with the sentence that a longer
+  message costs more to sign and to check by the same hash. The figures
+  are the ones measured above rather than a second session. `dsa.sign`
+  also says what a caller grinding *outside* the call pays, that being
+  one check per attempt where the wrapper's own `grind` checks only the
+  attempt it settles on — which is the reading the caller that raised
+  the issue was getting.
+- **The record said the fault is not tested, and a test produces one**
+  (#225). The bullet above opened "The fault itself is not tested,
+  because no input produces one", which was true of #216 and false after
+  #218: `recovery`'s check reads the recovery id, a wrong id is one
+  `parse_compact` away, and the test that produces one holds real
+  libsecp256k1 to refusing it with no stand-in. The test module's own
+  header carried the same sentence and was qualified in #218; this file
+  was not, so the record stated of the suite the opposite of what the
+  suite does — the same defect as the "eight entry points" count #218
+  removed, a claim about the tests that the tests disprove. It now
+  carries the qualification the test module already found. Two lines
+  from the same tail go with it: the docstring of
+  `test_a_signature_that_does_not_verify_is_not_answered_with`
+  documented `refusal` as "unused where the test does not refuse one",
+  which was true of the other readers of `SIGNERS` and false of exactly
+  this one, where it is the `match=`; and the 34-character line of this
+  file's own prose, between lines of 69 to 72, which was the reflow a
+  qualifier insertion did not get. That last one is why the paragraph
+  above is rewrapped whole rather than at the line named: inserting the
+  qualification left two more widows of the same shape, at 14 and 27
+  columns, so a fix line by line would have closed one instance of the
+  class and opened two. #233 counts the thirteen this change does not
+  reach. No hook reflows prose, which is why every one of them passed
+  the gate.
+- **`SIGNERS` stops handing a test an argument no body reads** (#226).
+  It grew a third element in #218 and that closed a real gap: before it
+  one `match="signing produced"` matched all three modules, so the test
+  could not say which failure it had provoked. The cost was that four
+  tests are parametrized over the table, one reads the refusal, and the
+  three that do not each carried two lines of docstring explaining that
+  they do not — which is how that sentence reached the fourth.
+  `SIGNING_CALLS` is the calls alone and `REFUSING_CALLS` the call with
+  its refusal, both derived from `SIGNERS` in a comprehension, and the
+  name goes with the refusal: it is the `ids=` and no body has ever read
+  it, so five tests stop declaring it and five docstrings stop excusing
+  it. `_DEFAULTING` is the same move on the one table that is not
+  `SIGNERS` — a mapping of the ten functions whose default is asserted,
+  its keys being those ids. The mapping the issue proposed instead —
+  `_REFUSALS` keyed by module, with `SIGNERS` back to pairs — is
+  declined for the reason the issue states against itself: a row would
+  no longer be the whole truth about its entry point, and finding a
+  module by splitting a test id on `.` is a weaker statement than the
+  message written beside the call. The ids are stated once as well,
+  every table here being those rows in that order.
 
 ### The frames between an entry point and libsecp256k1
 

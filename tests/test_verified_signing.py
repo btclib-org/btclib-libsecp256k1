@@ -106,6 +106,39 @@ SIGNERS: list[tuple[str, Callable[..., Any], str]] = [
     ),
 ]
 
+# what each test is actually handed, derived from the rows above rather
+# than written a second time: the calls alone for the three that never
+# provoke a refusal, the call and its refusal for the one that does.
+# `SIGNERS` stays the whole truth about an entry point and the refusal
+# stays beside the call it belongs to, while no test declares an argument
+# it does not read -- the name included, which `ids` supplies and no body
+# has ever looked at
+SIGNING_CALLS: list[Callable[..., Any]] = [signer for _, signer, _ in SIGNERS]
+REFUSING_CALLS: list[tuple[Callable[..., Any], str]] = [
+    (signer, refusal) for _, signer, refusal in SIGNERS
+]
+
+# one statement of the ids, every table here being those rows in that
+# order
+SIGNER_IDS = [name for name, *_ in SIGNERS]
+
+# every function that took a `verify`, which is not the same list: a
+# default is a property of a signature rather than of a call, so the
+# private halves are here and the three shapes of `dsa.sign` are not. A
+# mapping, because the name is the id and nothing else reads it
+_DEFAULTING: dict[str, Callable[..., Any]] = {
+    "dsa.sign": dsa.sign,
+    "dsa._sign_": dsa._sign_,
+    "ssa.sign": ssa.sign,
+    "ssa.sign_custom": ssa.sign_custom,
+    "ssa._sign32": ssa._sign32,
+    "ssa._sign_custom": ssa._sign_custom,
+    "Signer.sign": ssa.Signer.sign,
+    "Signer.sign_custom": ssa.Signer.sign_custom,
+    "recovery.sign": recovery.sign,
+    "recovery._sign_": recovery._sign_,
+}
+
 
 def _refusing(*_args: Any, **_kwargs: Any) -> bool:
     """Stand in for a verification, and refuse whatever it is handed.
@@ -193,10 +226,8 @@ def _through_signer(method: str, **kwargs: Any) -> bytes:
     return signed
 
 
-@pytest.mark.parametrize("name,signer,refusal", SIGNERS, ids=[n for n, *_ in SIGNERS])
-def test_the_check_changes_no_signature(
-    name: str, signer: Callable[..., Any], refusal: str
-) -> None:
+@pytest.mark.parametrize("signer", SIGNING_CALLS, ids=SIGNER_IDS)
+def test_the_check_changes_no_signature(signer: Callable[..., Any]) -> None:
     """Checking a signature is a question, so it answers the same bytes.
 
     The point of the parametrization is the entry points rather than the
@@ -207,18 +238,13 @@ def test_the_check_changes_no_signature(
     two that happen to verify.
 
     Args:
-        name: the entry point, for the test id.
-        signer: it, as a call taking the keyword under test.
-        refusal: what a refused check reports there, unused where the
-            test does not refuse one.
+        signer: the entry point, as a call taking the keyword under test.
     """
     assert signer(verify=True) == signer(verify=False)
 
 
-@pytest.mark.parametrize("name,signer,refusal", SIGNERS, ids=[n for n, *_ in SIGNERS])
-def test_the_check_is_on_where_nothing_asks(
-    name: str, signer: Callable[..., Any], refusal: str
-) -> None:
+@pytest.mark.parametrize("signer", SIGNING_CALLS, ids=SIGNER_IDS)
+def test_the_check_is_on_where_nothing_asks(signer: Callable[..., Any]) -> None:
     """Not passing the argument is passing True, which is the default.
 
     Stated in a docstring at every entry point and checked here,
@@ -227,32 +253,13 @@ def test_the_check_is_on_where_nothing_asks(
     way, and only the cost and the guarantee differ.
 
     Args:
-        name: the entry point, for the test id.
-        signer: it, as a call taking the keyword under test.
-        refusal: what a refused check reports there, unused where the
-            test does not refuse one.
+        signer: the entry point, as a call taking the keyword under test.
     """
     assert signer() == signer(verify=True)
 
 
-@pytest.mark.parametrize(
-    "name,function",
-    [
-        ("dsa.sign", dsa.sign),
-        ("dsa._sign_", dsa._sign_),
-        ("ssa.sign", ssa.sign),
-        ("ssa.sign_custom", ssa.sign_custom),
-        ("ssa._sign32", ssa._sign32),
-        ("ssa._sign_custom", ssa._sign_custom),
-        ("Signer.sign", ssa.Signer.sign),
-        ("Signer.sign_custom", ssa.Signer.sign_custom),
-        ("recovery.sign", recovery.sign),
-        ("recovery._sign_", recovery._sign_),
-    ],
-)
-def test_every_signer_defaults_to_checking(
-    name: str, function: Callable[..., Any]
-) -> None:
+@pytest.mark.parametrize("function", list(_DEFAULTING.values()), ids=list(_DEFAULTING))
+def test_every_signer_defaults_to_checking(function: Callable[..., Any]) -> None:
     """The default is True everywhere it exists, private halves included.
 
     A private half left at False would be the hole the public ones
@@ -260,15 +267,14 @@ def test_every_signer_defaults_to_checking(
     so a default that disagreed would be a second policy nobody stated.
 
     Args:
-        name: the entry point, for the test id.
-        function: it, to read the signature of.
+        function: the entry point, to read the signature of.
     """
     assert inspect.signature(function).parameters["verify"].default is True
 
 
-@pytest.mark.parametrize("name,signer,refusal", SIGNERS, ids=[n for n, *_ in SIGNERS])
+@pytest.mark.parametrize("signer,refusal", REFUSING_CALLS, ids=SIGNER_IDS)
 def test_a_signature_that_does_not_verify_is_not_answered_with(
-    name: str, signer: Callable[..., Any], refusal: str
+    signer: Callable[..., Any], refusal: str
 ) -> None:
     """The raise is wired to the check, and not merely written near it.
 
@@ -279,10 +285,11 @@ def test_a_signature_that_does_not_verify_is_not_answered_with(
     returned, at every entry point rather than at one of them.
 
     Args:
-        name: the entry point, for the test id.
-        signer: it, as a call taking the keyword under test.
-        refusal: what a refused check reports there, unused where the
-            test does not refuse one.
+        signer: the entry point, as a call taking the keyword under test.
+        refusal: what a refused check reports there, and what this
+            matches on: the module and not the package, `dsa` and `ssa`
+            saying a signature does not verify where `recovery` says no
+            key recovers from one.
     """
     with pytest.MonkeyPatch.context() as patch:
         _refuse_every_check(patch)
@@ -290,10 +297,8 @@ def test_a_signature_that_does_not_verify_is_not_answered_with(
             signer()
 
 
-@pytest.mark.parametrize("name,signer,refusal", SIGNERS, ids=[n for n, *_ in SIGNERS])
-def test_the_refused_check_is_not_made_at_all(
-    name: str, signer: Callable[..., Any], refusal: str
-) -> None:
+@pytest.mark.parametrize("signer", SIGNING_CALLS, ids=SIGNER_IDS)
+def test_the_refused_check_is_not_made_at_all(signer: Callable[..., Any]) -> None:
     """`verify=False` does not reach the check, which nothing else sees.
 
     The other direction, and the one no assertion above can stand in for:
@@ -307,10 +312,7 @@ def test_the_refused_check_is_not_made_at_all(
     what this asserts is that a signature comes back instead.
 
     Args:
-        name: the entry point, for the test id.
-        signer: it, as a call taking the keyword under test.
-        refusal: what a refused check reports there, unused where the
-            test does not refuse one.
+        signer: the entry point, as a call taking the keyword under test.
     """
     with pytest.MonkeyPatch.context() as patch:
         _refuse_every_check(patch)
