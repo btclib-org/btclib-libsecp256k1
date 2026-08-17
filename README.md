@@ -579,12 +579,12 @@ them through `to_compact` writes the DER and parses it straight back.
 
 ## Checking the signature before answering with it
 
-`dsa.sign` and `ssa.sign` verify what they just made, under the public
-key of the very key that made it, and a signature that fails is raised
+`dsa.sign`, `ssa.sign` and `recovery.sign` check what they just made
+against the very key that made it, and a signature that fails is raised
 on rather than returned. It is the one argument here that defaults to
 on, and `verify=False` is how a caller declines it.
 
-The two have the same reasoning behind them and did not arrive by the
+The three have the same reasoning behind them and did not arrive by the
 same route. For BIP340 it is a step of the algorithm: *Default Signing*
 ends with "If Verify(bytes(P), m, sig) returns failure, abort", and the
 note beside it says why — "Verifying the signature before leaving the
@@ -603,6 +603,9 @@ it runs. It catches the computation itself going wrong, whether by bad
 memory or by a fault induced on purpose, and the whole of the protection
 is not publishing the result.
 
+`recovery.sign` asks a different question, and the section below says
+why. What it shares with the other two is the reason and the argument.
+
 It costs what a verification costs, and in ECDSA a point multiplication
 besides — the public key, which BIP340 needs to sign at all and ECDSA
 needs for neither of the two things `sign` does. Measured with the
@@ -618,6 +621,15 @@ has a figure of its own:
 | `ssa.Signer.sign` | 8.18 | 20.82 |
 | `ssa.sign` again (the noise) | | ±0.04 |
 
+and `recovery.sign` in a session of its own, which re-measured `dsa.sign`
+beside it so that the two are comparable rather than merely printed
+together — 12.06 against 31.54 for `dsa.sign` there, agreeing with the
+row above, and a noise row of ±0.02:
+
+| the call | `verify=False` | `verify=True` |
+| --- | --- | --- |
+| `recovery.sign` | 12.02 | 34.41 |
+
 Microseconds per signature. The finding is the gap between the two
 increments: 19.5 for ECDSA against 12.7 for BIP340, and the 6.8 between
 them is the multiplication `secp256k1_ec_pubkey_create` does and
@@ -626,25 +638,46 @@ already, which is the same 7.55 the [signer](#two-outposts-past-the-boundary)
 hoists. So the step the specification prescribes is also the cheaper of
 the two, and a `Signer` pays it at the same price as a bare `ssa.sign`.
 
-**`recovery.sign` has no `verify`, and answers a signature nothing here
-has checked.** It is the one signing entry point this does not cover, and
-saying so is the point: the two sections above read as a policy of the
-package, and a caller reaching for a recoverable signature would
-otherwise conclude it was checked. The reason is that the check is a
-different one. Core closes the same hole in `CKey::SignCompact`, and not
-with a verification: it recovers the public key from the signature and
-compares it with `secp256k1_ec_pubkey_cmp`, which is the natural question
-to ask of a signature carrying a recovery id, and it is its own design,
-its own tests and its own measurement rather than this argument applied
-twice.
+**`recovery.sign` recovers instead of verifying**, and the difference is
+the recovery id. A verification does not look at it: a recoverable
+signature carrying the wrong one verifies perfectly and then recovers a
+key that is not the signer's — and recovering a key is the one thing a
+caller of that module is going to do with the answer. So the check is
+the one the id deserves: recover from the signature, and refuse a key
+that is not the one that signed.
 
-What each half checks is not quite the same region either. `ssa` verifies
-the very 64 octets it answers with; `dsa` verifies the signature *object*
-and serializes it afterwards, so the DER or compact encoding is outside
-what was checked — as it is in Core, whose `CKey::Sign` verifies the
-`secp256k1_ecdsa_signature` and serializes after. Both are defensible,
-the serializers being memcpy-shaped where the signing is arithmetic, and
-the difference is worth a sentence rather than a change.
+That is Bitcoin Core's own distinction, and it makes it in the same
+file. `CKey::Sign` ends in `secp256k1_ecdsa_verify`; `CKey::SignCompact`
+ends in `secp256k1_ecdsa_recover` followed by `secp256k1_ec_pubkey_cmp`
+against the key derived from the private one. Both under the same
+comment.
+
+It subsumes the verification exactly, rather than probably. Recovery is
+not selective: for a given id it answers *the* key under which that `r`
+and `s` verify, so an inconsistent pair does not fail — it comes back as
+a different key, and fails only where `r` is not the x of a point at
+all. That is the stronger argument rather than a weaker one. Because the
+recovered key is by construction the key that verifies the signature,
+`recovered == signer` **is** a verification, with the id checked besides;
+nothing is given up by no longer verifying, and it is provable rather
+than argued. What it costs is 22.4 microseconds against ECDSA's 19.5 — a
+recovery being about a verification's work, and the comparison and the
+derivation making up the rest.
+
+What the three check is not quite the same region either, and
+`recovery`'s is the one worth knowing: what its check reads is the id
+held inside the `secp256k1_ecdsa_recoverable_signature`, while the id the
+caller receives is the one `serialize_compact` writes afterwards — so the
+recovery id is outside the checked region exactly as a DER encoding is.
+Core does the same, `CKey::SignCompact` recovering from its `rsig` and
+not from the octets it filled. `ssa` verifies the very 64 octets it
+answers with; `dsa` verifies the signature *object* and serializes it
+afterwards, so the DER or compact encoding is outside what was checked —
+as it is in Core, whose `CKey::Sign` verifies the
+`secp256k1_ecdsa_signature` and serializes after. All three are
+defensible, the serializers being memcpy-shaped where the signing is
+arithmetic, and the difference is worth a sentence rather than a
+change.
 
 Every other microsecond figure in this file was measured before this
 argument existed and is therefore the signature without the check:

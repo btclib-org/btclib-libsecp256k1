@@ -13,15 +13,92 @@ id, which is what `to_der` drops.
 
 from __future__ import annotations
 
-from . import BytesLike, CData, ffi, lib
+from . import BytesLike, CData, ffi, keys, lib
 from ._scalar import in_range, octets, optional_entropy, scalar
 from .context import ctx
 from .dsa import serialize_der
 from .keys import serialize
 
 
+def _abort_unless_recovered(
+    signature: CData, msg_bytes: bytes, prvkey_bytes: bytes
+) -> None:
+    """Recover from a signature just made, and refuse another key.
+
+    What `dsa` and `ssa` do after signing, in the shape a recoverable
+    signature asks for. Bitcoin Core makes the same distinction:
+    `CKey::Sign` ends in `secp256k1_ecdsa_verify`, and `CKey::SignCompact`
+    ends in `secp256k1_ecdsa_recover` followed by
+    `secp256k1_ec_pubkey_cmp` against the key that signed.
+
+    The reason is the recovery id, which is what this signature has
+    beyond a plain one and what a verification does not look at. A
+    signature carrying the wrong id verifies perfectly and recovers
+    somebody else's key -- and recovering a key is the one thing a caller
+    of this module is going to do with it, so the check has to be the one
+    the id answers.
+
+    It subsumes the verification exactly rather than probably, which is
+    what makes not verifying safe here. Recovery is not selective: for a
+    given id it answers *the* key under which that `r` and `s` verify, so
+    an inconsistent pair does not fail, it comes back as a different key
+    -- and fails only where `r` is not the x of a point at all, which is
+    the branch below that reports no key recovering.
+    So the recovered key is by construction the key that verifies the
+    signature, and `recovered == signer` is a verification with the id
+    checked besides.
+
+    Named as `ssa._abort_unless_verified` is, and for the same reason:
+    it raises where a `_foo_` half would answer, and the verb is the one
+    BIP340 uses of the step.
+
+    **Neither call below needs a `context.check` behind it, and both are
+    the kind that usually would.** `keys._pubkey_cmp_` answers an
+    ordering that means nothing where libsecp256k1 could not read an
+    object, and that answer is a security decision here -- but both
+    objects come from calls that returned success a line earlier, so the
+    only way its `0` could lie is both keys being unreadable at once,
+    which is not a state either call can leave behind. And
+    `keys._pubkey_from_prvkey_` raises a `ValueError` for a key outside
+    [1, n-1], which this one is not: libsecp256k1 accepted it for signing
+    immediately above. That is why `_recover_`'s `ValueError` is
+    converted below and this one is not -- the first reports a property
+    of the signature, which a fault can change, and the second a property
+    of an argument that has already been proved. `dsa._sign_` leaves the
+    same call unconverted for the same reason.
+
+    Args:
+        signature: the recoverable signature just made.
+        msg_bytes: the 32-byte hash it was made over, already checked.
+        prvkey_bytes: the 32-byte private key that made it, already
+            checked.
+
+    Raises:
+        RuntimeError: if no key recovers from the signature, or if the
+            one that does is not the signer's. Neither is reachable by
+            any input: what they report is the computation itself having
+            gone wrong.
+    """
+    try:
+        recovered = _recover_(msg_bytes, signature)
+    except ValueError as failure:
+        # `_recover_` reports "no key can be recovered" as a ValueError,
+        # that being an argument error for a signature a caller handed
+        # in. For one made a line ago it is not: nothing was passed that
+        # could have caused it
+        raise RuntimeError("signing produced a signature no key recovers from") from (
+            failure
+        )
+    if keys._pubkey_cmp_(recovered, keys._pubkey_from_prvkey_(prvkey_bytes)):
+        raise RuntimeError("signing produced a signature that recovers another key")
+
+
 def _sign_(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    verify: bool = True,
 ) -> CData:
     """Create a recoverable ECDSA signature, as the parsed signature.
 
@@ -37,6 +114,9 @@ def _sign_(
         prvkey: the private key, 32 bytes or an int below 2**256.
         aux_rand32: 32 bytes of extra entropy mixed into the nonce, or
             None for the RFC6979 nonce alone.
+        verify: whether to recover the key from the signature and refuse
+            one that is not the signer's, as `sign` documents and
+            `_abort_unless_recovered` reasons about.
 
     Returns:
         The libsecp256k1 recoverable signature object.
@@ -45,6 +125,8 @@ def _sign_(
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
             given and is not 32 bytes, or if the private key is not 32
             bytes, does not fit in them, or is not in [1, n-1].
+        RuntimeError: if `verify` asks and the signature does not recover
+            the key that made it.
     """
     prvkey_bytes = scalar(prvkey, "private key")
     msg_bytes = octets(msg_bytes, "message hash", 32)
@@ -63,19 +145,44 @@ def _sign_(
         optional_entropy(aux_rand32),
     ):
         raise ValueError("invalid private key: not in [1, n-1]")
+    if verify:
+        _abort_unless_recovered(signature, msg_bytes, prvkey_bytes)
     return signature
 
 
 def sign(
-    msg_bytes: BytesLike, prvkey: BytesLike | int, aux_rand32: BytesLike | None = None
+    msg_bytes: BytesLike,
+    prvkey: BytesLike | int,
+    aux_rand32: BytesLike | None = None,
+    *,
+    verify: bool = True,
 ) -> tuple[bytes, int]:
     """Create a recoverable ECDSA signature.
+
+    `verify` is what `dsa.sign` and `ssa.sign` take, in the shape this
+    signature asks for: the key is recovered from the signature and
+    compared with the signer's, rather than the signature verified
+    against it. That is Bitcoin Core's own distinction between
+    `CKey::Sign` and `CKey::SignCompact`, and the reason is the recovery
+    id -- a verification does not look at it, so a signature carrying the
+    wrong one verifies and then recovers a key that is not the signer's.
+    Recovering is what a caller of this module does with the answer, so
+    the check is the one that question deserves.
+
+    What it catches is not a bad argument -- those have all raised by
+    then -- but a computation gone wrong, by bad memory or by a fault
+    induced on purpose, whose cost is a published signature that is
+    invalid or attributes itself to somebody else.
 
     Args:
         msg_bytes: the 32-byte hash of the message.
         prvkey: the private key, 32 bytes or an int below 2**256.
         aux_rand32: 32 bytes of extra entropy mixed into the nonce, or
             None for the RFC6979 nonce alone.
+        verify: whether to recover the key and refuse a signature that
+            does not give the signer's back. It costs a recovery, a point
+            multiplication and a comparison, and False is what a caller
+            that has measured those against its own threat model passes.
 
     Returns:
         The 64-byte compact signature and its recovery id. The id is 0
@@ -88,9 +195,19 @@ def sign(
             given and is not 32 bytes, or if the private key is not 32
             bytes, does not fit in them, or is not in [1, n-1].
         RuntimeError: if libsecp256k1 fails to serialize the signature,
-            which no input can make it do.
+            which no input can make it do, or if `verify` asks and the
+            signature does not recover the key that made it.
+
+    Example:
+        >>> import hashlib
+        >>> from btclib_secp256k1 import keys, recovery
+        >>> msg = hashlib.sha256(b"hello").digest()
+        >>> signature, recid = recovery.sign(msg, 1)
+        >>> pubkey = recovery.recover(msg, signature, recid)
+        >>> pubkey == keys.pubkey_from_prvkey(1)
+        True
     """
-    return serialize_compact(_sign_(msg_bytes, prvkey, aux_rand32))
+    return serialize_compact(_sign_(msg_bytes, prvkey, aux_rand32, verify=verify))
 
 
 def _recover_(msg_bytes: BytesLike, signature: CData) -> CData:

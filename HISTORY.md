@@ -96,11 +96,18 @@ back where it was:
 +sig = dsa.sign(msg, prvkey, verify=False)
 ```
 
-`recovery.sign` is the one signing call this does not cover: it answers a
-signature nothing here has checked, and it takes no `verify`. The check a
-recoverable signature wants is a different one — recover the key from the
-signature and compare it, which is what Bitcoin Core's `CKey::SignCompact`
-does — so it is a change of its own rather than this one applied twice.
+`recovery.sign` takes the same argument and asks a different question:
+it recovers the public key from the signature and refuses one that is not
+the signer's, rather than verifying. The difference is the recovery id,
+which a verification does not look at — a signature carrying the wrong
+one verifies perfectly and then recovers somebody else's key, which is
+exactly what a caller of that module is going to use it for. It costs
+12.02 microseconds against 34.41 — measured in a session of its own,
+where `dsa.sign` was 12.06 against 31.54, so that the two are compared
+against each other and not across two runs of the machine.
+
+So every signing call of the package now checks itself, and the same
+`verify=False` declines any of them.
 
 What the rest of the release adds: one for a caller that signs more than
 once under one key, one for a caller whose ECDSA signatures go into a

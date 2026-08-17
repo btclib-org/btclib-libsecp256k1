@@ -54,23 +54,53 @@ release-notes length in the first place, and are still in
 - **A caller that signs and does not publish pays for a guarantee it may
   not want**, and `verify=False` is the whole of the remedy: the
   signature is the same bytes either way, which
-  `tests/test_verified_signing.py` asserts for each of the eight entry
-  points rather than for one of them.
-- **`recovery.sign` is not in it, and the shipped documentation says so
-  rather than leaving it to a pull request description.** It answers a
-  signature nothing here has checked, and the reason is that the check
-  is a different one: Core closes the same hole in `CKey::SignCompact`
-  by recovering the public key and comparing it with
-  `secp256k1_ec_pubkey_cmp`, which is the question a recovery id invites
-  and is its own design, tests and measurement -- #217 carries it, and
-  names the three files to correct when it closes. README.md carries
-  the asymmetry beside the one it already carries for `grind`.
-- **The two halves do not check quite the same region**, which is worth
-  a sentence and not a change. `ssa` verifies the 64 octets it answers
+  `tests/test_verified_signing.py` asserts at each entry point rather
+  than at one of them.
+- **`recovery.sign` is in it too, and asks a different question** (#217).
+  It takes the same keyword-only `verify`, defaulting to `True`, and so
+  does `recovery._sign_`; what it does with it is recover the public key
+  from the signature and refuse one that is not the signer's, rather
+  than verify. The difference is the recovery id, which a verification
+  does not look at: a signature carrying the wrong one verifies
+  perfectly and then recovers somebody else's key, and recovering a key
+  is what a caller of that module does with the answer. Core makes the
+  same distinction in the same file -- `CKey::Sign` ends in
+  `secp256k1_ecdsa_verify`, `CKey::SignCompact` in
+  `secp256k1_ecdsa_recover` and `secp256k1_ec_pubkey_cmp` -- and it
+  subsumes the verification exactly rather than probably. Recovery is
+  not selective: for a given id it answers *the* key under which that
+  `r` and `s` verify, so an inconsistent pair does not fail, it comes
+  back as a different key -- and fails only where `r` is not the x of a
+  point at all, which a faulted `r` is about half the time. Which is the
+  stronger argument: the recovered
+  key is by construction the key that verifies the signature, so
+  `recovered == signer` **is** a verification, with the id checked
+  besides. Nothing is given up by not verifying, and that is provable
+  rather than argued.
+- **What that check costs was measured in a session of its own**, which
+  re-measured `dsa.sign` beside it rather than printing the two
+  together: `recovery.sign` 12.02 against 34.41, `dsa.sign` 12.06
+  against 31.54 there, agreeing with the 12.15 and 31.67 above. So the
+  recovery shape costs 22.4 against ECDSA's 19.5, a recovery being about
+  a verification's work with the comparison and the derivation making up
+  the rest. Same method as the rest, noise +/-0.02.
+- **`_abort_unless_recovered` turns `_recover_`'s `ValueError` into a
+  `RuntimeError`**, which is the one place the two exception kinds of
+  this package meet. "No key can be recovered" is an argument error of a
+  signature a caller handed in, and nothing of the sort for one made a
+  line earlier: what it reports there is the computation having gone
+  wrong, which is what a `RuntimeError` means throughout.
+- **The three do not check quite the same region**, which is worth a
+  sentence and not a change. `ssa` verifies the 64 octets it answers
   with; `dsa` verifies the signature object and serializes it after, so
-  the encoding is outside what was checked -- as it is in Core, for the
-  same reason, the serializers being memcpy-shaped where the signing is
-  arithmetic.
+  the encoding is outside what was checked. `recovery` is the case worth
+  the sentence most: what its check reads is the id inside the
+  `secp256k1_ecdsa_recoverable_signature`, and the id the caller
+  receives is the one `serialize_compact` writes afterwards -- so the id
+  is outside the checked region exactly as the DER is. Core does the
+  same, `CKey::SignCompact` recovering from `rsig` and not from the
+  octets it filled, and for the same reason: the serializers are
+  memcpy-shaped where the signing is arithmetic.
 - **`xonly._from_keypair_` is new**, and is what makes the BIP340 half
   cheap: `xonly.from_keypair` is now that call with a serialize behind
   it, where reaching the key through the public half would have written
