@@ -144,8 +144,39 @@ jobs:
           # the root and of .github, and neither README.md nor a file
           # under docs/, which the sdist carries. An empty list is not a
           # documentation change, it is a question this could not answer,
-          # so the count is checked before the pattern
-          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|HISTORY|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$'
+          # so the count is checked before the pattern.
+          #
+          # The mutation configuration and the detect-secrets baselines are
+          # on it for the same reason as the prose and were measured off it:
+          # a change to bindings.toml alone cost 23 jobs and 45.7
+          # runner-minutes (#239), and cosmic-ray takes that path as an
+          # argument from mutation.yml, which is a workflow the matrix does
+          # not contain. A baseline is detect-secrets' own output, read by a
+          # hook -- and by lint.yml, which has no changed-file gate at all,
+          # so a malformed one is still caught by the job that catches it
+          # today.
+          #
+          # Anchored on the *file* and not on the directory, which is the
+          # same staleness this comment declines below in the direction that
+          # looks cheap: `^\.github/mutation/` would exempt in advance any
+          # file a later change drops there, and two tests already load a
+          # script by path one directory over (`.github/scripts/`), so such
+          # a script would skip the matrix and take its own test with it.
+          # `.toml` rather than `bindings\.toml` so a second configuration
+          # needs no edit here; a script belongs in .github/scripts/, which
+          # is where the three of them are.
+          #
+          # A workflow is *not* on it, deliberately, and that is the answer
+          # to the other half of #239 rather than an omission. Which
+          # workflows the matrix reads is a judgement -- this file and what
+          # it calls, plus release.yml -- and naming the rest would be right
+          # today and stale the first time a sentinel is folded into the
+          # gate or one of these is split out, both of which have happened
+          # here. A stale list of that kind skips a matrix that should have
+          # run, which is the expensive direction; leaving every workflow
+          # change to run everything is the cheap one, at the cost this
+          # comment now records
+          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|HISTORY|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$|^\.github/mutation/[^/]*\.toml$|^\.secrets\..*baseline$'
           if [ ! -s files.txt ] || grep -qvE "$prose" files.txt; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "something the matrix reads changed: everything runs"

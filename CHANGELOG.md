@@ -2076,6 +2076,34 @@ release-notes length in the first place, and are still in
   and the paragraph says what the ratchet does and does not catch
   instead: a line that stops running is caught, a line still run by
   another test and asserted by none is what neither question sees.
+- **The prose allowlist covers the two file kinds nothing built reads**
+  (#239). `changes` answers whether the matrix has anything to check,
+  and its pattern was the root and `.github` prose alone — so a pull
+  request touching one file the matrix cannot read alongside prose ran
+  everything. The mutation configuration is on it now, cosmic-ray taking
+  that path as an argument from a workflow the matrix does not contain,
+  and so are the detect-secrets baselines, which are that tool's own
+  output read by a hook and by a workflow that has no changed-file gate
+  at all. It is anchored on the file --
+  `^\.github/mutation/[^/]*\.toml$` -- and not on the directory, that
+  being the same staleness this declines for workflows in the direction
+  that looks cheap: a prefix would exempt in advance whatever a later
+  change drops there, and two tests already load a script by path one
+  directory over, so such a script would skip the matrix and take its
+  own test with it. `.toml` rather than the one filename so a second
+  configuration needs no edit; a script belongs in `.github/scripts/`,
+  where all three are. Measured before and after against the file lists
+  of four real pull requests, with `/usr/bin/grep` rather than this
+  machine's `grep`: #236's `bindings.toml` and two markdown files went
+  from 23 jobs and 45.7 runner-minutes to a skipped matrix, a baseline
+  alone likewise, while #237's `silentpayments.py`, a bare `README.md`,
+  a file under `docs/` and an empty list all still run everything. A
+  workflow is deliberately not on the list, which is the other half of
+  #239 answered rather than omitted: which workflows the matrix reads is
+  a judgement — this file, what it calls, and `release.yml` — and a list
+  of the rest would be right today and stale the first time a sentinel
+  is folded into the gate, which skips a matrix that should have run.
+  The comment above the pattern carries that reasoning and the figure.
 
 ## v0.8.0.2
 
