@@ -219,7 +219,7 @@ repos:
   # is in pyproject.toml; codespell needs none today -- measured, with its
   # default dictionaries it finds nothing here to skip or allow for
   - repo: https://github.com/crate-ci/typos
-    rev: v1.49.0
+    rev: v1
     hooks:
       - id: typos
   - repo: https://github.com/DavidAnson/markdownlint-cli2
@@ -461,6 +461,6 @@ repos:
   # the only hook there: building metadata needs an index to fetch the
   # backend from, and pre-commit.ci has no network
   - repo: https://github.com/regebro/pyroma
-    rev: "5.0.1"
+    rev: "5.1b1"
     hooks:
       - id: pyroma
