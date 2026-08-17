@@ -153,8 +153,14 @@ uv lock
 
 # after adding a hex constant to a test module; the vendored vector
 # data has a baseline of its own, whose command is in CONTRIBUTING.md.
-# Neither file is excluded from the scan, only recorded as reviewed
-uvx --from detect-secrets detect-secrets scan --baseline .secrets.baseline
+# Neither file is excluded from the scan, only recorded as reviewed.
+# --slim and a redirect, not --baseline: the flag is what keeps a moved
+# line from rewriting the file, and --baseline writes the full form
+# whatever it read -- it also merges, so a redirect drops what an audit
+# marked; CONTRIBUTING.md carries both halves
+uvx --from detect-secrets detect-secrets scan --slim \
+    --exclude-files '^(\.secrets\..*baseline|tests/.*\.(csv|json))$' \
+    > .secrets.baseline
 ```
 
 ## The workflows that gate, and the ones that do not

@@ -418,20 +418,43 @@ targets and where every change lands; a tag on `main` is a release.
   regenerated:
 
   ```shell
-  # the tree, entropy detectors on; the vendored vector data is
-  # excluded by a filter the baseline itself records
-  uvx --from detect-secrets detect-secrets scan \
-      --baseline .secrets.baseline
+  # the tree, entropy detectors on. --slim omits `line_number` and
+  # `generated_at`, so the file stops changing when a flagged line
+  # moves; a fresh scan rather than `--baseline`, which writes the full
+  # form whatever it read -- `--slim` reaches `format_for_output` only on
+  # the branch that prints to stdout -- and therefore the exclusion
+  # spelled out rather than read back from the baseline's own filter
+  uvx --from detect-secrets detect-secrets scan --slim \
+      --exclude-files '^(\.secrets\..*baseline|tests/.*\.(csv|json))$' \
+      > .secrets.baseline
 
   # the vendored vector data, entropy detectors off: these files are
   # 64-character hex and nothing else, so a new vector would read as a
   # new secret. The paths are the hook's `files` pattern spelled out
-  uvx --from detect-secrets detect-secrets scan \
+  uvx --from detect-secrets detect-secrets scan --slim \
       --disable-plugin HexHighEntropyString \
       --disable-plugin Base64HighEntropyString \
       tests/*.csv tests/*.json \
       > .secrets.vectors.baseline
   ```
+
+  Both are slim, and what that costs is one field of the diff: a new
+  secret still arrives as a new `hashed_secret` under its filename, and
+  finding *where* it is takes a grep instead of a line number.
+  `detect-secrets audit` needs the full form and says so, which is a
+  reason to regenerate without `--slim` for an audit rather than to keep
+  the churn in the committed file.
+
+  The redirect costs a second thing, which is the one to know before
+  auditing: `--baseline` does not only save, it **merges**, and what it
+  carries forward is exactly the audit's product — `is_secret` and
+  `is_verified` per finding, "verification of secrets, both automated and
+  manual" in its own words. A scan into a file has no old baseline to
+  merge, so those marks go back to their defaults, and slim output prints
+  no `is_secret` at all when it is unset: the loss shows up as a diff of
+  nothing. Nothing is lost today, all 53 and all 466 findings being
+  unverified and none carrying `is_secret`, but an audit's marks want
+  saving elsewhere or re-applying after the next regeneration.
 
   read the diff before committing it, which is the whole point of a
   baseline: what appears there is what nobody has looked at yet

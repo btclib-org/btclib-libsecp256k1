@@ -1721,6 +1721,34 @@ release-notes length in the first place, and are still in
   size and truncated mtime match — the same window as the hand case,
   which is why that recipe wants the control run and not only the
   variable.
+- **Both secrets baselines are `--slim`, so a line that moves stops
+  rewriting them** (#230). The files carried `line_number` and
+  `generated_at`, and over #221 that meant a rewrite on all four pushes
+  recording nothing but one entry's number going 40, 48, 49 as a comment
+  block above it grew — a file that changes on pushes with nothing to do
+  with secrets being one a reader learns to skip. `--slim` omits both
+  fields, and it needs a fresh scan: `--baseline` writes the full form
+  whatever it read, `save_to_file` calling `format_for_output` with the
+  default `is_slim_mode=False`, where `--slim` is honoured only on the
+  branch that prints to stdout. So the exclusion the tree baseline's own
+  filter used to supply is spelled out in the command, and both baseline
+  files are named in it rather than the one `--baseline` would have
+  skipped by itself. Verified rather than assumed: 53 findings in the
+  tree baseline and 466 in the vectors one before and after, identical
+  as sets of filename, hash and type; both hooks pass; and with a line
+  inserted above every finding of `hashes.py` a regeneration is
+  byte-identical to the committed file, which is the whole of what the
+  churn was. The redirect costs two things and both are written where
+  they are paid. One field of the diff — a new secret still arrives as a
+  new `hashed_secret` under its filename, and finding *where* takes a
+  grep — and the merge `--baseline` was doing, which carried an audit's
+  own product forward: `is_secret` and `is_verified`, "verification of
+  secrets, both automated and manual" in `SecretsCollection.merge`'s
+  words. A scan into a file has nothing to merge, so those marks return
+  to their defaults, and slim output prints no `is_secret` when it is
+  unset, so the loss would show as a diff of nothing. Nothing is lost
+  today, all 53 and all 466 findings being unverified and none carrying
+  `is_secret`.
 
 ### CI
 

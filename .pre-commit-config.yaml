@@ -409,12 +409,26 @@ repos:
   #
   # The two hooks partition the tree: what the second matches, the first
   # excludes, through the filter recorded in its own baseline rather than a
-  # second copy of the pattern here. That filter also names the second
-  # baseline file, which is 40-character hashes by the hundred:
-  # detect-secrets skips a baseline of its own accord, but only the one
-  # --baseline names. Adding a vector to a file the second hook matches
+  # second copy of the pattern here. That filter also names both baseline
+  # files, which are 40-character hashes by the hundred: detect-secrets
+  # skips the one `--baseline` names of its own accord, and the pattern is
+  # what covers the other and the regeneration below, where no --baseline
+  # is passed at all. Adding a vector to a file the second hook matches
   # requires regenerating that baseline; see CONTRIBUTING.md, which carries
-  # both commands
+  # both commands.
+  #
+  # Both baselines are --slim, which omits `line_number` and
+  # `generated_at`: without it the file was rewritten whenever a flagged
+  # line moved, four times over one pull request recording nothing but a
+  # number going 40, 48, 49 — and a file that changes on pushes with
+  # nothing to do with secrets is one a reader learns to skip. What it
+  # costs is that a finding no longer says where it is, which is a grep,
+  # and that `detect-secrets audit` wants the full form: regenerate
+  # without --slim to audit, rather than keep the churn here. The
+  # regeneration passes no --baseline at all, so it also stops merging --
+  # and what --baseline merged was the audit's own product, `is_secret`
+  # and `is_verified`. Nothing carries either today; CONTRIBUTING.md says
+  # so where it names the audit
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
