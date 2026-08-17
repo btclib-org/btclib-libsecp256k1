@@ -1764,10 +1764,30 @@ release-notes length in the first place, and are still in
   not defects at all and stay: a line before a markdown link of 63, 84
   and 125 columns is short because nothing can follow it, and the filter
   measured the link's first word rather than the link. No hook does
-  this, which #233 asked about and answers no: the thresholds are a
+  this, which #233 asked about and answers no. The thresholds are a
   heuristic, a false positive has no `# noqa` to be marked with in
   prose, and a gate that is exact everywhere else is the wrong place for
-  one that is nearly right.
+  one that is nearly right — but the stronger half of that is the false
+  *negative*, and this change produced one of its own (#240). Correcting
+  a sentence in `CLAUDE.md` left a 35-column line mid-sentence under a
+  57-column one, and the detector that had just counted ten of exactly
+  that shape -- thirteen reported, ten of them defects -- walked past
+  it: 35 is under the 46-column ceiling but 57 is under the 65 the line
+  above has to reach, and the line at 57 is itself the same shape and
+  over the ceiling. A *pair* of short lines hides a widow, because the
+  first break is too long to be flagged and the second has no long line
+  above it. So what a hook would have missed here is the instance a
+  reader found, which is a better reason to decline it than the noise it
+  would have added — and the two short lines left in that paragraph
+  after the rewrap are token-forced, 47 columns before a 32-character
+  path and 58 before a 40-character one, the same shape as the three
+  links. Those are columns and not bytes, which is worth saying where
+  the figures are: the second line carries an em dash, three bytes and
+  one column, so `awk` in a byte locale and `wc -c` answer 60 where the
+  detector's own `len` answers 58, and every figure in this bullet is
+  the second kind. No consecutive short pair anywhere in it is what says
+  the rewrap is complete, and it is cheaper to check by eye than either
+  threshold.
 - **The worktree recipe costs a submodule clone, and the sentence under
   it counts it now** (#234). It said the venv and the C build "are the
   whole of the cost" and after the submodule line they are not: a linked
