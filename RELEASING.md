@@ -1,10 +1,10 @@
 # Release process
 
-Releases are published by the `release` workflow, which reuses the `lint`
-gate and the whole `test` build and test pipeline, and then uploads what
-the latter produced. Where
-it uploads is not an input to choose at dispatch time: a `v*` tag
-publishes to PyPI, a manual run publishes to TestPyPI. Both go through
+Releases are published by the `release` workflow, which reuses the
+`lint` gate and the whole `test` build and test pipeline, and then
+uploads what the latter produced. Where it uploads is not an input to
+choose at dispatch time: a `v*` tag publishes to PyPI, a manual run
+publishes to TestPyPI. Both go through
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so no
 long-lived token exists anywhere, and both upload PEP 740 attestations.
 The `attest` job then signs a build provenance statement for the sdist,
@@ -104,18 +104,17 @@ Then:
    submodule has moved since
 1. close the release notes. `CHANGELOG.md` and `HISTORY.md` are written
    as each change lands, not here, so what is left is to read the open
-   section of both against `git log`, drop the
-   `(work in progress, not released yet)` from each heading, and
-   renumber them if step 1 renumbered the version. `version-check`
-   refuses a tag whose section in either file is missing, empty, or still
-   carrying anything after the version in its heading, so a forgotten
-   retitle stops the release before the matrix builds anything. Dropping
-   those five words is the whole of what that check asks, and it asks it
-   of both files: it is the step this one exists to be, not a formality
-   downstream of it.
-   If the vendored libsecp256k1 moved, update the version named at the
-   top of `README.md` too (`grep -n 'wraps libsecp256k1' README.md`
-   finds the line without a search through the prose)
+   section of both against `git log`, drop the `(work in progress, not
+   released yet)` from each heading, and renumber them if step 1
+   renumbered the version. `version-check` refuses a tag whose section
+   in either file is missing, empty, or still carrying anything after
+   the version in its heading, so a forgotten retitle stops the release
+   before the matrix builds anything. Dropping those five words is the
+   whole of what that check asks, and it asks it of both files: it is
+   the step this one exists to be, not a formality downstream of it. If
+   the vendored libsecp256k1 moved, update the version named at the top
+   of `README.md` too (`grep -n 'wraps libsecp256k1' README.md` finds
+   the line without a search through the prose)
 1. give the pull request its title and its body before merging it, not
    after. The title is the version; the body says what the release is —
    what moved, what did not, and which of the two a user would notice.
@@ -360,26 +359,25 @@ Then:
    mirrors the page instead of trusting it live
 1. open the next version, in a pull request of its own and before
     anything else lands: bump `pyproject.toml` to a fourth number over
-    what was just published — `0.7.1.1` after `0.7.1` — and
-    run `uv lock`. It is a placeholder, and step 1 renumbers it if the
-    submodule moves before the next release; what it buys is a tree that
-    no longer claims to be a version it is not. `__version__` reads
-    installed metadata, so a checkout a developer installed stops
-    reporting itself as the release, and a report from it is unambiguous.
-    And pushing `v0.7.1` a second time — the mistake a just-finished
-    release invites — then fails at `version-check` in a minute, the
-    declared version having moved, rather than building the whole matrix
-    and dying at an upload PyPI refuses for a version it already carries.
-    A fourth number below the published one would be worse than no bump
-    at all: `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever
-    resolve it, and `version-check` accepts it, being digits and dots.
-    Open the section for it in `CHANGELOG.md` and in `HISTORY.md` at the
-    same time, headed
-    `## v<version> (work in progress, not released yet)` and empty: what
-    lands next then has somewhere to be written down as it lands, which
-    is the whole of step 2 — and, with one branch and no long-lived
-    release pull request to hold a body, the whole of what step 3 reads
-    the cycle off at the end of it
+    what was just published — `0.7.1.1` after `0.7.1` — and run `uv
+    lock`. It is a placeholder, and step 1 renumbers it if the submodule
+    moves before the next release; what it buys is a tree that no longer
+    claims to be a version it is not. `__version__` reads installed
+    metadata, so a checkout a developer installed stops reporting itself
+    as the release, and a report from it is unambiguous. And pushing
+    `v0.7.1` a second time — the mistake a just-finished release invites
+    — then fails at `version-check` in a minute, the declared version
+    having moved, rather than building the whole matrix and dying at an
+    upload PyPI refuses for a version it already carries. A fourth
+    number below the published one would be worse than no bump at all:
+    `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever resolve it,
+    and `version-check` accepts it, being digits and dots. Open the
+    section for it in `CHANGELOG.md` and in `HISTORY.md` at the same
+    time, headed `## v<version> (work in progress, not released yet)`
+    and empty: what lands next then has somewhere to be written down as
+    it lands, which is the whole of step 2 — and, with one branch and no
+    long-lived release pull request to hold a body, the whole of what
+    step 3 reads the cycle off at the end of it
 
 ## Rehearsing on TestPyPI
 

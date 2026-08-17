@@ -555,13 +555,13 @@ release-notes length in the first place, and are still in
   int and build the type from it. The int is the spelling that says what
   the number is, and it is the one the whole package uses now.
 - **What the eight cost, and what they cost now.** `main`'s spelling of
-  each call written out and alternated against the shipped one in a single
-  process over one build on the tree this branch lands as, minimum of 15
-  rounds — 500 000 calls for the
-  primitive, 300 000 for the serializations, 20 000 for the four hosts —
-  with every pair asserted to answer alike before it is timed, and a noise
-  row for each site rather than for one of them. An Apple M5, macOS 26.6,
-  arm64, CPython 3.14.6, microseconds per call:
+  each call written out and alternated against the shipped one in a
+  single process over one build on the tree this branch lands as,
+  minimum of 15 rounds — 500 000 calls for the primitive, 300 000 for
+  the serializations, 20 000 for the four hosts — with every pair
+  asserted to answer alike before it is timed, and a noise row for each
+  site rather than for one of them. An Apple M5, macOS 26.6, arm64,
+  CPython 3.14.6, microseconds per call:
 
   | | main | now | noise |
   | --- | --- | --- | --- |
@@ -1749,6 +1749,70 @@ release-notes length in the first place, and are still in
   unset, so the loss would show as a diff of nothing. Nothing is lost
   today, all 53 and all 466 findings being unverified and none carrying
   `is_secret`.
+- **Ten lines that stopped short mid-sentence are the paragraphs they
+  sit in, rewrapped** (#233). Each is the artifact an insertion leaves
+  in a block nothing reflows: the qualifier goes in, the line it lands
+  on stops early, and the diff of the change that made it shows a line
+  that was going to be rewritten anyway. The unit of repair is the block
+  and not the line, which #228 established the hard way — fixing the one
+  line #225 named left two more of the same shape. Twelve blocks moved
+  across `CHANGELOG.md`, `README.md`, `CONTRIBUTING.md`, `RELEASING.md`
+  and `HISTORY.md`, every one of them word-for-word identical to what it
+  said before, which is asserted rather than eyeballed: the rewrap
+  compares the joined words of the block before and after and refuses to
+  write where they differ. Three of the thirteen the issue counted are
+  not defects at all and stay: a line before a markdown link of 63, 84
+  and 125 columns is short because nothing can follow it, and the filter
+  measured the link's first word rather than the link. No hook does
+  this, which #233 asked about and answers no: the thresholds are a
+  heuristic, a false positive has no `# noqa` to be marked with in
+  prose, and a gate that is exact everywhere else is the wrong place for
+  one that is nearly right.
+- **The worktree recipe costs a submodule clone, and the sentence under
+  it counts it now** (#234). It said the venv and the C build "are the
+  whole of the cost" and after the submodule line they are not: a linked
+  worktree gets a module of its own rather than sharing the primary
+  checkout's, measured at 14 MB under `.git/worktrees/<wt>/modules` and
+  7 MB of tree, which is the same "minutes, not seconds" argument the
+  other two get. `--reference` is what a session asks about next and is
+  measured rather than reasoned about: it works, leaves the module
+  directory where git puts it, writes one `objects/info/alternates` at
+  the primary's `objects`, and comes to 128 KB against those 14 MB with
+  the primary's `core.worktree` untouched. What it costs is that pointer
+  — no copy of its own objects, so a `git gc` or a repack in the
+  primary, or moving it, can leave the worktree's submodule unable to
+  find them. What git keeps apart by giving each linked worktree a
+  module of its own is the submodule's *state*, so two worktrees can
+  have it at two commits; the object store inside that module follows
+  from where the state lives rather than from a refusal to share
+  objects, which is why `--reference` may share them and leaves
+  `core.worktree` alone. For a recipe that removes the worktree anyway
+  that is a trade worth declining knowingly. Two facts measured while
+  checking that go with it, both about a sharp edge: `core.worktree` is
+  a single value that a second checkout of one submodule can rewrite
+  under the first, and does not here; and `git worktree remove --force`
+  finishes with an initialized submodule inside, exit 0 and nothing left
+  for `git worktree prune`, so the recipe's last line needs no
+  companion.
+- **`silentpayments` says why its two widths are the package's only
+  public ones** (#232). Six modules name a buffer width privately and
+  this one does not, which after #221 made "the six modules read alike"
+  a claim a reader would test against the seventh. The rule is not the
+  one `xonly.py` states about its own: those are the size of a buffer
+  the module fills and unpacks, where these are lengths this module
+  answers a caller with. `SUMMARY_SIZE` has to be public — `ffi.sizeof`
+  of a struct, written down by no BIP, moving when libsecp256k1 moves,
+  and unknowable to a caller holding what `prevouts_summary` returned.
+  `LABEL_SIZE` is 33 and could be worked out, so what keeps it public is
+  that it has been since 0.8.0 and taking a released name private to
+  tidy an asymmetry is a break charged to a reader who never asked.
+  `keys._COMPRESSED_SIZE` is the same 33 and stays private: two callers'
+  arguments are checked against this one, `parse_label`'s octets and the
+  labels `_fill_label_cache` takes for `_scan_outputs_`, where nothing
+  in `keys` checks an argument against a width at all. What
+  `serialize_label` does with it is the other kind of use and is named
+  as such — unpacking the buffer this module declared, which is exactly
+  what `keys` does with its own.
 
 ### CI
 
@@ -1929,10 +1993,10 @@ release-notes length in the first place, and are still in
   v0.8.0.2 all published clean and none produced a GitHub release,
   recreated by hand from each run's own `sdist` and `attestation`
   artifacts every time
-- **A change to prose no longer rewrites `.secrets.baseline`** (#198). The
-  baseline recorded one finding in `CHANGELOG.md`, and this file grows
-  above it: of the forty commits before this one, forty rewrote the
-  baseline and thirty-three moved nothing in it but that finding's
+- **A change to prose no longer rewrites `.secrets.baseline`** (#198).
+  The baseline recorded one finding in `CHANGELOG.md`, and this file
+  grows above it: of the forty commits before this one, forty rewrote
+  the baseline and thirty-three moved nothing in it but that finding's
   `line_number`. What the rewrite costs is not the command that makes it
   — it is that every open pull request then conflicts there with every
   other and with `main`, whatever either of them touches, which is what
@@ -1940,16 +2004,16 @@ release-notes length in the first place, and are still in
   finding is a false positive this file's own entry above records: the
   `-DSECP256K1_BUILD_BENCHMARK=OFF` it names is quoted there as
   `cffi_build.py` writes it, and a string in straight quotes is what the
-  base64 detector reads. A
-  `pragma: allowlist secret` beside it takes it out of the baseline
-  without taking the quotes out of the sentence, they being why the
-  detector fires and so what the sentence is about. Measured against the
-  alternatives: dropping the quotes also clears it and says less; the
-  pragma on the previous line does *not* clear it, `is_line_allowlisted`
-  reading `context.previous_line` notwithstanding; and excluding the file
-  from the hook would take the keyword and provider-token detectors off
-  it too. The baseline is now written when a file that has a finding
-  changes, which was 7 of those 40 rather than all of them
+  base64 detector reads. A `pragma: allowlist secret` beside it takes it
+  out of the baseline without taking the quotes out of the sentence,
+  they being why the detector fires and so what the sentence is about.
+  Measured against the alternatives: dropping the quotes also clears it
+  and says less; the pragma on the previous line does *not* clear it,
+  `is_line_allowlisted` reading `context.previous_line` notwithstanding;
+  and excluding the file from the hook would take the keyword and
+  provider-token detectors off it too. The baseline is now written when
+  a file that has a finding changes, which was 7 of those 40 rather than
+  all of them
 - **`mutation.yml` says what its session cannot ask** (#222). The
   operators replace arithmetic, comparisons, literals, branches and
   decorators; not one of them puts a different expression in an argument
@@ -2504,12 +2568,12 @@ release-notes length in the first place, and are still in
 - **The documentation build is `docs.yml`, not the second job of
   `lint.yml`.** A failed docs build and a failed hook are two different
   verdicts about two different things, and one badge and one line in the
-  checks list each is what says so — the badge being a `docs` one added to
-  the second README row, beside `test` and `lint`, where the row already
-  ends with what read the docs makes of the same source. The job's display
-  name is unchanged,
-  which is what let it move without touching the branch rule: a required
-  context is matched by name, not by the workflow that reported it.
+  checks list each is what says so — the badge being a `docs` one added
+  to the second README row, beside `test` and `lint`, where the row
+  already ends with what read the docs makes of the same source. The
+  job's display name is unchanged, which is what let it move without
+  touching the branch rule: a required context is matched by name, not
+  by the workflow that reported it.
 - **Every job is named for the question it answers, and the aggregate is
   `test: every job passed`.** `Coverage` said which job it was rather than
   what it gates; the two suite matrices were *both* named
@@ -2733,30 +2797,31 @@ release-notes length in the first place, and are still in
 ### Packaging metadata
 
 - **`.gitignore` matches a versioned environment, and the sdist stops
-  shipping one.** `.venv`, `venv/` and `venv*/` between them do not match
-  `.venv-3.10`, which is what
-  `UV_PROJECT_ENVIRONMENT=.venv-3.10 uv run --python 3.10 --no-cache pytest`
-  creates — the way of trying another interpreter that keeps the default
-  environment rather than replacing it, and CONTRIBUTING.md now gives it
-  beside the run that replaces one. Nothing downstream caught the leftover:
-  uv writes a `.gitignore` holding `*` inside the environment it creates, so
-  `git status` was clean, while hatchling builds the sdist from the root file
+  shipping one.** `.venv`, `venv/` and `venv*/` between them do not
+  match `.venv-3.10`, which is what `UV_PROJECT_ENVIRONMENT=.venv-3.10
+  uv run --python 3.10 --no-cache pytest` creates — the way of trying
+  another interpreter that keeps the default environment rather than
+  replacing it, and CONTRIBUTING.md now gives it beside the run that
+  replaces one. Nothing downstream caught the leftover: uv writes a
+  `.gitignore` holding `*` inside the environment it creates, so `git
+  status` was clean, while hatchling builds the sdist from the root file
   alone and shipped the directory — 377 paths against 297 and 13,132,264
-  bytes against 3,076,714, measured on `38ee75b` with the environment present
-  either way (`tar -tzf dist/*.tar.gz | wc -l`), the rest of the archive
-  identical. The totals move with the vendored library and the difference
-  does not: it is the environment's `bin` and the four files beside it,
-  `lib/` being matched already by the Distribution section above.
-  `twine check --strict` passed on it; `pyroma --min 10` raised
-  `tarfile.AbsoluteLinkError` on `.venv-3.10/bin/python`, the tarfile data
-  filter refusing a link to an absolute path, so the packaging gate failed
-  on one symlink rather than on the stray paths, which are the difference
-  between those two counts. `check-manifest` names every one of them — it
-  compares the sdist with what git tracks — and is not in the `check` group;
-  the pattern states the same fact where a file becomes invisible rather
-  than where an archive is built. It is `.venv*/`, in place of the `.venv`
-  beside `venv*/`: a directory of that exact name is matched by it, and by
-  the stock `# Environments` block above.
+  bytes against 3,076,714, measured on `38ee75b` with the environment
+  present either way (`tar -tzf dist/*.tar.gz | wc -l`), the rest of the
+  archive identical. The totals move with the vendored library and the
+  difference does not: it is the environment's `bin` and the four files
+  beside it, `lib/` being matched already by the Distribution section
+  above. `twine check --strict` passed on it; `pyroma --min 10` raised
+  `tarfile.AbsoluteLinkError` on `.venv-3.10/bin/python`, the tarfile
+  data filter refusing a link to an absolute path, so the packaging gate
+  failed on one symlink rather than on the stray paths, which are the
+  difference between those two counts. `check-manifest` names every one
+  of them — it compares the sdist with what git tracks — and is not in
+  the `check` group; the pattern states the same fact where a file
+  becomes invisible rather than where an archive is built. It is
+  `.venv*/`, in place of the `.venv` beside `venv*/`: a directory of
+  that exact name is matched by it, and by the stock `# Environments`
+  block above.
 
 ## v0.7.1.3
 

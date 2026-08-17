@@ -630,19 +630,19 @@ in it all the same. None of the three changes the shape of a correction:
 whether a branch is squashed or fast-forwarded is decided when it lands,
 and by then the review has its record either way.
 
-Squash is the only merge *button* this repository enables, so there is no
-other to read; REPOSITORY.md has that setting, what the other two would
-have cost, and the fast-forward that is not a button at all. Auto-merge is
-what presses it, the dialog that switches it on carrying one method: what
-a pull request set to merge itself once the checks go green is holding is
-still
-`gh pr view <n> --json autoMergeRequest`. Enabling it is the way to not
-wait for a matrix that compiles C on every platform, and what it costs is
-the paragraph above: GitHub signs what it composes, so a pull request
-left to merge itself lands a commit signed by the web-flow key rather
-than by the maintainer, and one whose sha the branch never carried.
-GitHub only offers it while something is still pending, and it merges
-nothing the branch rule would not have let through by hand.
+Squash is the only merge *button* this repository enables, so there is
+no other to read; REPOSITORY.md has that setting, what the other two
+would have cost, and the fast-forward that is not a button at all.
+Auto-merge is what presses it, the dialog that switches it on carrying
+one method: what a pull request set to merge itself once the checks go
+green is holding is still `gh pr view <n> --json autoMergeRequest`.
+Enabling it is the way to not wait for a matrix that compiles C on every
+platform, and what it costs is the paragraph above: GitHub signs what it
+composes, so a pull request left to merge itself lands a commit signed
+by the web-flow key rather than by the maintainer, and one whose sha the
+branch never carried. GitHub only offers it while something is still
+pending, and it merges nothing the branch rule would not have let
+through by hand.
 
 Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
 nothing about a version needs to be touched in a pull request.

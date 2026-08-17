@@ -28,8 +28,7 @@ bitcoin-core-rpc carry the same three lines. -->
 Simple python bindings to
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1)
 ([v0.8.0](https://github.com/bitcoin-core/secp256k1/releases/tag/v0.8.0)).
-As used by the
-[btclib](https://github.com/btclib-org/btclib) library.
+As used by the [btclib](https://github.com/btclib-org/btclib) library.
 
 To install (and/or upgrade):
 
@@ -456,12 +455,11 @@ halves take it, which is what "the private halves above hand one object
 from a call to the next" already promised. What a class would add there
 is a name, not a saving. The second is the other side of the ledger:
 this package is [stateless by construction](#design), which is also why
-MuSig2 is not
-wrapped, so an object is an exception to that, with an owner and an
-invalidation and a threading story, and the rule is what the exception
-has to be paid for with. What it does not weigh is ergonomics — the line
-a caller does not have to write is real, and belongs in btclib along
-with the lifetimes.
+MuSig2 is not wrapped, so an object is an exception to that, with an
+owner and an invalidation and a threading story, and the rule is what
+the exception has to be paid for with. What it does not weigh is
+ergonomics — the line a caller does not have to write is real, and
+belongs in btclib along with the lifetimes.
 
 So the numbers **confirm** the rule rather than establish it, and it is
 worth being clear which of them would survive a different machine. Not
@@ -1057,8 +1055,8 @@ difference *in*: not the cryptography, which is upstream's regardless of
 which wrapper calls it, but the boundary each one places around the same
 calls — how much a caller pays to cross it. Measuring that honestly, and
 publishing the run rather than a claim, is what
-[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks)
-is for, and
+[btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) is
+for, and
 [the libsecp256k1 wrappers table](https://github.com/btclib-org/btclib-benchmarks/blob/main/results/libsecp256k1-wrappers.md)
 is where this project's own boundary is timed against the others', one
 run kept whole rather than reduced to a single figure — an order of

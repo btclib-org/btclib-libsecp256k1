@@ -277,12 +277,11 @@ call from three terms up, 64 terms 459.3 microseconds against 536.5, and
 the saving does not shrink with the count -- it is the naive form, one
 term at a time and one sum, libsecp256k1 exporting no batched
 multi-multiplication, so what it saves is the crossing and not the
-arithmetic. Like `xonly.from_prvkey` it
-is a composition rather than one libsecp256k1 call, and for the same
-reason — what it saves is the crossing between its halves, which is the
-caller's cost and not its own choice. The sum at infinity is
-`pubkey_sum`'s `None`, which a verification equation is written to land
-on.
+arithmetic. Like `xonly.from_prvkey` it is a composition rather than one
+libsecp256k1 call, and for the same reason — what it saves is the
+crossing between its halves, which is the caller's cost and not its own
+choice. The sum at infinity is `pubkey_sum`'s `None`, which a
+verification equation is written to land on.
 
 **And a wrong object is now told to the caller, wherever one is taken.**
 `keys.serialize` and `xonly.from_keypair` raised what libsecp256k1

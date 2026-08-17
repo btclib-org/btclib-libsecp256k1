@@ -104,9 +104,31 @@ git push origin HEAD:refs/heads/<branch>
 git worktree remove --force "$WT" # removing it is part of finishing
 ```
 
-The venv and the C build are the whole of the cost, and they buy the thing
-that matters: a commit cannot contain work that was never in it, and the
-maintainer's branch does not move under them.
+The venv, the C build and a second clone of the submodule are the whole
+of the cost, and they buy the thing that matters: a commit cannot
+contain work that was never in it, and the maintainer's branch does not
+move under them. The clone is the third of those because a linked
+worktree gets a submodule module of its own rather than sharing the
+primary checkout's — `secp256k1/.git` there reads `gitdir:
+…/.git/worktrees/<wt>/modules/secp256k1` — which was measured at 14 MB
+under `.git/worktrees/<wt>/modules` and 7 MB of tree. `--reference`
+against the primary's module is what a session asks about next, and it
+works: `git submodule update --init --reference
+<primary>/.git/modules/secp256k1 secp256k1` leaves the module directory
+exactly where git puts it, writes one `objects/info/alternates` pointing
+at the primary's `objects`, and measures **128 KB** against those 14 MB,
+with the primary's own `core.worktree` untouched and its submodule
+clean. What it costs is the pointer: the worktree's submodule then has
+no copy of its own objects, so a `git gc` or a repack in the primary —
+or moving or deleting it — can leave this one unable to find them. What
+git is keeping apart by giving each linked worktree a module of its own
+is the submodule's *state*, so that two worktrees can have it checked
+out at two commits; the object store sitting inside that module is a
+consequence of where the state lives rather than a refusal to share
+objects, which is why `--reference` is allowed to share them and why it
+changes nothing about `core.worktree`. For a recipe whose last line
+removes the worktree anyway that is a trade worth declining, and
+declining knowingly is the point of the paragraph.
 
 **The submodule line is what makes the rest of the recipe run**, and
 leaving it out costs a session rather than a build: `git submodule status`
@@ -117,6 +139,17 @@ the two things that are not wrong. CI never meets it, every checkout there
 passing `submodules: true`. It is the same sentence as the one below about
 `refs/stash`: a worktree isolates files, and neither a submodule checkout
 nor a ref is one.
+
+**Two things the recipe leans on, both measured rather than assumed**, and
+worth knowing because a submodule inside a linked worktree is a known sharp
+edge. `core.worktree` in `.git/modules/<name>/config` is a single value, so
+a second checkout of one submodule can rewrite it under the first — and
+does not here, git giving the linked worktree its own module: the primary's
+`core.worktree` still reads `../../../secp256k1` and `git -C secp256k1
+status` there stays clean through the whole sequence. And `git worktree
+remove --force` still finishes with an initialized submodule inside: exit
+0, tree gone, `.git/worktrees` gone with it, nothing left for
+`git worktree prune`. So the recipe's last line needs no companion.
 
 **Never `git stash`, in the primary checkout or in a worktree:
 `refs/stash` is shared.** A worktree isolates files, not refs, so

@@ -39,7 +39,26 @@ from .context import ctx
 # summary's is asked of the struct rather than written down, so that a
 # libsecp256k1 that changes it changes this too; the label's is the 33
 # bytes of a compressed point, which is its serialization and not the 68
-# of the object holding it
+# of the object holding it.
+#
+# Public, where the widths of the other six modules are private, and the
+# question those answer is a different one: `xonly.py` states its own for
+# the buffer it unpacks, and nothing outside the module needs it. This
+# module answers a caller two lengths (#232). `SUMMARY_SIZE` is the one
+# that has to be public: it is `ffi.sizeof` of a struct, no BIP writes it
+# down, it moves when libsecp256k1 moves, and a caller holding what
+# `prevouts_summary` returned can learn how many octets that is nowhere
+# else -- its docstring shows the check. `LABEL_SIZE` is 33 because a
+# label is a compressed point, so a caller could work it out where it
+# could not work the other out; what keeps it public is that it has been
+# since 0.8.0, and taking a released name private to tidy an asymmetry is
+# a break charged to a reader who never asked. `keys._COMPRESSED_SIZE` is
+# the same 33 and stays private: nothing there checks a caller's argument
+# against it, where two callers' arguments are checked against this one --
+# `parse_label`'s octets and the labels `_fill_label_cache` takes for
+# `_scan_outputs_`. What `serialize_label` does with it is not that: it
+# unpacks the buffer this module declared, which is exactly what `keys`
+# does with its own
 SUMMARY_SIZE = ffi.sizeof("secp256k1_silentpayments_prevouts_summary")
 LABEL_SIZE = 33
 
