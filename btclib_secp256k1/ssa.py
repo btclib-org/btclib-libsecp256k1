@@ -23,6 +23,16 @@ from .context import ctx
 # survive the preprocessing of the headers into cffi definitions
 EXTRAPARAMS_MAGIC = b"\xda\x6f\xb3\x8c"
 
+# the width of a BIP340 signature: 64 bytes, which is what `_sign32` and
+# `_sign_custom` write and what `_verify_` and `verify` read back, so the
+# one statement of it answers for the argument checks as well as for the
+# buffer, whose type is built from it. It saves some hundredths of a
+# microsecond on calls of 30.20 and 30.54, where timing each of those
+# against itself moves 0.08 and 0.003: nothing that measurement resolves,
+# and not the reason either -- `xonly.py` says the reason
+_SIGNATURE_SIZE = 64
+_SIGNATURE_BUFFER_TYPE = ffi.typeof(f"char[{_SIGNATURE_SIZE}]")
+
 # the tag secp256k1_schnorrsig_sign gives its nonce function, and what
 # makes the derivation BIP340's rather than another protocol's
 _NONCE_ALGO = b"BIP0340/nonce"
@@ -499,7 +509,7 @@ def _verify_(
         ValueError: if the signature is not 64 bytes.
     """
     msg_bytes = octets(msg_bytes, "message")
-    signature_bytes = octets(signature_bytes, "signature", 64)
+    signature_bytes = octets(signature_bytes, "signature", _SIGNATURE_SIZE)
 
     verified = lib.secp256k1_schnorrsig_verify(
         ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
@@ -544,7 +554,7 @@ def verify(
     # key, and tests/test_parsed_keys.py asserts the two answer alike
     xonly_pubkey = xonly.parse(pubkey_bytes)
     msg_bytes = octets(msg_bytes, "message")
-    signature_bytes = octets(signature_bytes, "signature", 64)
+    signature_bytes = octets(signature_bytes, "signature", _SIGNATURE_SIZE)
     return bool(
         lib.secp256k1_schnorrsig_verify(
             ctx, signature_bytes, msg_bytes, len(msg_bytes), xonly_pubkey
@@ -636,12 +646,12 @@ def _sign32(
     """
     msg_bytes = octets(msg_bytes, "message hash", 32)
 
-    sig = ffi.new("char[64]")
+    sig = ffi.new(_SIGNATURE_BUFFER_TYPE)
     if not lib.secp256k1_schnorrsig_sign32(
         ctx, sig, msg_bytes, keypair_obj, entropy(aux_rand32)
     ):
         raise RuntimeError("schnorr signing failed")
-    signature_bytes = ffi.unpack(sig, ffi.sizeof(sig))
+    signature_bytes = ffi.unpack(sig, _SIGNATURE_SIZE)
     if verify:
         _abort_unless_verified(keypair_obj, msg_bytes, signature_bytes)
     return signature_bytes
@@ -678,7 +688,7 @@ def _sign_custom(
     """
     msg_bytes = octets(msg_bytes, "message")
 
-    sig = ffi.new("char[64]")
+    sig = ffi.new(_SIGNATURE_BUFFER_TYPE)
     ndata = ffi.new("char[32]", entropy(aux_rand32))
     extraparams = ffi.new("secp256k1_schnorrsig_extraparams *")
     extraparams.magic = EXTRAPARAMS_MAGIC
@@ -691,7 +701,7 @@ def _sign_custom(
         ctx, sig, msg_bytes, len(msg_bytes), keypair_obj, extraparams
     ):
         raise RuntimeError("schnorr signing failed")
-    signature_bytes = ffi.unpack(sig, ffi.sizeof(sig))
+    signature_bytes = ffi.unpack(sig, _SIGNATURE_SIZE)
     if verify:
         _abort_unless_verified(keypair_obj, msg_bytes, signature_bytes)
     return signature_bytes

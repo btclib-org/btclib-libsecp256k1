@@ -19,6 +19,19 @@ from .context import ctx
 from .dsa import serialize_der
 from .keys import serialize
 
+# the width of a compact signature, in both directions: it is what
+# `serialize_compact` writes and what `parse_compact` accepts, so the
+# statement of it serves the argument check too, and the buffer's type is
+# built from it. `ffi.sizeof` of a cdata is not asked per call, which is
+# worth a hundredth of a microsecond of the 0.272 that serialization
+# costs -- 0.015 in the session `xonly.py` names, and not a figure this
+# site can be held to between sessions: that comment says why. The
+# recovery id is the `int *` beside it and is not a buffer anything
+# unpacks, so its cdecl stays spelled in full. `xonly.py` carries the
+# session behind the spelling
+_COMPACT_SIZE = 64
+_COMPACT_BUFFER_TYPE = ffi.typeof(f"char[{_COMPACT_SIZE}]")
+
 
 def _abort_unless_recovered(
     signature: CData, msg_bytes: bytes, prvkey_bytes: bytes
@@ -354,7 +367,7 @@ def parse_compact(signature_bytes: BytesLike, recid: int) -> CData:
         ValueError: if the signature is not 64 bytes, if r or s is at or
             above the group order, or if recid is outside 0 to 3.
     """
-    signature_bytes = octets(signature_bytes, "signature", 64)
+    signature_bytes = octets(signature_bytes, "signature", _COMPACT_SIZE)
     recid = in_range(recid, "recovery id", 3)
 
     signature = ffi.new("secp256k1_ecdsa_recoverable_signature *")
@@ -384,11 +397,11 @@ def serialize_compact(signature: CData) -> tuple[bytes, int]:
         RuntimeError: if libsecp256k1 fails for any other reason, which
             a signature it parsed cannot make it do.
     """
-    sig_bytes = ffi.new("char[64]")
+    sig_bytes = ffi.new(_COMPACT_BUFFER_TYPE)
     recid = ffi.new("int *")
     serialized = lib.secp256k1_ecdsa_recoverable_signature_serialize_compact(
         ctx, sig_bytes, recid, signature
     )
     if not serialized:
         raise RuntimeError("signature serialization failed")
-    return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes)), recid[0]
+    return ffi.unpack(sig_bytes, _COMPACT_SIZE), recid[0]

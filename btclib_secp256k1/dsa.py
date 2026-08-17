@@ -25,6 +25,38 @@ from ._scalar import in_range, octets, optional_entropy, scalar
 from ._secret import take
 from .context import ctx
 
+# the two buffers a signature is serialized into, and the lengths that go
+# with them in both directions: `_parsed` accepts a compact signature of
+# the width `serialize_compact` writes, so one statement of it answers
+# for the argument check as well. `ffi.sizeof` of a cdata is asked at
+# neither call, which is worth a hundredth of a microsecond of the 0.278
+# the DER serialization costs and of the 0.182 the compact one does --
+# 0.012 and 0.006 in the session `xonly.py` names, and not a figure this
+# site can be held to between sessions: that comment says why.
+#
+# The compact width is an int and the DER capacity is not, which is the
+# one place this module departs from the other five, and `length[0]` is
+# the reason: what `serialize_der` unpacks is the length libsecp256k1
+# reports back, so a capacity above 72 is absorbed on the way out and no
+# test can tell it from 72 -- verified, 73 leaves the suite passing where
+# 71 fails `test_der_reaches_all_72_octets`. Written as an int it would
+# be a number the mutation operator reaches and nothing checks, which is
+# the shape `.github/mutation/bindings.toml` records as closed, six of
+# thirteen survivors having been it. So it stays inside the cdecl, where
+# the width is still stated once and `ffi.sizeof` derives the capacity
+# from the buffer's own type -- at import, not per call.
+#
+# 72 is the maximum a signature of this curve can encode to, and it is
+# structural rather than generous: secp256k1_ecdsa_sig_serialize writes
+# 6 + lenR + lenS, and each of those is at most 33 -- 32 octets of
+# scalar and the leading zero DER wants when the top bit is set.
+# `to_der` reaches it, a high-s signature being one it serializes rather
+# than refuses
+_DER_BUFFER_TYPE = ffi.typeof("char[72]")
+_DER_SIZE = ffi.sizeof(_DER_BUFFER_TYPE)
+_COMPACT_SIZE = 64
+_COMPACT_BUFFER_TYPE = ffi.typeof(f"char[{_COMPACT_SIZE}]")
+
 
 @overload
 def nonce_rfc6979(
@@ -792,7 +824,7 @@ def _parsed(signature_bytes: BytesLike, compact: bool) -> CData | None:
     signature_bytes = octets(signature_bytes, name)
     signature = ffi.new("secp256k1_ecdsa_signature *")
     if compact:
-        if len(signature_bytes) != 64:
+        if len(signature_bytes) != _COMPACT_SIZE:
             return None
         parsed = lib.secp256k1_ecdsa_signature_parse_compact(
             ctx, signature, signature_bytes
@@ -857,21 +889,20 @@ def serialize_der(signature: CData) -> bytes:
             72-byte buffer makes unreachable. `context.check` is what
             tells the two apart.
     """
-    # 72 is the maximum a signature of this curve can encode to, and it
-    # is structural rather than generous: secp256k1_ecdsa_sig_serialize
-    # writes 6 + lenR + lenS, and each of those is at most 33 -- 32
-    # octets of scalar and the leading zero DER wants when the top bit
-    # is set. `to_der` reaches it, a high-s signature being one it
-    # serializes rather than refuses.
+    # the length passed in is `ffi.sizeof` of the buffer's own type, so
+    # the two cannot drift apart -- the top of this module says where 72
+    # comes from and why it is the one width not spelled as an int -- and
+    # what comes out is what libsecp256k1 says it wrote, this being the
+    # one serialization here whose length varies, 70 to 72 depending on
+    # how many octets r and s need. Where the length is fixed the width
+    # itself is unpacked instead, and keys.serialize says why.
     #
-    # The number is written once and the rest is derived from it: the
-    # length passed in is the buffer's own size, so the two cannot drift
-    # apart, and what comes out is what libsecp256k1 says it wrote --
-    # this being the one serialization here whose length varies, 70 to 72
-    # depending on how many octets r and s need. Where the length is
-    # fixed the buffer is unpacked instead, and keys.serialize says why
-    sig_bytes = ffi.new("char[72]")
-    length = ffi.new("size_t *", ffi.sizeof(sig_bytes))
+    # The length *object* is built per call and not hoisted, for the
+    # thread-safety reason keys.serialize gives: libsecp256k1 writes 0
+    # into it before it does anything and a shared one left at zero would
+    # refuse every later serialization
+    sig_bytes = ffi.new(_DER_BUFFER_TYPE)
+    length = ffi.new("size_t *", _DER_SIZE)
     serialized = lib.secp256k1_ecdsa_signature_serialize_der(
         ctx, sig_bytes, length, signature
     )
@@ -896,10 +927,10 @@ def serialize_compact(signature: CData) -> bytes:
             signature it parsed cannot make it do. `context.check` is
             what tells the two apart.
     """
-    sig_bytes = ffi.new("char[64]")
+    sig_bytes = ffi.new(_COMPACT_BUFFER_TYPE)
     serialized = lib.secp256k1_ecdsa_signature_serialize_compact(
         ctx, sig_bytes, signature
     )
     if not serialized:
         raise RuntimeError("signature serialization failed")
-    return ffi.unpack(sig_bytes, ffi.sizeof(sig_bytes))
+    return ffi.unpack(sig_bytes, _COMPACT_SIZE)

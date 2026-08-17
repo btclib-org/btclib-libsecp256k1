@@ -30,24 +30,23 @@ from .context import ctx
 COMPRESSED = 258
 UNCOMPRESSED = 2
 
-# the two buffers `serialize` writes into, and the lengths it declares
-# them with. The pairing is what these are for: each size is
-# `ffi.sizeof` of the very type beside it, so the buffer and the length
-# cannot say different numbers, and stating the width once is what asked
-# for a type at module level in the first place. What it saves is the
-# `ffi.sizeof` per call, 0.0175 microseconds.
+# the two buffers `serialize` writes into, and the lengths it declares them
+# with. The pairing is what these are for: each type is `ffi.typeof` of the
+# width beside it, so the buffer and the length cannot say different
+# numbers, and neither is `ffi.sizeof` of a cdata per call. This is the one
+# spelling every unpacked buffer in the package uses; `xonly.py` carries
+# the session and the reason.
 #
 # It is not hoisted for the `ffi.new`. cffi already caches the parse of
 # a literal cdecl, so a hoisted type beats one by 0.003 microseconds --
 # real, 4.3% on a noise row of 0.5%, and an order below the 0.054 an
-# interpolated cdecl gives back, which is the figure a hoist has to earn
-# to be worth spelling a width twice or naming every cdecl in the
-# package. So the length pointer below stays spelled in full, like every
-# other `ffi.new` here. `xonly.py` carries the session
-_COMPRESSED_BUFFER_TYPE = ffi.typeof("char[33]")
-_COMPRESSED_SIZE = ffi.sizeof(_COMPRESSED_BUFFER_TYPE)
-_UNCOMPRESSED_BUFFER_TYPE = ffi.typeof("char[65]")
-_UNCOMPRESSED_SIZE = ffi.sizeof(_UNCOMPRESSED_BUFFER_TYPE)
+# interpolated cdecl gives back. What asks for a name here is the length,
+# and the type comes along with it: so the length pointer below stays
+# spelled in full, like every cdecl whose buffer nothing unpacks
+_COMPRESSED_SIZE = 33
+_COMPRESSED_BUFFER_TYPE = ffi.typeof(f"char[{_COMPRESSED_SIZE}]")
+_UNCOMPRESSED_SIZE = 65
+_UNCOMPRESSED_BUFFER_TYPE = ffi.typeof(f"char[{_UNCOMPRESSED_SIZE}]")
 
 
 def prvkey_verify(prvkey: BytesLike | int) -> bool:
@@ -1073,11 +1072,11 @@ def serialize(pubkey: CData, compressed: bool = True) -> bytes:
         >>> keys.serialize(keys.parse(uncompressed)).hex()[:10]
         '0279be667e'
     """
-    # the buffer's type and the size are declared together at the top of
-    # this module, each size being `ffi.sizeof` of the type beside it, so
-    # the two cannot say different numbers and neither is worked out
-    # again here. The flag is decided in the branch that picks the
-    # buffer, so the one condition is asked once.
+    # the width and the buffer's type are declared together at the top of
+    # this module, each type built from the width beside it, so the two
+    # cannot say different numbers and neither is worked out again here.
+    # The flag is decided in the branch that picks the buffer, so the one
+    # condition is asked once.
     #
     # What is unpacked is the buffer, not the length libsecp256k1 reports
     # back: this serialization has one length per flag, so a buffer of

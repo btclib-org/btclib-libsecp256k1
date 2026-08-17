@@ -18,6 +18,17 @@ from ._secret import take
 from .context import ctx
 from .keys import parse, serialize
 
+# the width of an ElligatorSwift encoding: 64 bytes, the two field
+# elements it is. `create` and `_encode_` write it, `_decode_` and `xdh`
+# accept it, and the one statement of it answers for all four -- the
+# buffer's type is built from it and so is every length check. It saves
+# some hundredths of a microsecond on calls of 19.90 and 14.85, where
+# timing each of those against itself moves 0.004 and 0.10: nothing that
+# measurement resolves, and not the reason either -- `xonly.py` says the
+# reason
+_ENCODING_SIZE = 64
+_ENCODING_BUFFER_TYPE = ffi.typeof(f"char[{_ENCODING_SIZE}]")
+
 
 def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> bytes:
     """Create the 64-byte ElligatorSwift encoding of a private key's public key.
@@ -40,12 +51,12 @@ def create(prvkey: BytesLike | int, aux_rand32: BytesLike | None = None) -> byte
     """
     prvkey_bytes = scalar(prvkey, "private key")
 
-    ell_bytes = ffi.new("char[64]")
+    ell_bytes = ffi.new(_ENCODING_BUFFER_TYPE)
     if not lib.secp256k1_ellswift_create(
         ctx, ell_bytes, prvkey_bytes, entropy(aux_rand32)
     ):
         raise ValueError("invalid private key: not in [1, n-1]")
-    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
+    return ffi.unpack(ell_bytes, _ENCODING_SIZE)
 
 
 def _encode_(pubkey: CData, aux_rand32: BytesLike | None = None) -> bytes:
@@ -70,12 +81,12 @@ def _encode_(pubkey: CData, aux_rand32: BytesLike | None = None) -> bytes:
         RuntimeError: if libsecp256k1 fails to encode, which no valid
             input can make it do.
     """
-    ell_bytes = ffi.new("char[64]")
+    ell_bytes = ffi.new(_ENCODING_BUFFER_TYPE)
     aux_rand32_bytes = entropy(aux_rand32)
     encoded = lib.secp256k1_ellswift_encode(ctx, ell_bytes, pubkey, aux_rand32_bytes)
     if not encoded:
         raise RuntimeError("ElligatorSwift encoding failed")
-    return ffi.unpack(ell_bytes, ffi.sizeof(ell_bytes))
+    return ffi.unpack(ell_bytes, _ENCODING_SIZE)
 
 
 def encode(pubkey_bytes: BytesLike, aux_rand32: BytesLike | None = None) -> bytes:
@@ -125,7 +136,7 @@ def _decode_(ell_bytes: BytesLike) -> CData:
         RuntimeError: if libsecp256k1 fails to decode, which no 64 bytes
             can make it do.
     """
-    ell_bytes = octets(ell_bytes, "ElligatorSwift public key", 64)
+    ell_bytes = octets(ell_bytes, "ElligatorSwift public key", _ENCODING_SIZE)
 
     pubkey = ffi.new("secp256k1_pubkey *")
     if not lib.secp256k1_ellswift_decode(ctx, pubkey, ell_bytes):
@@ -212,8 +223,8 @@ def xdh(
             0 or 1, or if the private key is not 32 bytes, does not fit
             in them, or is not a valid scalar.
     """
-    ell_a_bytes = octets(ell_a_bytes, "ElligatorSwift public key of A", 64)
-    ell_b_bytes = octets(ell_b_bytes, "ElligatorSwift public key of B", 64)
+    ell_a_bytes = octets(ell_a_bytes, "ElligatorSwift public key of A", _ENCODING_SIZE)
+    ell_b_bytes = octets(ell_b_bytes, "ElligatorSwift public key of B", _ENCODING_SIZE)
     # 0 is A and 1 is B, which is what the argument's own name says
     party = in_range(party, "party", 1)
 

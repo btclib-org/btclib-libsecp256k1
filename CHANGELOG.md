@@ -400,12 +400,112 @@ release-notes length in the first place, and are still in
   beside the hoisted types.
 - **`ffi.sizeof` of a buffer whose size is a constant is not asked per
   call**, and that is what asked `keys.serialize` for a type at module
-  level: each size is `ffi.sizeof` of the very type beside it, so the
+  level: the width is stated once and the type built from it, so the
   buffer and the length cannot say different numbers, and the 0.0175
   microseconds is not paid at every call. `keys.serialize` also decides
   its flag in the branch that picks its buffer, so the one condition is
   asked once. The length *object* is still built per call, for the
   thread-safety reason its comment gives.
+- **Every buffer in the package whose bytes are unpacked is spelled that
+  way now**, the eight sites that still asked `ffi.sizeof` of a cdata
+  per call included: `dsa.serialize_der`, `dsa.serialize_compact`,
+  `recovery.serialize_compact`, `hashes.tagged_sha256`,
+  `ellswift.create`, `ellswift._encode_`, `ssa._sign32` and
+  `ssa._sign_custom`. An int constant states the width, `ffi.typeof` of
+  it is the buffer's type, and that same constant is the length — and
+  where a module validates an argument against the width it writes,
+  `dsa`, `recovery`, `ssa` and `ellswift` check it against the constant
+  rather than against a second copy of the number.
+- **What the mutants say, which is not that there are more of them.**
+  `core/NumberReplacer` emits two mutants per numeric literal — `dsa.py`
+  holds 20 and `cosmic-ray init` enumerates 40 of them among its 376 — and
+  an AST census of the package counts 67 literals before this change and
+  67 after: `ellswift` sheds two and `ssa` one, `hashes` gains one and
+  `keys` two, and the surface is the size it was. Only three of the
+  seven widths had no int literal anywhere before (`hashes._HASH_SIZE`,
+  `keys._COMPRESSED_SIZE`, `keys._UNCOMPRESSED_SIZE`), so six mutants are
+  new; the other four replace the seven literals that sat at the
+  validation sites — `dsa`'s `!= 64`, `recovery.parse_compact`,
+  `ssa._verify_` and `ssa.verify`, `ellswift._decode_` and both of
+  `xdh`'s — which were fourteen of their own.
+  What changed is what each covers: a width inside `"char[64]"` was
+  reachable by no operator, so a wrong *buffer* was a mutation nobody
+  could ask about, and the mutable copy answered only for the argument
+  check. One number answers for both now, so each of the fourteen tests
+  both — same count, more code under each. All fourteen die, each applied
+  to the source one at a time with bytecode writing off and a passing
+  control run either side.
+- **The DER capacity is the one width not written as an int**, and it is
+  the site where taking that trade would have cost a kill rather than
+  bought one: what `serialize_der` unpacks is `length[0]`, the length
+  libsecp256k1 reports back, so 73 leaves the whole suite passing where 71
+  fails `test_der_reaches_all_72_octets` — the shape
+  `.github/mutation/bindings.toml` records as closed, six of thirteen
+  survivors, answered by deriving the capacity from the buffer rather than
+  writing it twice. So it keeps `ffi.typeof("char[72]")` with `ffi.sizeof`
+  of it, asked at import and not per call. Of the 40 `NumberReplacer`
+  mutants `cosmic-ray init` enumerates in the module, the two that fall in
+  the declaration block are both on `_COMPACT_SIZE` and none on those two
+  lines: the width is stated once and there is no int for the operator to
+  move.
+- **What consolidating costs, since nothing else records it.** `ellswift`
+  had three independently mutable copies of 64 — `_decode_` and both of
+  `xdh`'s — and `ssa` had two; each is one constant now, so a single
+  mutant changes every site at once and dies on whichever test reaches it
+  first. Nothing is hidden today: every one of those seven literals was
+  mutated on `main`, one at a time, and each dies on its own. But a check
+  that later loses the test that covers it can no longer surface as a
+  survivor, and `bindings.toml` asks for a survivor list to be read
+  expecting nothing — so the trade is named here rather than left for a
+  session to rediscover.
+- **Four of the eight save nothing the measurement can resolve, and are
+  spelled that way regardless.** The saving is 2.65% to 5.53% of the four
+  serializations, and some hundredths of a microsecond of the two
+  `ellswift` encodings and the two `ssa` signings, which cost 14.85 to
+  30.54 — where timing each of those four against *itself* moves 0.003 to
+  0.10, so the effect is under the resolution of its own measurement.
+  What decided them is not the figure: a reader cannot see the cost of a
+  host, so two spellings of one shape would leave the difference
+  unexplainable at both, and a comment saying why a site was *left* alone
+  is a comment about a non-change. One spelling is the whole of the
+  reason, and the saving is what pays for the four where it shows.
+- **`keys.py` derives its two the other way round**, so the six modules
+  read alike: it stated `ffi.typeof("char[33]")` and took the size as
+  `ffi.sizeof` of that type, where `xonly` and `silentpayments` state an
+  int and build the type from it. The int is the spelling that says what
+  the number is, and it is the one the whole package uses now.
+- **What the eight cost, and what they cost now.** `main`'s spelling of
+  each call written out and alternated against the shipped one in a single
+  process over one build on the tree this branch lands as, minimum of 15
+  rounds — 500 000 calls for the
+  primitive, 300 000 for the serializations, 20 000 for the four hosts —
+  with every pair asserted to answer alike before it is timed, and a noise
+  row for each site rather than for one of them. An Apple M5, macOS 26.6,
+  arm64, CPython 3.14.6, microseconds per call:
+
+  | | main | now | noise |
+  | --- | --- | --- | --- |
+  | `ffi.unpack` of a 64-byte buffer | 0.0690 | 0.0520 | 0.0005 |
+  | `dsa.serialize_compact` | 0.1823 | 0.1765 | 0.0007 |
+  | `dsa.serialize_der` | 0.2784 | 0.2665 | 0.0008 |
+  | `recovery.serialize_compact` | 0.2720 | 0.2569 | −0.0009 |
+  | `hashes.tagged_sha256` of an empty message | 0.5957 | 0.5800 | 0.0007 |
+
+  The per-site saving is 0.006 to 0.016, and it is neither one number nor
+  the primitive's 0.017. Within a session the noise rows move under 0.001,
+  so no row here is noise; across four sessions the same site moved by
+  more than that — `dsa.serialize_compact` between 0.006 and 0.013, the
+  lowest of the four every time, `recovery` and `hashes` the highest. So
+  what the measurement supports is a hundredth of a microsecond at a
+  serialization rather than a figure per site, and no row is a regression.
+
+  And the four hosts the saving disappears into, each timed against itself
+  so that the row *is* the resolution: `ellswift.encode` 14.9537 and
+  14.8501, `ellswift.create` 19.9003 and 19.9046, `ssa.sign` 30.2860 and
+  30.2031, `ssa.sign_custom` 30.5408 and 30.5379 — moving 0.003 to 0.10
+  either way around an effect of some hundredths. Every figure in the
+  comments of `dsa.py`, `recovery.py`, `hashes.py`, `ellswift.py`,
+  `ssa.py` and the last paragraph of `xonly.py`'s is from this session.
 - **`_secret.take` zeroes through the view it already holds.** It built
   an `ffi.buffer` to read the secret and then called `wipe`, which built
   a second one over the same cdata. The statement that writes the zeros

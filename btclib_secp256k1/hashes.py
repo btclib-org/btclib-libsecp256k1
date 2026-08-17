@@ -14,6 +14,15 @@ from . import BytesLike, ffi, lib
 from ._scalar import octets
 from .context import ctx
 
+# the buffer the hash is written into: SHA256 has one output length and
+# this is it. The width is stated once and the type is built from it, and
+# what that saves is `ffi.sizeof` of a cdata per call, a hundredth of a
+# microsecond of the 0.596 a tagged hash of an empty message costs --
+# 0.016 in the session `xonly.py` names, and not a figure this site can be
+# held to between sessions: that comment says why
+_HASH_SIZE = 32
+_HASH_BUFFER_TYPE = ffi.typeof(f"char[{_HASH_SIZE}]")
+
 
 def tagged_sha256(tag_bytes: BytesLike, msg_bytes: BytesLike) -> bytes:
     """Return the BIP340 tagged hash of a message.
@@ -41,9 +50,9 @@ def tagged_sha256(tag_bytes: BytesLike, msg_bytes: BytesLike) -> bytes:
     """
     tag_bytes = octets(tag_bytes, "tag")
     msg_bytes = octets(msg_bytes, "message")
-    output = ffi.new("char[32]")
+    output = ffi.new(_HASH_BUFFER_TYPE)
     if not lib.secp256k1_tagged_sha256(
         ctx, output, tag_bytes, len(tag_bytes), msg_bytes, len(msg_bytes)
     ):
         raise RuntimeError("tagged hashing failed")
-    return ffi.unpack(output, ffi.sizeof(output))
+    return ffi.unpack(output, _HASH_SIZE)

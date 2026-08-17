@@ -341,6 +341,17 @@ row beside each: `xonly.serialize` 0.197 microseconds against 0.257,
 Nothing on a signature or a verification, which are twelve microseconds
 of libsecp256k1; something on a caller doing point arithmetic in a loop,
 which is who these calls are short for.
+The second of those four now reaches every buffer in the package whose
+bytes are unpacked, and the serializations that were still working their
+own length out at each call are the ones it shows on:
+`dsa.serialize_compact` 0.177 microseconds against 0.182,
+`dsa.serialize_der` 0.267 against 0.278, `recovery.serialize_compact`
+0.257 against 0.272, `hashes.tagged_sha256` of an empty message 0.580
+against 0.596. The signing and encoding calls in `ssa` and `ellswift`
+carry the same spelling and gain nothing measurable from it, which is
+deliberate: one spelling for one shape is worth more to whoever reads
+this package than some hundredths of a microsecond are to whoever calls
+it.
 
 ## v0.8.0.2
 
