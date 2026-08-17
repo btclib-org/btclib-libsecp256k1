@@ -22,6 +22,86 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### The check takes a public key the caller already has
+
+- **`dsa.sign` and `dsa._sign_` take a keyword-only `pubkey`**, the key
+  the check verifies under, so that a caller who already holds it does
+  not pay for deriving it again. It is taken on trust and never checked
+  against the private key on the way in: checking it would cost the
+  point multiplication the argument exists to avoid.
+- **What that saves is most of what ECDSA's check costs over BIP340's.**
+  Measured on an Apple M5, macOS 26.6, arm64, CPython 3.13.14, the five
+  shapes alternated in one process, 9 rounds of 3 000 calls with the
+  minimum of each kept, and the unchecked signature run again at the end
+  so the noise has a figure of its own -- ±0.04 against an unchecked
+  11.72. The check is **20.20** deriving the key per call, **15.08** with
+  a compressed key handed in, **13.06** with an uncompressed one, and
+  **12.80** with the point already parsed and `_sign_` called directly.
+  The 7.40 between the first and the last is the derivation, which is
+  `secp256k1_ec_pubkey_create` through `keys._pubkey_from_prvkey_`;
+  timed alone in a session of the same shape it is 7.31, against a
+  noise of ±0.14. The 7.55 the README carries and the 7.16 measured for
+  `secp256k1_keypair_create` are that other call rather than this one,
+  and land within half a microsecond of it because the two do the same
+  work. Within the handed-in rows, 2.02 is what a compressed key costs
+  to parse over an uncompressed one -- the field square root -- and
+  0.26 is the uncompressed parse: what the parse adds back above the
+  fully parsed row, not slices of the derivation. Under all of it is a
+  bare verification, which is what BIP340's check has always been.
+- **A failed check now says which of two things failed**, and that is
+  what makes the trust affordable rather than merely cheap. A key that
+  is not this private key's makes the verification fail exactly as a
+  faulted computation does, and reporting one as the other would tell a
+  caller their hardware is wrong because they passed the wrong argument.
+  So the failing branch, and only the failing branch, derives the key
+  and asks again: `RuntimeError` where the signature does not verify
+  under the key the private key actually has, `ValueError` where it does
+  and the one handed in is simply not it. The rare branch pays the
+  derivation the common one saved.
+- **The trust cannot let a bad signature through**, which is the
+  property the whole argument rests on and is now a test rather than a
+  paragraph. The keys a signature verifies under are a property of that
+  signature -- `recovery.recover` walks them -- so a key fixed before
+  the signature exists is not one of them.
+  `test_a_key_fixed_in_advance_cannot_pass_a_signature_of_another_key`
+  holds that over forty keys and messages.
+- **And it catches a fault the derived check cannot.** A private key
+  corrupted before it was signed with passes the derived check in
+  silence: the signature and the key it is verified against come out of
+  the same corrupted octets and agree. A key handed in came from
+  somewhere no fault in that call could reach, so it does not agree --
+  which means the `ValueError` names the likelier of two causes rather
+  than the only one, and the docstring says so.
+- **Both halves of the discrimination are held to.** The `ValueError`
+  side has a case of its own; the `RuntimeError` side has one too, and
+  it needs a substituted verification because no input reaches it --
+  `raise RuntimeError` is outside the coverage ratchet, so nothing else
+  would have said that stubbing the second verification to succeed
+  turns every genuine fault under a handed-in key into a report that
+  the caller mistyped an argument. That mutation now fails the suite.
+- **Refused rather than resolved**, as `aux_rand32` beside `grind`
+  already is: a key given with `verify=False` raises, being a caller
+  contradicting themselves, and octets that are not a key are parsed and
+  refused on the way in rather than arriving as a failed check on a
+  signature the caller now holds.
+- **Not on `ssa`, and deliberately.** The check there is 13.2
+  microseconds whether the key is held or not, the keypair already
+  holding the point, so the argument would buy nothing and sell one
+  thing: a second reason a check can fail, and the discrimination step
+  that reason costs. btclib-org/btclib#982 has the measurement.
+- **Not on `recovery` yet, and that is a decision to take rather than
+  one taken.** `_abort_unless_recovered` derives the same key --
+  `keys._pubkey_cmp_(recovered, keys._pubkey_from_prvkey_(...))` -- so
+  the saving available there is exactly the one taken here: the recovery
+  stays and the derivation goes. What differs is the discrimination, a
+  recovered key that is not the one handed in having a third possible
+  cause the two schemes above do not, which is the recovery id. It wants
+  its own measurement and its own cases, so it is left to #246 rather
+  than folded in here.
+- **The README carries all of this**, in the section on the check, which
+  said `verify=False` was the only thing a caller could do about the
+  cost and is where CLAUDE.md puts the design.
+
 ### A signer checks its own signature
 
 - **`dsa.sign` and `ssa.sign` verify what they made before answering

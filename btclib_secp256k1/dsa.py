@@ -253,13 +253,85 @@ def _grind(signature: CData, msg_bytes: bytes, prvkey_bytes: bytes) -> None:
         _signed(signature, msg_bytes, prvkey_bytes, entropy)
 
 
-def _sign_(
+def _checked(
+    signature: CData, msg_bytes: bytes, prvkey_bytes: bytes, pubkey: CData | None
+) -> None:
+    """Verify what was just signed, and say which of two things failed.
+
+    The check itself is one call, and everything around it is about a
+    public key a caller may have handed in. It is taken on trust: a
+    signer that derived it to check it would have paid the point
+    multiplication the argument exists to avoid, so what is skipped on
+    the way in is paid for on the way out, and only where it is owed.
+
+    A key that is not this private key's makes the verification fail, and
+    a verification that fails means something quite different -- the
+    computation having gone wrong, memory gone bad or a fault induced,
+    which is what this check is here to catch at all. Reporting one as
+    the other would tell a caller their hardware is faulty because they
+    passed the wrong argument. So the failing branch, and only the
+    failing branch, derives the key and asks again: it is the rare one by
+    construction, and it is where the microseconds saved everywhere else
+    are worth giving back.
+
+    What the trust cannot do is let a bad signature through. The keys
+    under which a signature verifies are a property of that signature --
+    for ECDSA they are what `recovery.recover` walks -- so a key fixed
+    before the signature exists cannot be one of them except by knowing
+    it in advance.
+    `test_a_key_fixed_in_advance_cannot_pass_a_signature_of_another_key`
+    is that property rather than this paragraph.
+
+    What it catches that the derived path cannot is worth knowing too,
+    because it is more than a mistyped argument. A private key corrupted
+    before it was signed with passes the derived check silently: the
+    signature and the key it is checked against both come out of the
+    same corrupted octets, so they agree. A key handed in came from
+    somewhere no fault in this call could have reached, and does not
+    agree -- so the `ValueError` below is raised over a fault the other
+    branch has no way of seeing, and names only the likelier of its two
+    causes.
+
+    Args:
+        signature: the signature just produced, parsed.
+        msg_bytes: the 32-byte hash it was made over, already checked.
+        prvkey_bytes: the 32-byte private key that made it, already
+            checked, and what the failing branch derives from.
+        pubkey: the public key to check against, parsed, or None to
+            derive it -- which is what a caller holding nothing gets.
+
+    Raises:
+        RuntimeError: if the signature does not verify under the key this
+            private key actually has, which is the fault this is for.
+        ValueError: if it verifies under that key but not under the one
+            handed in -- the wrong key given, most likely, or else a
+            private key that was already corrupt when it was signed
+            with, as the paragraph above says.
+    """
+    if pubkey is not None:
+        if _verify_(msg_bytes, pubkey, signature):
+            return
+        # the given key did not verify it, and the two reasons for that
+        # are told apart here rather than guessed at
+        if _verify_(msg_bytes, keys._pubkey_from_prvkey_(prvkey_bytes), signature):
+            raise ValueError("the public key given is not this private key's")
+        raise RuntimeError("signing produced a signature that does not verify")
+
+    if not _verify_(msg_bytes, keys._pubkey_from_prvkey_(prvkey_bytes), signature):
+        raise RuntimeError("signing produced a signature that does not verify")
+
+
+# six arguments here for the reason `sign` below carries at greater
+# length: the four ECDSA questions plus the two this package adds, and
+# `pubkey` is `verify`'s argument rather than a group with any of them
+def _sign_(  # noqa: PLR0913
     msg_bytes: BytesLike,
     prvkey: BytesLike | int,
     aux_rand32: BytesLike | None = None,
     grind: bool = False,
     *,
     verify: bool = True,
+    pubkey: CData | None = None,
 ) -> CData:
     """Create an ECDSA signature, as the parsed signature.
 
@@ -284,6 +356,11 @@ def _sign_(
             signature the grinding settled on: the attempts it discarded
             are never answered with, so a fault in one of them is a
             wasted attempt rather than a published signature.
+        pubkey: the public key to check under, parsed, where the caller
+            already holds it and would rather not have it derived again.
+            Taken on trust; `_checked` says what that does and does not
+            risk. Refused beside `verify=False`, which declines the
+            check it is for.
 
     Returns:
         The libsecp256k1 signature object, in the lower-s form
@@ -292,8 +369,12 @@ def _sign_(
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
             given and is not 32 bytes, if aux_rand32 and grind are given
-            together, or if the private key is not 32 bytes, does not fit
-            in them, or is not in [1, n-1].
+            together, if the private key is not 32 bytes, does not fit
+            in them, or is not in [1, n-1], if a `pubkey` is given beside
+            `verify=False`, or if the signature verifies under the key
+            this private key has and not under the one given -- the
+            wrong key handed in, most likely, and `_checked` says what
+            else it can be.
         RuntimeError: if libsecp256k1 fails to serialize an attempt while
             grinding, which a signature it has just made cannot do, or if
             `verify` asks and the signature does not verify.
@@ -303,20 +384,22 @@ def _sign_(
     if grind and aux_rand32 is not None:
         raise ValueError("aux_rand32 and grind are the same 32 octets")
 
+    if pubkey is not None and not verify:
+        raise ValueError("pubkey is for the check that verify=False declines")
+
     signature = ffi.new("secp256k1_ecdsa_signature *")
     _signed(signature, msg_bytes, prvkey_bytes, optional_entropy(aux_rand32))
     if grind:
         _grind(signature, msg_bytes, prvkey_bytes)
     if verify:
-        # through `_verify_` and `keys._pubkey_from_prvkey_` rather than
-        # through the two public halves, which would serialize this
-        # signature into DER and the point into octets only to parse both
-        # straight back -- and for a compressed key that parse is a field
-        # square root. `normalize` is not passed: libsecp256k1 has just
-        # answered the lower-s form, so there is nothing to normalize
-        pubkey = keys._pubkey_from_prvkey_(prvkey_bytes)
-        if not _verify_(msg_bytes, pubkey, signature):
-            raise RuntimeError("signing produced a signature that does not verify")
+        # `_checked` goes through `_verify_` and `keys._pubkey_from_prvkey_`
+        # rather than through the two public halves, which would serialize
+        # this signature into DER and the point into octets only to parse
+        # both straight back -- and for a compressed key that parse is a
+        # field square root. `normalize` is not passed either: libsecp256k1
+        # has just answered the lower-s form, so there is nothing to
+        # normalize
+        _checked(signature, msg_bytes, prvkey_bytes, pubkey)
     return signature
 
 
@@ -334,6 +417,7 @@ def sign(  # noqa: PLR0913
     grind: bool = False,
     *,
     verify: bool = True,
+    pubkey: BytesLike | None = None,
 ) -> bytes:
     """Create an ECDSA signature.
 
@@ -403,6 +487,15 @@ def sign(  # noqa: PLR0913
             multiplication and a verification, and False is what a
             caller that has measured those against its own threat model
             passes.
+        pubkey: the public key of this private key, where the caller
+            already holds it, so that the check does not derive it
+            again. That derivation is the larger half of what the check
+            costs, and this is how not to pay it twice. It is taken on
+            trust rather than checked against the private key, which
+            would cost the multiplication it saves; where it is wrong,
+            the check says so and says which of the two things went
+            wrong. Refused beside `verify=False`, which declines the
+            check it is for.
 
     Returns:
         The signature, in the lower-s form libsecp256k1 always produces:
@@ -412,10 +505,15 @@ def sign(  # noqa: PLR0913
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
             given and is not 32 bytes, if aux_rand32 and grind are given
-            together, or if the private key is not 32 bytes, does not fit
-            in them, or is not in [1, n-1].
+            together, if the private key is not 32 bytes, does not fit in
+            them, or is not in [1, n-1], if pubkey is not a public key or
+            is given beside `verify=False`, or if pubkey is not this
+            private key's -- which is told apart from the failure below
+            rather than reported as it.
         RuntimeError: if libsecp256k1 fails to serialize the signature,
-            which no input can make it do.
+            which no input can make it do, or if the check asks and the
+            signature does not verify under the key this private key
+            actually has.
 
     Example:
         >>> import hashlib
@@ -426,6 +524,13 @@ def sign(  # noqa: PLR0913
         >>> dsa.sign(msg, 1, grind=True, compact=True)[0] < 0x80
         True
     """
+    # the contradiction before the value, and in that order deliberately:
+    # a caller who asked for no check and handed in a key to check with
+    # should hear about the two arguments rather than about the octets of
+    # one of them, which is what parsing first would have told them
+    if pubkey is not None and not verify:
+        raise ValueError("pubkey is for the check that verify=False declines")
+
     # composed, where `verify` below is spelled out: the frames this
     # would save were measured and are not there. Shipped against a
     # spelling with `_sign_` inlined, with the DER serialization inlined,
@@ -434,7 +539,18 @@ def sign(  # noqa: PLR0913
     # three land within 0.03 microseconds of this one and on the wrong
     # side of it. A signature is 11.9 microseconds of libsecp256k1, and
     # two python frames do not show against it
-    signature = _sign_(msg_bytes, prvkey, aux_rand32, grind, verify=verify)
+    signature = _sign_(
+        msg_bytes,
+        prvkey,
+        aux_rand32,
+        grind,
+        verify=verify,
+        # parsed here rather than inside `_checked`, so that octets which
+        # are not a public key are refused before anything is signed: a
+        # caller who mistyped an argument should not be told about it by
+        # a check on a signature they now hold
+        pubkey=None if pubkey is None else keys.parse(pubkey),
+    )
     return serialize_compact(signature) if compact else serialize_der(signature)
 
 

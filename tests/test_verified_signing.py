@@ -40,6 +40,14 @@ away -- so the last test in this file needs no stand-in at all: it
 signs, re-parses under each id, and holds real libsecp256k1 to refusing
 every one but the signature's own, while a verification of the same
 octets still succeeds.
+
+`dsa` adds a group of its own, for the public key a caller may hand the
+check instead of having it derived. Those turn on the key being taken on
+trust: what it costs -- a failure that has two causes, told apart in both
+directions, one of them needing the same stand-in as above -- and what it
+cannot cost, which is a signature wrongly accepted. That last one is the
+strongest thing in this file, and the only one here that is a property
+over many keys rather than a case.
 """
 
 from __future__ import annotations
@@ -403,3 +411,112 @@ def test_the_recovery_id_is_what_the_check_catches() -> None:
     assert dsa._verify_(
         MSG, keys._pubkey_from_prvkey_(PRVKEY_BYTES), dsa.parse_compact(signature)
     )
+
+
+def test_a_key_handed_in_is_the_key_that_would_have_been_derived() -> None:
+    """The signature is the same one, whichever way the check got its key.
+
+    What the argument is for is skipping a point multiplication, so what
+    has to hold is that nothing else changed with it: the same message
+    and key answer the same octets in both serializations and with the
+    grinding loop, which is the third place the check could have been
+    reached from.
+    """
+    uncompressed = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
+    compressed = keys.pubkey_from_prvkey(PRVKEY, compressed=True)
+    for compact, grind in ((False, False), (True, False), (False, True)):
+        derived = dsa.sign(MSG, PRVKEY, None, compact, grind)
+        for held in (uncompressed, compressed):
+            assert dsa.sign(MSG, PRVKEY, None, compact, grind, pubkey=held) == derived
+
+
+def test_the_wrong_key_is_told_apart_from_a_wrong_computation() -> None:
+    """A key that is not this private key's is an argument, not a fault.
+
+    The whole reason the failing branch derives: without it a caller who
+    passed the wrong key is told the computation went wrong, which is
+    what `RuntimeError` means here and what somebody would go looking
+    for their hardware over. The two are distinguishable only by which
+    exception arrives, since the signature is fine either way.
+    """
+    other = keys.pubkey_from_prvkey(PRVKEY + 1, compressed=False)
+    with pytest.raises(ValueError, match="not this private key's"):
+        dsa.sign(MSG, PRVKEY, pubkey=other)
+
+
+def test_octets_that_are_not_a_key_are_refused_before_anything_is_signed() -> None:
+    """Parsed on the way in, so a mistyped argument is not a verdict.
+
+    A key parsed inside the check would make bad octets arrive as a
+    failed verification of a signature the caller now holds, which reads
+    as the signature being wrong. Refusing at the boundary is the same
+    discipline every other argument of this package gets.
+    """
+    with pytest.raises(ValueError, match="invalid public key"):
+        dsa.sign(MSG, PRVKEY, pubkey=b"\x02" + bytes(32))
+
+
+def test_a_key_is_refused_beside_the_flag_that_declines_the_check() -> None:
+    """A key to check with is refused where the check is declined.
+
+    `verify=False` and a key to check under is a caller contradicting
+    themselves, and the package answers those rather than resolving
+    them -- as it does for `aux_rand32` beside `grind`.
+    """
+    pubkey = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
+    with pytest.raises(ValueError, match="verify=False declines"):
+        dsa.sign(MSG, PRVKEY, verify=False, pubkey=pubkey)
+
+
+def test_the_private_half_refuses_that_contradiction_too() -> None:
+    """`_sign_` is the row the table recommends, not an internal detail.
+
+    A caller holding a parsed point calls `_sign_` to save the parse, so
+    the private half is where the argument is cheapest and the one place
+    a `pubkey` must not be ignored beside `verify=False`. The copy of the
+    refusal there is for that caller, and this is the case that reaches
+    it -- the same reason `test_every_signer_defaults_to_checking`
+    exists.
+    """
+    with pytest.raises(ValueError, match="verify=False declines"):
+        dsa._sign_(
+            MSG, PRVKEY, verify=False, pubkey=keys._pubkey_from_prvkey_(PRVKEY_BYTES)
+        )
+
+
+def test_a_key_fixed_in_advance_cannot_pass_a_signature_of_another_key() -> None:
+    """What makes taking the key on trust safe, stated as a property.
+
+    The keys a signature verifies under are a property of that signature
+    -- `recovery.recover` walks them -- so a key chosen before the
+    signature exists is not one of them. That is why the trust can cost
+    a wrong diagnosis and never a wrong success, and it is checked here
+    over keys and messages rather than argued in a docstring.
+    """
+    wrong = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
+    for other_key in range(PRVKEY + 1, PRVKEY + 41):
+        msg = hashlib.sha256(other_key.to_bytes(32, "big")).digest()
+        with pytest.raises(ValueError, match="not this private key's"):
+            dsa.sign(msg, other_key, pubkey=wrong)
+
+
+def test_a_fault_under_a_handed_in_key_is_not_reported_as_a_wrong_key() -> None:
+    """The other half of the discrimination, and the one coverage hides.
+
+    `raise RuntimeError` is outside the coverage ratchet by design, so a
+    hundred percent says nothing about this branch. What it guards is the
+    inversion of the misdiagnosis the whole argument is built to avoid:
+    with the second verification stubbed to succeed, every genuine fault
+    met under a handed-in key would be reported as "the public key given
+    is not this private key's" -- a caller told they mistyped an argument
+    because their hardware went wrong.
+
+    The key handed in here is the right one, so the only reason either
+    verification can fail is the substitution, and what has to arrive is
+    the fault.
+    """
+    pubkey = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
+    with pytest.MonkeyPatch.context() as patch:
+        _refuse_every_check(patch)
+        with pytest.raises(RuntimeError, match=_UNVERIFIED):
+            dsa.sign(MSG, PRVKEY, pubkey=pubkey)

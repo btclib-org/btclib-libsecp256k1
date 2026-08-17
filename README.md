@@ -636,6 +636,67 @@ already, which is the same 7.55 the [signer](#two-outposts-past-the-boundary)
 hoists. So the step the specification prescribes is also the cheaper of
 the two, and a `Signer` pays it at the same price as a bare `ssa.sign`.
 
+**`verify=False` is not the only thing a caller can do about that gap.**
+`dsa.sign` takes a `pubkey`, the key the check verifies under, so that a
+caller already holding it does not have the multiplication done again.
+That is most of what ECDSA's check costs above BIP340's, and handing the
+key in brings the two to the same operation — a bare verification. In a
+session of its own, an Apple M5, macOS 26.6, arm64, CPython 3.13.14, nine
+rounds of 3 000 calls with the minimum of each kept, and the unchecked
+signature run a second time so the noise has a figure of its own — its
+`dsa.sign` rows sitting a few tenths under the two sessions above, which
+is between sessions and not within any of them:
+
+| `dsa.sign` | per call | the check |
+| --- | --- | --- |
+| `verify=False` | 11.72 | |
+| the key derived, as before | 31.92 | 20.20 |
+| a compressed key handed in | 26.80 | 15.08 |
+| an uncompressed key handed in | 24.78 | 13.06 |
+| the point already parsed, through `_sign_` | 24.52 | 12.80 |
+| `verify=False` again (the noise) | 11.76 | ±0.04 |
+
+The 7.40 between the second row and the last is the derivation, which is
+`secp256k1_ec_pubkey_create` through `keys._pubkey_from_prvkey_`. Timed
+alone in a session of the same shape it is 7.31, against a noise of
+±0.14. The 7.55 above is a different call — the keypair's own
+multiplication — and lands within half a microsecond of it because the
+two do the same work.
+
+Within the rows where the key is handed in, 2.02 is what a *compressed*
+key costs to parse over an uncompressed one — the field square root that
+recovers y, which is why the longer encoding is the cheaper argument
+here — and 0.26 is the uncompressed parse itself, which only the private
+half avoids. Those are what the parse adds back above the fully parsed
+row, not slices of the derivation above.
+
+The key is taken on trust: checking it against the private key would
+cost the multiplication the argument exists to save. What that would
+otherwise confuse is a wrong argument with a wrong computation, since a
+key that is not this private key's fails verification exactly as a fault
+does, so the failing branch — and only that one — derives the key and
+asks again: `RuntimeError` where the signature does not verify under the
+key the private key actually has, `ValueError` where it does. A key
+handed in beside `verify=False` is refused rather than ignored.
+
+What the trust cannot do is pass a bad signature. The keys a signature
+verifies under are a property of that signature, so a key fixed before
+the signature exists is not one of them, and the argument can cost a
+wrong diagnosis but never a wrong success. It can also catch what the
+derived check cannot: a private key corrupted before it was signed with
+agrees with a public key derived from the same corrupted octets, and
+does not agree with one that came from anywhere else.
+
+`ssa.sign` takes no such argument, and that is a decision rather than an
+omission: its check is a bare verification already, the keypair holding
+the point, so there would be nothing to save and one more way for a
+check to fail. `recovery.sign` is the one where the same saving is
+available and not yet taken — its check derives the very same key before
+comparing what it recovered against it — and what it would cost to take
+is
+[issue 246](https://github.com/btclib-org/btclib-secp256k1/issues/246):
+a third way for the comparison to fail, which is the recovery id.
+
 **`recovery.sign` recovers instead of verifying**, and the difference is
 the recovery id. A verification does not look at it: a recoverable
 signature carrying the wrong one verifies perfectly and then recovers a
