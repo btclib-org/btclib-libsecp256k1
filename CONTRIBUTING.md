@@ -236,6 +236,35 @@ command at all, for the reason above, and no longer gates.
   uvx pre-commit run --all-files
   ```
 
+- `Ask which files the pull request touches`, whose answer decides whether
+  the rest of `test.yml` runs at all
+
+  ```shell
+  gh api "repos/btclib-org/btclib-secp256k1/pulls/<number>/files" \
+      --paginate --jq '.[].filename' > files.txt
+  eval "$(/usr/bin/grep -m1 '^ *prose=' .github/workflows/test.yml)"
+  if [ ! -s files.txt ] || /usr/bin/grep -qvE "$prose" files.txt; then
+      echo "everything runs"
+  else
+      echo "prose only"
+  fi
+  ```
+
+  The second line lifts the pattern out of the workflow rather than
+  restating it here, so the two cannot drift. `/usr/bin/grep` rather than
+  `grep`, because where the shell's is [ugrep](https://ugrep.com) the
+  third line answers the opposite question: ugrep takes the status from
+  whether the *pattern* matched anywhere and inverts that, rather than
+  from whether `-v` selected a line. A list of only prose and a list of
+  only code come out right either way; one mixing the two exits 1 and
+  reads as "prose only", which is the direction that skips a matrix that
+  should have run, and nothing says it has. `-q` is what asks the
+  question of the file rather than of the lines, and ugrep takes the same
+  path when the output is discarded, so `-cvE` and a numeric test agree
+  with both greps. The runner's `grep` is GNU's, so what ugrep can get
+  wrong here is the reproduction and not the workflow
+  (<https://github.com/btclib-org/btclib-secp256k1/issues/242>)
+
 - `Measure coverage, gated at 100%`
 
   ```shell
@@ -308,6 +337,11 @@ command at all, for the reason above, and no longer gates.
 
 - `Build on Linux for Windows` needs `mingw-w64`, and a Linux host to be
   faithful: the cross-compilation CI does is from ubuntu, not from macOS
+
+- `test: every job passed` reproduces as nothing, and is here because it
+  is the required check and therefore the one a contributor sees red: it
+  reads the conclusions of the jobs above it and runs no command of its
+  own. What turned it red is one of them, in the run
 
 - `Build the documentation`, the same command `.readthedocs.yaml` runs
   and `docs/README.rst` documents. Needs the submodule checked out,

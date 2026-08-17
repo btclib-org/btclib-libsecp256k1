@@ -2104,6 +2104,27 @@ release-notes length in the first place, and are still in
   of the rest would be right today and stale the first time a sentinel
   is folded into the gate, which skips a matrix that should have run.
   The comment above the pattern carries that reasoning and the figure.
+- **and the list that promises to reproduce each gating job was missing
+  the job that decides whether the others run** (#242), which is the same
+  step again from the other side. Reproducing it by hand answers the
+  opposite where the shell's `grep` is ugrep: `-qv` there takes its
+  status from whether the pattern matched anywhere and inverts that,
+  rather than from whether `-v` selected a line, so a list mixing prose
+  with code — the case the step exists to judge — exits 1 and reads as
+  "prose only", the direction that skips a matrix that should have run,
+  and nothing says it has. Measured on each shape of file list with the
+  pattern taken out of the workflow, and against the runner rather than
+  against itself: #237's own list answers "everything runs" as its run
+  did, and the pull request carrying this entry answers "prose only" with
+  its matrix skipped. Nothing in the tree moves, `test.yml`'s `grep`
+  being the runner's, which is GNU's. The entry spells the path out,
+  lifts the pattern out of `test.yml` so the two cannot drift, and names
+  `-q` as the mechanism rather than `-v`: ugrep takes the same
+  file-level path when the output is discarded, which is where dropping
+  `-q` lands next, and `-cvE` with a numeric test is what agrees with
+  both greps. `test: every job passed` gets an entry in the same pass,
+  that being the neighbouring gap and the check a contributor sees red:
+  it reproduces as nothing, reading the conclusions of the jobs above it.
 
 ## v0.8.0.2
 
