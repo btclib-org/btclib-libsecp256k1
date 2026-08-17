@@ -1579,6 +1579,24 @@ release-notes length in the first place, and are still in
   the description fires. A contributor reading only this file would have
   expected the other outcome, and the two pull requests that landed the
   rule went the way it now describes
+- **The worktree recipe checks the submodule out** (#223). CLAUDE.md tells
+  every session to work in a worktree and gives the commands that get one,
+  and what they set up could not build: a worktree isolates files, a
+  submodule is a checkout of its own, and `git submodule status` in a
+  fresh one answers a leading `-`. What `uv sync --locked` then says is
+  forty lines of CMake and traceback naming the empty `secp256k1/`, closing
+  on "Build failures usually indicate a problem with the package or the
+  build environment" — the two things that are not wrong — and mentioning
+  the submodule nowhere, so a reader who does not already know goes and
+  audits their toolchain. `git submodule update --init secp256k1` before
+  the sync is the whole of the fix, verified in a fresh worktree rather
+  than reasoned about: with it the sync exits 0 and the suite passes in
+  that worktree's own venv, without it the sync exits 1. Nothing here was
+  unknown — CONTRIBUTING.md documents the submodule for a clone and again
+  for the documentation build — but the recipe a session actually follows
+  is the one in CLAUDE.md, it reads as complete, and it was the one place
+  the line was missing. CI never meets it, every checkout there passing
+  `submodules: true`
 
 - **The concurrency ceiling is written down, with the column that
   decides it** (#194). REPOSITORY.md's plan-gated section now carries the
@@ -1806,6 +1824,31 @@ release-notes length in the first place, and are still in
   from the hook would take the keyword and provider-token detectors off
   it too. The baseline is now written when a file that has a finding
   changes, which was 7 of those 40 rather than all of them
+- **`mutation.yml` says what its session cannot ask** (#222). The
+  operators replace arithmetic, comparisons, literals, branches and
+  decorators; not one of them puts a different expression in an argument
+  list, so which argument a `lib` call is handed — the whole of what a
+  binding decides — is mutated by nothing in the session, and a green
+  Sunday says nothing about it. `core/VariableReplacer` and
+  `core/VariableInserter` are the two that come closest and
+  `.github/mutation/bindings.toml` instantiates neither, both declaring
+  `cause_variable` and `effect_variable` arguments it does not supply;
+  configured they would substitute a random number, which cffi refuses
+  where a pointer was declared, and a mutant that dies of a `TypeError`
+  proves the boundary type-checks rather than that a test read what the
+  call wrote. The instance is the first revision of #220: `ffi.NULL` in
+  place of the `int *` its caller allocated left the whole suite passing,
+  the key having even y and `ffi.new("int *")` zeroing what it allocates,
+  so every side of every comparison was 0 either way. A paragraph in the
+  header is the change, and it is what would have made that hole visible
+  while the test was being written rather than after. An operator of our
+  own, replacing each argument of a `lib.*` call with `ffi.NULL` in turn,
+  is what a second instance would justify and what nothing yet does: the
+  optional out-parameters of the wrapped surface are the two occurrences
+  of `Ignored if NULL` in the vendored headers, both in
+  `secp256k1_extrakeys.h` and both now exercised over either answer, plus
+  `sigout` of `secp256k1_ecdsa_signature_normalize`, for which `dsa`
+  passes `ffi.NULL` already
 
 ## v0.8.0.2
 

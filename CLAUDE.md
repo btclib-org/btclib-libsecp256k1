@@ -92,8 +92,13 @@ lose. Reading it is fine — `git log`, `git show`, `git diff`, `gh`, and a
 ```shell
 WT=<scratchpad>/wt<issue>
 git worktree add -b <branch> "$WT" origin/main
-cd "$WT" && uv sync --locked      # a second venv, and a second build of
-                                  # the extension: minutes, not seconds
+cd "$WT"
+git submodule update --init secp256k1  # a worktree isolates files, and a
+                                       # submodule is a checkout of its
+                                       # own that it does not inherit
+uv sync --locked                       # a second venv, and a second build
+                                       # of the extension: minutes, not
+                                       # seconds
 # edit, gate and commit here, then
 git push origin HEAD:refs/heads/<branch>
 git worktree remove --force "$WT" # removing it is part of finishing
@@ -102,6 +107,16 @@ git worktree remove --force "$WT" # removing it is part of finishing
 The venv and the C build are the whole of the cost, and they buy the thing
 that matters: a commit cannot contain work that was never in it, and the
 maintainer's branch does not move under them.
+
+**The submodule line is what makes the rest of the recipe run**, and
+leaving it out costs a session rather than a build: `git submodule status`
+answers a leading `-` in a fresh worktree, and `uv sync --locked` then dies
+inside CMake naming the empty `secp256k1/` and closing on "Build failures
+usually indicate a problem with the package or the build environment" —
+the two things that are not wrong. CI never meets it, every checkout there
+passing `submodules: true`. It is the same sentence as the one below about
+`refs/stash`: a worktree isolates files, and neither a submodule checkout
+nor a ref is one.
 
 **Never `git stash`, in the primary checkout or in a worktree:
 `refs/stash` is shared.** A worktree isolates files, not refs, so

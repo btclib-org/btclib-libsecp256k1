@@ -13,6 +13,23 @@ name: mutation
 # the line still runs. What kills it is a test at 31 octets *and* one at 33,
 # and whether every bound has both is what nobody has measured.
 #
+# What it cannot ask is the other half of that same boundary, and a green
+# session does not say otherwise. The operators replace arithmetic,
+# comparisons, literals, branches and decorators; not one of them puts a
+# different expression in an argument list, so *which argument a `lib` call
+# is handed* -- the whole of what a binding decides -- is mutated by
+# nothing here. core/VariableReplacer and core/VariableInserter are the two
+# that come closest and .github/mutation/bindings.toml instantiates
+# neither: both declare cause_variable and effect_variable arguments it
+# does not supply, and configured they would substitute a random number,
+# which cffi refuses where a pointer was declared -- a mutant dying because
+# the boundary type-checks, not because a test read what the call wrote.
+# So an out-parameter's semantics rest on a test that exercises both of its
+# answers, and writing that test is not something this session will prompt.
+# The first revision of #220 is the instance: `ffi.NULL` in place of the
+# `int *` a caller allocated left the suite passing, an even-y key and a
+# zeroed allocation agreeing on 0 on every side of every comparison.
+#
 # It gates nothing, and that is the design rather than a caution. A gate
 # needs a number nobody has yet, and a survival rate is not a regression: a
 # mutant survives because a test is missing, so a red merge would block
