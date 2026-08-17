@@ -43,6 +43,9 @@ from btclib_secp256k1._secret import keypair, wipe
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 PRVKEY = 7
+# the small scalar whose point has odd y, as tests/test_nonces.py keeps
+# it: a parity test over an even-y key alone compares zeros with zeros
+ODD_Y_PRVKEY = 6
 TWEAK = 11
 SCAN_PRVKEY = 13
 MSG = hashlib.sha256(b"btclib_secp256k1").digest()
@@ -354,15 +357,51 @@ def test_the_keypair_pair_reads_the_point_it_already_holds() -> None:
     caller could have handed in. What the private half saves is that
     serialize and the lift back that reading it again would cost, which
     is what `ssa.sign(verify=True)` takes it for.
+
+    The parity is asked for through the pointer, which is the half of
+    the pair a NULL default leaves to the caller: passing none is what
+    `ssa._abort_unless_verified` does, and the test below is where that
+    spelling answers alike.
     """
     keypair_obj = keypair(PRVKEY)
     try:
-        xonly_pubkey, parity = xonly._from_keypair_(keypair_obj)
-        assert (xonly.serialize(xonly_pubkey), parity) == xonly.from_keypair(
+        parity = ffi.new("int *")
+        xonly_pubkey = xonly._from_keypair_(keypair_obj, parity)
+        assert (xonly.serialize(xonly_pubkey), parity[0]) == xonly.from_keypair(
             keypair_obj
         )
     finally:
         wipe(keypair_obj)
+
+
+def test_the_keypair_parity_is_the_callers_to_ask_for() -> None:
+    """`xonly._from_keypair_` answers the same key with a parity and without.
+
+    The NULL default is what `ssa._abort_unless_verified` takes, so the
+    key it verifies against has to be the key `from_keypair` names --
+    libsecp256k1 documenting `pk_parity` as "Ignored if NULL" is the
+    claim, and this is it held to.
+
+    Both parities, and the 0 and the 1 asserted rather than only the
+    agreement between the two calls: `ffi.new("int *")` zeroes the
+    buffer it allocates, so over an even-y key alone every side of every
+    comparison here is 0 whether the pointer was written through or not.
+    Discarding the caller's pointer inside the helper is then a mutant
+    the whole suite passes, while `from_keypair` answers 0 for every
+    odd-y key. 6 is the odd-y scalar `tests/test_nonces.py` already
+    keeps for this, under the name it gives it there.
+    """
+    for prvkey, expected in ((PRVKEY, 0), (ODD_Y_PRVKEY, 1)):
+        keypair_obj = keypair(prvkey)
+        try:
+            parity = ffi.new("int *")
+            with_parity = xonly._from_keypair_(keypair_obj, parity)
+            without = xonly._from_keypair_(keypair_obj)
+            assert xonly.serialize(with_parity) == xonly.serialize(without)
+            assert parity[0] == expected
+            assert parity[0] == xonly.from_keypair(keypair_obj)[1]
+        finally:
+            wipe(keypair_obj)
 
 
 def test_the_taproot_pair_starts_from_the_point_the_x_belongs_to() -> None:

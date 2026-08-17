@@ -595,7 +595,7 @@ def _abort_unless_verified(
             can make happen: what it reports is the computation itself
             having gone wrong.
     """
-    xonly_pubkey, _ = xonly._from_keypair_(keypair_obj)
+    xonly_pubkey = xonly._from_keypair_(keypair_obj)
     if not _verify_(msg_bytes, xonly_pubkey, signature_bytes):
         raise RuntimeError("signing produced a signature that does not verify")
 

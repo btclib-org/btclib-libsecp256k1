@@ -72,7 +72,7 @@ def _drop_y(pubkey: CData, parity: CData = ffi.NULL) -> CData:
             reading it, which is the default because the callers that
             want the object alone are why it exists: `parse`, `_parsed`
             and `_tweak_add_`. libsecp256k1 documents `pk_parity` as
-            "can be NULL", so the allocation is the caller's to make
+            "Ignored if NULL", so the allocation is the caller's to make
             rather than this function's, and skipping it is 0.4295
             microseconds against 0.5021 on `xonly.parse` of a 65-byte
             key -- CHANGELOG.md names the session every figure in this
@@ -207,7 +207,7 @@ def from_prvkey(prvkey: BytesLike | int) -> tuple[bytes, int]:
     return _from_pubkey_(keys._pubkey_from_prvkey_(prvkey))
 
 
-def _from_keypair_(keypair_obj: CData) -> tuple[CData, int]:
+def _from_keypair_(keypair_obj: CData, parity: CData = ffi.NULL) -> CData:
     """Return the x-only public key of a keypair, as the parsed point.
 
     The private half of `from_keypair`, for a caller about to hand the
@@ -221,11 +221,19 @@ def _from_keypair_(keypair_obj: CData) -> tuple[CData, int]:
     Args:
         keypair_obj: the libsecp256k1 keypair object, as `ssa.Signer`
             holds and as `secp256k1_keypair_create` writes.
+        parity: an `int *` to receive the parity of y, 0 for even and 1
+            for odd -- or the NULL that says nobody is reading it, which
+            is the default because `ssa._abort_unless_verified` is in
+            that case and `from_keypair` is the one that is not.
+            libsecp256k1 documents `pk_parity` as "Ignored if NULL", the
+            same words it gives `secp256k1_xonly_pubkey_from_pubkey`,
+            which is why `_drop_y` above takes its pointer the same way.
 
     Returns:
-        The libsecp256k1 x-only public key object, and the parity of y:
-        0 for even, 1 for odd. The parity is of the point the private
-        key gives, the keypair being the negated key where that y is odd.
+        The libsecp256k1 x-only public key object. The parity written
+        through the pointer, where one is given, is of the point the
+        private key gives, the keypair being the negated key where that
+        y is odd.
 
     Raises:
         RuntimeError: if libsecp256k1 will not read the object -- a NULL
@@ -235,11 +243,10 @@ def _from_keypair_(keypair_obj: CData) -> tuple[CData, int]:
             deserves, and `context.check` is what tells the two apart.
     """
     xonly_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    parity = ffi.new("int *")
     converted = lib.secp256k1_keypair_xonly_pub(ctx, xonly_pubkey, parity, keypair_obj)
     if not converted:
         raise RuntimeError("x-only public key conversion failed")
-    return xonly_pubkey, parity[0]
+    return xonly_pubkey
 
 
 def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
@@ -274,8 +281,11 @@ def from_keypair(keypair_obj: CData) -> tuple[bytes, int]:
             fails to serialize the result, which a keypair it built
             cannot make it do.
     """
-    xonly_pubkey, parity = _from_keypair_(keypair_obj)
-    return serialize(xonly_pubkey), parity
+    # the one caller of the two that reads a parity, so the allocation
+    # is here rather than behind a helper: `_drop_y` needed
+    # `_drop_y_with_parity` because it has two
+    parity = ffi.new("int *")
+    return serialize(_from_keypair_(keypair_obj, parity)), parity[0]
 
 
 def _tweak_add_(pubkey: CData, tweak: BytesLike | int) -> tuple[bytes, int]:

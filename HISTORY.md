@@ -317,6 +317,16 @@ it, and does afterwards. Reading it — as the attribute, as
 metadata — answers what it always answered, and costs what it always
 cost, the first read and every one after it.
 
+**On both conversions, the parity is the caller's to ask for.**
+`xonly._drop_y` and `xonly._from_keypair_` take an `int *` where one is
+wanted, and the NULL libsecp256k1 documents as "Ignored" where it is
+not: `from_pubkey`, `to_pubkey` and `from_keypair` allocate one, and
+`parse`, `_parsed`, `_tweak_add_` and the check `ssa` makes of its own
+signature pass nothing. Both conversions are new in this release, so
+there is nothing here to act on — what a caller of the octets API sees
+is unchanged, and so is what it costs, a signature with its verification
+being 20 microseconds either way.
+
 **Serializing and parsing cost a little less, and nothing changed about
 what they answer.** Four things a wrapper used to work out at every call
 are worked out once: the cffi type of a buffer whose declaration was

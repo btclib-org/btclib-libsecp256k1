@@ -340,6 +340,46 @@ release-notes length in the first place, and are still in
   Nothing else changes: the attribute, the `from … import __version__`,
   and reading the metadata directly all answer what they answered.
 
+### The out-parameter that is the caller's to ask for
+
+- **`xonly._from_keypair_` takes its parity pointer, defaulting to NULL**
+  (#219), which is the shape the entry below gives `xonly._drop_y` and
+  which libsecp256k1 documents in the same words for both:
+  `secp256k1_extrakeys.h` says `pk_parity: Ignored if NULL` of
+  `secp256k1_keypair_xonly_pub` as it does of
+  `secp256k1_xonly_pubkey_from_pubkey`. `from_keypair` allocates one and
+  reads it; `ssa._abort_unless_verified`, which threw it away, passes
+  nothing. The allocation sits at the one call site that wants it rather
+  than behind a helper — `_drop_y` needed `_drop_y_with_parity` because
+  it has two such callers, and this has one.
+- **It is worth 28% of the conversion and nothing where the conversion
+  is**, and both halves of that are the point of taking it. Same session
+  shape as the entry below — the two spellings alternated in one process
+  over 15 rounds, a noise row beside each, an Apple M5, macOS 26.6,
+  arm64, CPython 3.14.6:
+
+  | | with the parity | with NULL |
+  | --- | --- | --- |
+  | the conversion alone | 0.2384 | 0.1718 |
+  | `ssa.sign` with the check on, which is where it runs | 19.9400 | 20.0303 |
+  | *noise*, the conversion twice | 0.2353 | 0.2404 |
+
+  −28.0% on the call, +0.45% on the path against a noise row that moved
+  2.18% — which is to say nothing, an `ffi.new` being some hundredths of
+  a microsecond against a signature and a verification. **So this is
+  taken for the convention and not for the speed**: the package had two
+  answers to one question, written a week apart, and now has one.
+- **One test holds it, and it takes two keys to.**
+  `test_the_keypair_parity_is_the_callers_to_ask_for` runs over an even-y
+  key and an odd-y one and asserts the 0 and the 1, because
+  `ffi.new("int *")` zeroes what it allocates: over an even-y key alone
+  every side of every comparison is 0 whether the pointer was written
+  through or not, and discarding it inside the helper is then a mutant
+  the whole suite passes while `xonly.from_keypair` answers 0 for every
+  odd-y key. With both keys that mutant fails at the assertion meant to
+  catch it. The same mutation on `_drop_y` fails eight tests, so the
+  claim these two conversions now share is one the suite holds on both.
+
 ### What a wrapper works out per call, and now works out once
 
 - **An interpolated cdecl is resolved at import, not at every call**
@@ -375,8 +415,8 @@ release-notes length in the first place, and are still in
   places is 0.1314. A quarter of what was on the table, for one copy of
   the line that overwrites a secret rather than two.
 - **The parity nobody reads is not allocated.**
-  `secp256k1_xonly_pubkey_from_pubkey` documents `pk_parity` as "can be
-  NULL", and the callers that want the object alone — `parse`, `_parsed`
+  `secp256k1_xonly_pubkey_from_pubkey` documents `pk_parity` as "Ignored
+  if NULL", and the callers that want the object alone — `parse`, `_parsed`
   and `_tweak_add_` — are why NULL is the default. `_drop_y` takes the
   pointer as an argument now: 0.1747 microseconds against 0.2425 on the
   conversion alone. `_from_pubkey_` and `to_pubkey` read a parity and go
