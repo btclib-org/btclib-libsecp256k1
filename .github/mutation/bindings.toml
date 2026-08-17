@@ -57,6 +57,28 @@
 # after, the same way the filter below skips the annotations by operator
 # rather than asking every mutant of a `|` to be read again.
 #
+# One thing to know that is not a survivor at all, and is the reason
+# "expecting nothing" is worth reading as exactly that and no more (#231).
+# #221 collapsed every buffer width in the package to one statement, and in
+# two modules that turned several independently mutable copies of a number
+# into one: `ellswift` had 64 at `_decode_` and at both of `xdh`'s length
+# checks, three of them, and `ssa` had it at `_verify_` and at `verify`.
+# `core/NumberReplacer` carries `OFFSETS = [+1, -1]` and yields a position
+# per offset, so where `ellswift`'s three literals gave six mutants its one
+# constant gives two -- and either of those two changes every site at once
+# and dies on whichever test reaches it first. Nothing is hidden today: the
+# seven constants #221 introduced were each mutated both ways before it
+# landed, bytecode writing off and a control run either side, and all
+# fourteen die. What is gone is resolution for the
+# session after next: a check that later loses the test covering it can no
+# longer surface here, because the mutant that would have reported it is
+# killed elsewhere. So this is the mirror of the two shapes above -- not a
+# survivor to skip, but a silence to know about. The ratchet catches a lost
+# test only where losing it stops the line running at all; a check still
+# executed by some other test and asserted by none is what neither
+# question sees, and one constant is now the whole of what would have
+# asked about it.
+#
 # That is a statement about the shapes, not a promise about the rate:
 # what the next scheduled run reports is what it reports, and it is not
 # restated here, a number in a comment being a line every change to the

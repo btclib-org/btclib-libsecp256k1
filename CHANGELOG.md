@@ -1703,6 +1703,24 @@ release-notes length in the first place, and are still in
   `macos.yml`'s cells is `windows.yml`'s too, and `test.yml`'s aggregate
   job explains its name by there being a second workflow over this matrix
   shape, which is now a third
+- **cosmic-ray's own defence against a stale `.pyc` is named rather than
+  asserted** (#229). CLAUDE.md said "cosmic-ray does not have the
+  problem" after two paragraphs on how a hand-applied mutation loses
+  one, and did not say why — which is what let the sentence be read as
+  an assumption. It is `cosmic_ray/testing.py`, which sets
+  `PYTHONDONTWRITEBYTECODE` in the environment of the test command under
+  a comment giving this very reason, so no `.pyc` is written during a
+  session; measured by looking at `btclib_secp256k1/__pycache__` before
+  and after a real `cosmic-ray exec` over `hashes.py`, one file before
+  and the same one after, and the baseline step writes none either. Two
+  things go in the same clause because each is what the next reader
+  would otherwise re-derive: grepping the package for
+  `dont_write_bytecode` finds nothing and proves nothing, the string
+  being the environment variable's own spelling; and no flag stops a
+  *read*, so a `.pyc` from an earlier `pytest` is still used where its
+  size and truncated mtime match — the same window as the hand case,
+  which is why that recipe wants the control run and not only the
+  variable.
 
 ### CI
 
@@ -1929,6 +1947,23 @@ release-notes length in the first place, and are still in
   `secp256k1_extrakeys.h` and both now exercised over either answer, plus
   `sigout` of `secp256k1_ecdsa_signature_normalize`, for which `dsa`
   passes `ffi.NULL` already
+- **`bindings.toml` records the resolution a consolidated width costs**
+  (#231). Its preamble already carries the two shapes that were answered
+  in the code and the one equivalence that cannot be, each written down
+  so a session does not spend itself rediscovering them; a width
+  collapsed to one statement belongs in that list for the opposite
+  reason. Two modules had several mutable copies of one number —
+  `ellswift` three, at `_decode_` and at both of `xdh`'s checks, and
+  `ssa` two, at `_verify_` and at `verify` — and `core/NumberReplacer`
+  carries `OFFSETS = [+1, -1]`, a position per offset, so `ellswift`'s
+  six mutants are two now and either of them changes every site at once,
+  dying on whichever test reaches it first. A check that later loses the
+  test covering it can therefore no longer surface as a survivor.
+  Nothing is hidden today, the seven constants #221 introduced having
+  each been mutated both ways before it landed and all fourteen dying,
+  and the paragraph says what the ratchet does and does not catch
+  instead: a line that stops running is caught, a line still run by
+  another test and asserted by none is what neither question sees.
 
 ## v0.8.0.2
 

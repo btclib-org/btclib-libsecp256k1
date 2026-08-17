@@ -310,7 +310,18 @@ findings.
   python reuses the mutated bytecode — silently, in the next unrelated run.
   `PYTHONDONTWRITEBYTECODE=1`, with a passing baseline run before and a
   passing control run after, is what makes a hand verification mean
-  anything. cosmic-ray does not have the problem
+  anything. **cosmic-ray does not have the problem, and the mechanism is
+  worth naming rather than trusting** (#229): `cosmic_ray/testing.py`
+  sets that very variable in the environment of the test command, under a
+  comment giving this reason, so a session writes no `.pyc` at all — the
+  baseline included, both measured by looking at `__pycache__` before and
+  after a real `cosmic-ray exec`. Grepping the package for
+  `dont_write_bytecode` finds nothing and means nothing: the string it
+  sets is the environment variable's own spelling. What no flag stops is
+  a *read*, so a `.pyc` already on disk from an earlier `pytest` is still
+  used where its size and truncated mtime match — which is the same
+  window as above, and the reason the hand recipe wants the control run
+  and not only the variable
 - **`detect-secrets` runs twice, over two baselines**: the tree with the
   entropy detectors on, and `tests/*.csv`/`tests/*.json` with them off,
   those files being hex and nothing else. Adding to either side fails its
