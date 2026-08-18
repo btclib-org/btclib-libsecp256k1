@@ -554,6 +554,25 @@ def test_a_fault_under_a_handed_in_key_is_not_reported_as_a_wrong_key() -> None:
             dsa.sign(MSG, PRVKEY, pubkey=pubkey)
 
 
+def test_the_derivation_is_not_made_where_the_key_handed_in_verifies() -> None:
+    """`dsa`'s early return, which is the whole of what its argument saves.
+
+    `_checked` verifies under the key handed in and returns there,
+    deriving only where that fails, so the saving is that return and
+    nothing else -- and `_refusing_to_derive` says why no other case of
+    the argument can see it go. The unchecked call is the independent
+    side: it never derives whatever the check does, so the checked one
+    answering the same octets with the multiplication raising is what
+    says the derivation was not made.
+    """
+    pubkey = keys.pubkey_from_prvkey(PRVKEY)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(keys, "_pubkey_from_prvkey_", _refusing_to_derive)
+        assert dsa.sign(MSG, PRVKEY, pubkey=pubkey) == dsa.sign(
+            MSG, PRVKEY, verify=False
+        )
+
+
 def test_a_key_handed_in_is_the_key_recovery_would_have_derived() -> None:
     """The signature is the same pair, whichever way the check got its key.
 

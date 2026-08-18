@@ -303,6 +303,16 @@ release-notes length in the first place, and are still in
   would have said that stubbing the second verification to succeed
   turns every genuine fault under a handed-in key into a report that
   the caller mistyped an argument. That mutation now fails the suite.
+- **And the saving itself is asserted rather than only measured**
+  (#251). What the argument buys is the early return in `_checked`, and
+  deleting that return changed no answer: a correct key reached the
+  derived comparison, which agreed and gave back the same signature, so
+  every other case of the argument passed with the derivation paid for
+  again -- the figures above false and nothing red.
+  `test_the_derivation_is_not_made_where_the_key_handed_in_verifies`
+  substitutes the multiplication for one that raises, and the signature
+  coming back at all is what says it was never made. That mutation now
+  fails the suite, and it failed nothing before.
 - **Refused rather than resolved**, as `aux_rand32` beside `grind`
   already is: a key given with `verify=False` raises, being a caller
   contradicting themselves, and octets that are not a key are parsed and
