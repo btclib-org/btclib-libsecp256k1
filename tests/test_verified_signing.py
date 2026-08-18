@@ -36,10 +36,10 @@ passing.
 `recovery` adds a fifth, and it is the one that says what the check is
 for rather than that the raise is wired to it. There the fault *is*
 reachable from an input -- a wrong recovery id is one `parse_compact`
-away -- so the last test in this file needs no stand-in at all: it
-signs, re-parses under each id, and holds real libsecp256k1 to refusing
-every one but the signature's own, while a verification of the same
-octets still succeeds.
+away -- so `test_the_recovery_id_is_what_the_check_catches` needs no
+stand-in at all: it signs, re-parses under each id, and holds real
+libsecp256k1 to refusing every one but the signature's own, while a
+verification of the same octets still succeeds.
 
 `dsa` adds a group of its own, for the public key a caller may hand the
 check instead of having it derived. Those turn on the key being taken on
@@ -52,12 +52,19 @@ than a case.
 `recovery` takes the same key and adds the group after it, where the
 failure has three causes rather than two: the key given, the recovery id,
 or the computation. The first is an argument and the other two are not,
-and what separates them is the derivation the matching path skipped. The
-last of those tests is the one nothing else in the package can write --
-a right key and a wrong id, both real, no stand-in anywhere -- and the
-property over many keys is asserted again there, because what makes the
-trust safe is a different sentence when the key is recovered rather than
-verified against.
+and what separates them is the derivation the matching path skipped.
+`test_a_wrong_id_under_a_right_key_is_not_reported_as_a_wrong_key` is the
+one nothing else in the package can write -- a right key and a wrong id,
+both real, no stand-in anywhere -- and the property over many keys is
+asserted again there, because what makes the trust safe is a different
+sentence when the key is recovered rather than verified against.
+
+Each group also asserts the saving itself, which no other case of the
+argument can see: with the multiplication substituted for one that
+raises, `test_the_derivation_the_argument_saves_is_not_made_at_all` and
+`test_the_derivation_the_recoverable_check_saves_is_not_made_at_all` hold
+the signature to coming back anyway, so the derivation a key handed in
+skips is asserted absent rather than only priced.
 """
 
 from __future__ import annotations

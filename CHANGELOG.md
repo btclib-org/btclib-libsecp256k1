@@ -521,6 +521,28 @@ release-notes length in the first place, and are still in
   module by splitting a test id on `.` is a weaker statement than the
   message written beside the call. The ids are stated once as well,
   every table here being those rows in that order.
+- **The module docstring of `tests/test_verified_signing.py` names the
+  tests it points at** (#256). Two of its landmarks were positions rather
+  than names, and each had come to name the wrong test. "The last test in
+  this file" arrived with #217 meaning
+  `test_the_recovery_id_is_what_the_check_catches`, and #245 appended the
+  `dsa` group after it. "The last of those tests" meant
+  `test_a_wrong_id_under_a_right_key_is_not_reported_as_a_wrong_key` and
+  arrived with #246 -- which in that same diff put two tests after the one
+  it points at, so it was false in the commit that wrote it. That is the
+  whole argument against the form: a position is a claim nothing checks,
+  and an append falsifies it in silence, sometimes its own. Both now name
+  the test.
+- **And the account of the two key-handed-in groups gains the third thing
+  they hold**, in one clause for both halves rather than one for `dsa`:
+  that the saving is asserted and not only priced, by
+  `test_the_derivation_the_argument_saves_is_not_made_at_all` and
+  `test_the_derivation_the_recoverable_check_saves_is_not_made_at_all`.
+  Raised as a non-blocking review finding on #254, where folding it into
+  that diff would have put the asymmetry in a second place. What a name
+  still does not buy is a check -- a rename falsifies it as quietly as an
+  append falsified a position -- which is #258, and the count in the same
+  docstring is #259.
 
 ### The frames between an entry point and libsecp256k1
 
