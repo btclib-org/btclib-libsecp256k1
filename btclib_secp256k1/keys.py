@@ -21,7 +21,7 @@ from typing import overload
 from . import BytesLike, CData, MutableBytesLike, ffi, lib
 from ._cdata import array
 from ._scalar import octets, scalar
-from ._secret import take
+from ._secret import scalar_buffer, take
 from .context import ctx
 
 # SECP256K1_EC_COMPRESSED and SECP256K1_EC_UNCOMPRESSED: the
@@ -127,7 +127,7 @@ def prvkey_negate(
         ValueError: if it is not 32 bytes, does not fit in them, or is
             not in [1, n-1]; or if `into` is not 32 bytes.
     """
-    prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
+    prvkey_buffer = scalar_buffer(prvkey, "private key")
     if not lib.secp256k1_ec_seckey_negate(ctx, prvkey_buffer):
         raise ValueError("invalid private key: not in [1, n-1]")
     return take(prvkey_buffer, into=into)
@@ -174,7 +174,7 @@ def prvkey_tweak_add(
             is zero, which is the one tweak with no valid result, or if
             `into` is not 32 bytes.
     """
-    prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
+    prvkey_buffer = scalar_buffer(prvkey, "private key")
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_add(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")
@@ -218,7 +218,7 @@ def prvkey_tweak_mul(
             is zero or at or above the group order, or if `into` is not
             32 bytes.
     """
-    prvkey_buffer = ffi.new("char[32]", scalar(prvkey, "private key"))
+    prvkey_buffer = scalar_buffer(prvkey, "private key")
     tweak_bytes = scalar(tweak, "tweak")
     if not lib.secp256k1_ec_seckey_tweak_mul(ctx, prvkey_buffer, tweak_bytes):
         raise ValueError("invalid private key or tweak")

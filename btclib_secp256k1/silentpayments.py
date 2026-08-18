@@ -31,7 +31,7 @@ from collections.abc import Callable, Mapping, Sequence
 from . import BytesLike, CData, ffi, keys, lib, xonly
 from ._cdata import array
 from ._scalar import in_range, octets, scalar
-from ._secret import keypair, take, wipe
+from ._secret import keypair, scalar_buffer, take, wipe
 from .context import ctx
 
 # the two widths this module has to check, neither of them a macro that
@@ -135,10 +135,7 @@ def _create_outputs_(
     seckeys: list[CData] = []
     try:
         keypairs.extend(keypair(prvkey) for prvkey in taproot_prvkeys)
-        seckeys.extend(
-            ffi.new("unsigned char[32]", scalar(prvkey, "private key"))
-            for prvkey in prvkeys
-        )
+        seckeys.extend(scalar_buffer(prvkey, "private key") for prvkey in prvkeys)
         created = lib.secp256k1_silentpayments_sender_create_outputs(
             ctx,
             array("secp256k1_xonly_pubkey *[]", outputs),

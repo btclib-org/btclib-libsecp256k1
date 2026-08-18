@@ -117,6 +117,135 @@ release-notes length in the first place, and are still in
   sentence that said the saving was "available and not yet taken" for
   `recovery` is now the one that says what taking it cost.
 
+### A scalar may be memory the caller can overwrite
+
+- **`_scalar.scalar` takes a cffi array of exactly 32 octets and hands it
+  on unconverted** (#247), so wherever a private key or a tweak is
+  accepted, `ffi.new("unsigned char[32]", ...)` is too. It is the only
+  argument of these bindings that is not copied at the boundary, and the
+  reason is what the copy would be: an immutable `bytes` of a secret,
+  which nothing can overwrite and which stays until the collector gets to
+  it. A caller signing again and again under one key can now hold it in
+  memory it owns and wipe that when done, with no `bytes` of the key made
+  per call. What that gives up is stated where `octets` states the
+  opposite -- the copy is also what stops a caller changing the octets
+  libsecp256k1 is reading -- and it is the caller's to give up, the
+  buffer and its synchronization being theirs already.
+- **What decided the shape is where the coercion actually binds**, and
+  the issue's premise was wrong about it. #247 reasoned that a
+  `dsa.Signer` holding a buffer "would have to turn it back into a
+  `bytes` on every call". It would not: `dsa._signed` and `dsa._checked`
+  hand libsecp256k1 the pointer, exactly as `ssa.Signer` bypasses
+  `keypair` per signature, so a prototype signer holding
+  `ffi.new("unsigned char[32]")` produced byte-identical signatures
+  before this change and hoisted 0.37 microseconds of 23.42 -- an Apple
+  M5, macOS 26.6, arm64, CPython 3.14.6, nine rounds of 3 000 calls with
+  the minimum kept, the checked call with its key handed in as the
+  anchor and run again for a noise of 0.02. Which leaves the README's
+  verdict on speed where it was.
+- **It binds on the derivation, and the sharpest case is a diagnosis.**
+  `keys._pubkey_from_prvkey_` asks for a scalar, so a key in a buffer
+  could not have its public key derived at all -- and the failing branch
+  of `dsa._checked`, which derives precisely in order to tell a wrong
+  argument from a fault, answered `TypeError: the private key must be
+  bytes or an int, not __CDataOwn`. A caller whose hardware had faulted
+  was told they had mistyped an argument they passed correctly, which is
+  the misdiagnosis #245 built that branch to avoid. So the door is open
+  for the diagnosis rather than for the microsecond, and
+  `test_the_discrimination_holds_for_a_key_held_in_a_buffer` holds both
+  sides of it with the key in a buffer.
+- **Any item type an octet wide, because what crosses is a re-view.**
+  `ffi.from_buffer` over `ffi.buffer` answers an `unsigned char[32]`
+  pointing at the caller's own memory, which is the one item type cffi
+  will pass to `const unsigned char *`: without it the acceptance would
+  be `char` and `unsigned char` alone, and `uint8_t[32]` -- what a C
+  programmer writes for 32 octets -- would clear every check and die at
+  the boundary in cffi's words about an internal ctype. Not `ffi.cast`,
+  which answers the same pointer for nothing and does **not** keep the
+  memory alive: measured, a cast whose owner is dropped and collected
+  reads 32 octets that no longer hold the key, with no error anywhere.
+  `from_buffer` keeps a reference to what it views.
+- **Three obligations pass to the caller with the copy**, and the
+  docstring names them because none of them exists for a `bytes`. The
+  octets must stay put for the whole call, which is more than one read:
+  `secp256k1_ecdsa_sign` loads the scalar (`secp256k1.c:555`) and derives
+  the nonce from the same pointer (:563), and `dsa._sign_` reads it again
+  per grinding attempt and in `_checked`'s failing branch -- so a write in
+  between gives a nonce and a signature under two different keys, arriving
+  as the fault `RuntimeError`. The memory must outlive the call, which no
+  python argument has had to promise: a cffi view -- a slice, a cast --
+  does not keep its owner alive, measured, and a dangling one reads freed
+  memory as a key. And the length is the declaration's word, `ffi.sizeof`
+  answering what the type says: a cast of 8 octets to `unsigned char[32]`
+  clears every refusal and has libsecp256k1 read 24 octets of whatever
+  follows, which cffi cannot report and so neither can this.
+- **Three refusals, because what follows is a bare pointer** libsecp256k1
+  reads 32 octets from. A *pointer* rather than an array, whose
+  `ffi.sizeof` is 8 and says nothing about what it points at -- the trap
+  `_secret.wipe` records from the other side, where that number would
+  have wiped a quarter of a private key and reported success. An array of
+  wider items: `uint32_t[8]` is 32 octets of whatever this machine's byte
+  order made of them, refused for the reason `octets` refuses a
+  `memoryview` of wider items. And an array of the wrong length, which is
+  the check every other scalar gets and the one a bare pointer cannot be
+  given later.
+- **A `str` is refused before the question is asked, and that is a bug
+  the suite caught rather than a case somebody thought of.**
+  `ffi.typeof` reads a str as a *cdecl*: `"x" * 32` comes back as cffi's
+  own `error: undefined type name`, which is neither this function's
+  `TypeError` nor about the argument -- and `"char[32]"` is worse, being
+  a cdecl that resolves, measures 32 octets, and would have been passed
+  to libsecp256k1 as a str.
+  `test_type_checks_refuse_what_merely_has_a_length` failed on the first
+  spelling the moment the branch was written; the second was found
+  looking for why, and both are cases now.
+- **Four call sites copy the octets, and had to be taught to.**
+  `keys.prvkey_negate`, `keys.prvkey_tweak_add`, `keys.prvkey_tweak_mul`
+  and `silentpayments._create_outputs_` allocate a buffer of their own --
+  the first three because libsecp256k1 writes the answer through that
+  pointer, the last because this package wipes it in a `finally` -- so
+  handing them the caller's memory would negate or zero the key that was
+  passed in. They spelled it `ffi.new(cdecl, scalar(...))`, whose
+  initializer is `bytes` or a list and never a cdata, so each refused one
+  of the two obvious cdecls with cffi's own message about an internal
+  `char[32]`: `unsigned char[32]` failed in the three `keys` functions and
+  `char[32]` in `silentpayments`, and `ssa.nonce_bip340` therefore failed
+  for *half of all keys*, reaching `prvkey_negate` only where the point
+  has odd y. `_secret.scalar_buffer` is now the one statement of that
+  copy -- `ffi.new` then `ffi.memmove`, which takes either source and
+  makes no `bytes` of the secret in between -- and it says which of the
+  two reasons each site has.
+- **The sweep is what would have caught it, and now exists.**
+  `tests/test_bytes_like.py` drove every entry point with bytes, a
+  bytearray and a memoryview; it drives them with a 32-octet buffer too,
+  swapping the private keys and tweaks of its own table by identity. It
+  asserts the answer is the same *and* that the caller's octets are still
+  there afterwards, which is the half a comparison of answers cannot see.
+  Reverting one of the four sites fails it on that row. The parity branch
+  gets a case of its own beside it, `PRVKEY` being 7 and even-y, so that
+  the half of `nonce_bip340` no table row reaches is driven with 5 and 6
+  and both parities are asserted to occur.
+- **The public annotations do not widen, which was the cost the issue
+  named.** `CData` is `Any`, so `BytesLike | int | CData` on `dsa.sign`
+  would have stopped mypy checking every caller's private key. Only
+  `scalar`'s own parameter widens: the entry points still declare
+  `BytesLike | int`, so a `float` is still refused statically at the call
+  the caller made, while a cdata still arrives because `ffi.new` answers
+  `Any`. What is given up is mypy checking this package's own calls of
+  `scalar`, whose run-time check is the one that was doing the work.
+- **The cffi stub gains what the question reads**: `_CType.kind`,
+  `.cname` and `.item`, and `typeof` now takes a cdata as well as a
+  cdecl -- `Any`, as `sizeof`'s parameter already is for the same reason,
+  cdata being what that file cannot name. It was opaque because nothing
+  read what cffi answered, and its docstring says what now does. Two
+  functions join it, `from_buffer` and `memmove`, being the two halves of
+  what a caller's octets can become.
+- **Whether a `dsa.Signer` is worth having is still
+  btclib-org/btclib#982's question**, and this does not answer it. What
+  it does is take the blocker away: the wiping ground that issue would
+  have to be argued on no longer needs a signer at all, a caller holding
+  the buffer and calling `dsa.sign` getting the same thing.
+
 ### The check takes a public key the caller already has
 
 - **`dsa.sign` and `dsa._sign_` take a keyword-only `pubkey`**, the key

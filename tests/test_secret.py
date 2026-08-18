@@ -290,3 +290,28 @@ def test_the_two_spellings_of_a_producer_agree() -> None:
         into = bytearray(32)
         assert call(*args, into=into) is None, call.__name__
         assert bytes(into) == call(*args), call.__name__
+
+
+def test_a_key_held_in_a_buffer_never_becomes_a_bytes_of_the_secret() -> None:
+    """The copy `into` cannot help with, and the one `scalar` no longer makes.
+
+    `into` is for a secret coming *out* of this package. This is the
+    other direction: a caller signing again and again under one key can
+    hold it in memory it owns -- `ffi.new`, and `_secret.wipe` when done
+    -- and hand that to the boundary, where before it was converted to an
+    immutable `bytes` per call and nothing could overwrite those.
+
+    Both halves are asserted, because either alone would be misleading.
+    The signature and the derived key are the ones the same secret gives
+    as `bytes`, so nothing about the answers changed; and the buffer is
+    zero after the wipe, which is what the `bytes` could never be.
+    """
+    held = ffi.new("unsigned char[32]", SECRET)
+    msg = bytes(range(32))
+
+    assert dsa.sign(msg, held) == dsa.sign(msg, SECRET)
+    assert keys.pubkey_from_prvkey(held) == keys.pubkey_from_prvkey(SECRET)
+    assert ssa.sign(msg, held, bytes(32)) == ssa.sign(msg, SECRET, bytes(32))
+
+    _secret.wipe(held)
+    assert bytes(ffi.buffer(held)) == bytes(32)

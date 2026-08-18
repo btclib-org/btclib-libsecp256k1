@@ -570,6 +570,48 @@ the paragraph above describes, a second copy of the secret held for as
 long as the signer is. That trade is worth making for half a signature
 and not for a hundredth of one.
 
+**The other ground such a signer could be argued on is the memory, and
+it needs no signer.** Where a scalar is accepted — a private key, a tweak
+— a cffi array of 32 octets is accepted too, and where the call only
+*reads* it libsecp256k1 is handed the caller's own memory. So a caller
+signing again and again under one key can hold it in
+`ffi.new("unsigned char[32]")`, wipe that when done, and have no `bytes`
+of the key made per signature. It is the only argument of these bindings
+that is not copied on the way in, and the trade is stated where the
+copying one is: the copy `bytes` and `bytearray` get is also what stops
+the caller changing the octets libsecp256k1 is reading, and a caller who
+hands in memory instead of a value has taken that on.
+[SECURITY.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/SECURITY.md)
+carries it with the wipe that goes with it.
+
+Which item type the array was declared as does not matter — `char`,
+`unsigned char`, `uint8_t`, `signed char` — because what crosses is a
+re-view of those octets rather than a conversion of them. What is refused
+is a pointer, whose length is not the pointer's own to know, an array of
+wider items, which is this machine's byte order rather than a scalar, and
+any length but 32.
+
+**Four calls copy it, and are meant to.** `keys.prvkey_negate`,
+`keys.prvkey_tweak_add`, `keys.prvkey_tweak_mul` and the sender side of
+`silentpayments` each own the buffer libsecp256k1 works in: the first
+three because it writes the answer through that pointer, and the last
+because this package wipes it afterwards. Handing those the caller's
+memory would negate or zero the key they passed, so a copy is owed and
+`_secret.scalar_buffer` takes it. Each of them *answers* a new secret,
+which is the other facility's question rather than this one's — `into`
+is how that comes back into a buffer instead of a `bytes`.
+
+Where that binds is not the signing, which never asked: the private
+halves hand libsecp256k1 the pointer, so a key in a buffer reached
+`_signed` before this and reaches it now. It binds on the *derivation* —
+`keys._pubkey_from_prvkey_` asks for a scalar — and the sharpest case is
+the failing branch of the check above, which derives in order to tell a
+wrong argument from a fault: with the key in a buffer it used to answer
+`TypeError: the private key must be bytes or an int`, telling a caller
+they had mistyped the argument they had passed correctly. Which is the
+reason the door is open, rather than the microsecond a signer would have
+hoisted.
+
 What does cost in `dsa.sign` is the DER serialization, 0.757
 microseconds, and a caller who wanted the other form never has to pay it:
 `compact=True` answers the 64 octets of `r ‖ s` directly, where reaching

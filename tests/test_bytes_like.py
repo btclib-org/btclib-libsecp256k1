@@ -5,6 +5,14 @@
 
 """Every argument that takes bytes takes a bytearray and a memoryview.
 
+And every argument that takes a *scalar* takes a cffi array of 32 octets
+besides, which is memory the caller owns rather than a value: the second
+sweep here drives the same table with the private keys and tweaks handed
+in that way. It asserts the same answer and one thing more -- that the
+caller's octets are still there afterwards, since four call sites copy
+into a buffer of their own precisely because libsecp256k1 writes through
+the pointer or because this package wipes it.
+
 The check is a normalization, so it has to be the normalized value that
 reaches libsecp256k1: a call site that checks its argument and then
 passes the one it was given would still hand cffi a bytearray, and cffi
@@ -469,6 +477,102 @@ def retyped(value: Any, kind: type) -> Any:
     if isinstance(value, dict):
         return {key: retyped(item, kind) for key, item in value.items()}
     return value
+
+
+# the scalars of the table above, by identity: every other bytes argument
+# crosses as a value rather than as memory, and `entropy` and `octets`
+# take no cdata. A tuple rather than a set, `bytes` being hashable but
+# `is` being the question
+SCALARS = (PRVKEY, TWEAK, SCAN_PRVKEY, SPEND_PRVKEY)
+
+
+def held(value: Any, made: list[tuple[Any, bytes]]) -> Any:
+    """Return a scalar argument as 32 octets of cffi memory.
+
+    Sequences and mappings are walked as `retyped` walks them, for the
+    same reason: the scalars of `create_outputs` and `scan_outputs` are
+    inside a list and a pair.
+
+    Args:
+        value: one argument of a call below.
+        made: what to record each buffer and its octets in, so that the
+            caller of this can check afterwards that nothing wrote
+            through them.
+
+    Returns:
+        The same value as an `unsigned char[32]` where it is one of the
+        scalars, walked where it is a sequence, and unchanged otherwise.
+    """
+    if any(value is scalar for scalar in SCALARS):
+        buffer = ffi.new("unsigned char[32]", value)
+        made.append((buffer, value))
+        return buffer
+    if isinstance(value, list):
+        return [held(item, made) for item in value]
+    if isinstance(value, tuple):
+        return tuple(held(item, made) for item in value)
+    if isinstance(value, dict):
+        return {key: held(item, made) for key, item in value.items()}
+    return value
+
+
+@pytest.mark.parametrize("name,call,args,kwargs", CALLS, ids=[c[0] for c in CALLS])
+def test_a_scalar_may_be_a_buffer_at_every_entry_point(
+    name: str,
+    call: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> None:
+    """The answer does not depend on the scalar being a value or memory.
+
+    Driven over the whole table rather than over the entry points that
+    looked interesting: which sites copy is not visible from the outside,
+    and the two that were wrong were `keys.prvkey_negate` -- reached by
+    `ssa.nonce_bip340` for half of all keys and by nothing else here --
+    and `silentpayments._create_outputs_`, each refusing one cdecl and
+    taking the other.
+
+    The second assertion is the half a comparison of answers cannot see:
+    a caller's buffer must come back holding what it held. Three sites
+    have libsecp256k1 write through the pointer and one wipes what it was
+    given, so each has to copy first, and a copy left out would show up
+    as a negated key or 32 zeros in the caller's own memory.
+
+    Args:
+        name: the entry point, for the test id.
+        call: the entry point itself.
+        args: its arguments, as bytes.
+        kwargs: its keyword arguments.
+    """
+    made: list[tuple[Any, bytes]] = []
+    swapped = tuple(held(argument, made) for argument in args)
+    assert call(*args, **kwargs) == call(*swapped, **kwargs)
+    assert all(bytes(ffi.buffer(buffer)) == octets for buffer, octets in made)
+
+
+def test_the_negating_half_of_a_nonce_takes_a_buffer_too() -> None:
+    """One table row cannot reach a branch that depends on the key.
+
+    `ssa.nonce_bip340` negates the private key where its point has odd y,
+    which is the only path in this table to `keys.prvkey_negate` other
+    than the row for it -- and `PRVKEY` is 7, whose y is even, so the
+    sweep above never takes that branch. With a buffer-held key it was a
+    coin flip on the key: 5 and 7 answered, 6 raised.
+
+    Both parities are asserted to occur rather than assumed, as
+    `tests/test_verified_signing.py` does of the same question.
+    """
+    parities = set()
+    for prvkey in (5, 6):
+        octets = prvkey.to_bytes(32, "big")
+        parities.add(xonly.from_prvkey(octets)[1])
+        held = ffi.new("unsigned char[32]", octets)
+        assert ssa.nonce_bip340(MSG, held, bytes(32)) == ssa.nonce_bip340(
+            MSG, octets, bytes(32)
+        )
+        # the negation is of a copy: what the caller handed in is intact
+        assert bytes(ffi.buffer(held)) == octets
+    assert parities == {0, 1}
 
 
 @pytest.mark.parametrize("kind", [bytearray, memoryview])

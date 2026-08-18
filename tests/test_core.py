@@ -296,6 +296,59 @@ def test_type_checks_refuse_what_merely_has_a_length() -> None:
         keys.pubkey_sort(pubkey_bytes)  # type: ignore[arg-type]
 
 
+def test_a_scalar_may_be_octets_this_package_can_overwrite() -> None:
+    """A cffi array of 32 octets is taken as it stands, and nothing else is.
+
+    Why it is taken is `tests/test_secret.py`'s subject: memory a caller
+    can zero, where the `bytes` this would otherwise convert to is a copy
+    of the secret that nothing can. What is refused is every shape whose
+    32 octets cannot be known to be 32 octets of scalar, and the three
+    are three different mistakes.
+
+    A pointer answers 8 for its own `ffi.sizeof` and says nothing about
+    what it points at -- the trap `_secret.wipe` records from the other
+    side, where that number would have wiped a quarter of a private key
+    and reported success. An array of wider items is 32 octets of
+    whatever this machine's byte order made of them, which is what
+    `_scalar.octets` refuses a `memoryview` of wider items for. And an
+    array of the wrong length is the length check every other scalar
+    gets, made here because a bare pointer cannot be given one later.
+    """
+    secret = bytes([7]) * 32
+
+    # four item types rather than one spelled four ways: cffi holds
+    # `uint8_t` and `signed char` to be primitives of their own, so
+    # nothing but a re-view of the octets lets all four cross
+    for cdecl in ("unsigned char[32]", "char[32]", "uint8_t[32]", "signed char[32]"):
+        held = ffi.new(cdecl)
+        ffi.buffer(held)[:] = secret
+        assert keys.pubkey_from_prvkey(held) == keys.pubkey_from_prvkey(secret)
+
+    # a view of the caller's memory and not a copy of it, which is the
+    # whole of what "unconverted" buys and also what it costs: writing
+    # through the buffer changes what libsecp256k1 would read
+    held = ffi.new("unsigned char[32]", secret)
+    viewed = _scalar.scalar(held, "private key")
+    held[0] = 0x09
+    assert bytes(ffi.buffer(viewed))[0] == 0x09
+
+    for cdecl in ("unsigned char *", "secp256k1_keypair *", "uint32_t[8]"):
+        with pytest.raises(TypeError, match="must be a cffi array of octets"):
+            keys.prvkey_verify(ffi.new(cdecl))
+    with pytest.raises(ValueError, match="private key must be 32 bytes"):
+        keys.prvkey_verify(ffi.new("unsigned char[31]"))
+
+    # a str is the one thing the question itself would get wrong, and
+    # `"char[32]"` is why it is refused before being asked rather than
+    # by the answer: `ffi.typeof` reads a str as a cdecl, so that one
+    # resolves, measures 32 octets, and would have been passed on as a
+    # str. The other spelling raises cffi's own `undefined type name`,
+    # which is not a TypeError and not about the argument
+    for text in ("char[32]", "x" * 32):
+        with pytest.raises(TypeError, match="private key must be bytes or an int"):
+            keys.prvkey_verify(text)  # type: ignore[arg-type]
+
+
 def test_a_bool_is_not_a_scalar() -> None:
     """A bool is refused where a scalar goes, python making it an int.
 

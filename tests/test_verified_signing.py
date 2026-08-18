@@ -69,7 +69,7 @@ from typing import Any, NoReturn
 
 import pytest
 
-from btclib_secp256k1 import CData, dsa, keys, recovery, ssa, xonly
+from btclib_secp256k1 import CData, dsa, ffi, keys, recovery, ssa, xonly
 
 MSG = hashlib.sha256(b"a message to sign twice").digest()
 PRVKEY = 7
@@ -681,3 +681,32 @@ def test_the_derivation_the_argument_saves_is_not_made_at_all() -> None:
         assert recovery.sign(MSG, PRVKEY, pubkey=pubkey) == recovery.sign(
             MSG, PRVKEY, verify=False
         )
+
+
+def test_the_discrimination_holds_for_a_key_held_in_a_buffer() -> None:
+    """The reason `scalar` takes a cffi array, rather than the mechanism.
+
+    The failing branch derives, and the derivation asks for a scalar. So
+    a caller holding the private key in memory it can wipe -- which is
+    what `tests/test_secret.py` is about -- used to reach this branch and
+    be told `the private key must be bytes or an int`: a type error about
+    an argument they had passed correctly, in place of the one diagnosis
+    this check exists to make.
+
+    Both sides of that diagnosis are held here with the key in a buffer.
+    The wrong public key is still a `ValueError` about the argument, and a
+    fault under the right one is still the `RuntimeError` -- and the
+    second needs the stand-in for the reason it always did: no input makes
+    a fresh signature fail its own verification.
+    """
+    held = ffi.new("unsigned char[32]", PRVKEY_BYTES)
+
+    other = keys.pubkey_from_prvkey(PRVKEY + 1, compressed=False)
+    with pytest.raises(ValueError, match="not this private key's"):
+        dsa.sign(MSG, held, pubkey=other)
+
+    pubkey = keys.pubkey_from_prvkey(PRVKEY)
+    with pytest.MonkeyPatch.context() as patch:
+        _refuse_every_check(patch)
+        with pytest.raises(RuntimeError, match=_UNVERIFIED):
+            dsa.sign(MSG, held, pubkey=pubkey)

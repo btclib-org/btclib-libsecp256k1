@@ -24,6 +24,14 @@ that of the memory rather than of a pointer to it: `_secret` reads both
 from it. `memoryview` is what it is used as -- sliced, assigned to, and
 measured -- so that is what it is declared to return.
 
+`from_buffer` and `memmove` are the two halves of what a caller's own 32
+octets can become. The first re-views them as the item type the boundary
+takes, without copying and while keeping the memory alive, which is
+`_scalar._owned_octets`; the second fills a buffer this package allocated
+from either a `bytes` or a cdata, which is `_secret.scalar_buffer`, where
+a copy is owed because libsecp256k1 writes through the pointer or because
+this package wipes it afterwards.
+
 `addressof` is how a field of a struct is passed where libsecp256k1 wants
 a pointer to it: the found outputs of `silentpayments` carry an x-only
 public key and a label by value, and each has to reach its own serializer.
@@ -34,21 +42,33 @@ well as a string. `_CType` is what says so: with `Any` there instead,
 `new` accepts anything at all -- `ffi.new(_XONLY_SIZE)`, an int where a
 cdecl belongs, and the size and the type it was built from now sit a
 dozen lines apart in the same module -- which is the vacuous
-type-checking this file exists to prevent. It is opaque because nothing
-here reads what cffi answers; only where it may be passed matters.
+type-checking this file exists to prevent.
+
+`typeof` also answers *about* a cdata, which is how `_scalar.scalar`
+asks whether the 32 octets it was handed are an array of them: the
+parameter is therefore `Any`, as `sizeof`'s already is for taking either
+a cdecl or a cdata, cdata being what this file cannot name. The three
+fields of `_CType` are the ones that question reads -- the kind, the
+element type, and the name to put in the exception -- and they are here
+rather than opaque because something now reads them.
 """
 
 from typing import Any
 
-class _CType: ...
+class _CType:
+    kind: str
+    cname: str
+    item: _CType
 
 class _FFI:
     NULL: Any
     def new(self, cdecl: str | _CType, init: Any = ...) -> Any: ...
-    def typeof(self, cdecl: str) -> _CType: ...
+    def typeof(self, cdecl_or_cdata: Any) -> _CType: ...
     def addressof(self, cdata: Any, field: str) -> Any: ...
     def sizeof(self, cdecl_or_cdata: Any) -> int: ...
     def buffer(self, cdata: Any, size: int = ...) -> memoryview: ...
+    def from_buffer(self, cdecl: str | _CType, python_buffer: Any) -> Any: ...
+    def memmove(self, dest: Any, src: Any, n: int) -> None: ...
     def unpack(self, cdata: Any, length: int) -> bytes: ...
     def string(self, cdata: Any) -> bytes: ...
     def callback(self, cdecl: str, python_callable: Any) -> Any: ...

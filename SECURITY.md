@@ -103,13 +103,9 @@ These are known and inherent, not vulnerabilities:
     zeroed, which is the limitation above and not this narrowing of it.
     What the caller then does with the buffer is theirs: this does not
     wipe it for them, and a buffer they never overwrite is exactly the
-    un-zeroizable copy `into` was reached for to avoid. Nor does it
-    touch the *entry* side, which is the half that cannot be improved
-    from inside this package: the `bytes` or `int` handed in already
-    existed before the call, and the arithmetic that produced it
-    happened where this package cannot see. The obligation is stated
-    rather than enforced, for the reason `ssa.Signer` has no finalizer:
-    a guarantee nothing keeps is worse than none
+    un-zeroizable copy `into` was reached for to avoid. The obligation is
+    stated rather than enforced, for the reason `ssa.Signer` has no
+    finalizer: a guarantee nothing keeps is worse than none
 
     ```python
     prvkey = bytearray(32)
@@ -149,6 +145,53 @@ These are known and inherent, not vulnerabilities:
     type, a length or a magnitude and never on the content of a secret.
     Everywhere an `int` is accepted `bytes` is too, and for a secret that
     is the form to use
+- **the entry side takes one form that is not a copy**: where a scalar is
+    accepted, so is a cffi array of 32 octets —
+    `ffi.new("unsigned char[32]", ...)`, or any other item type an octet
+    wide — and where the call only reads it, it reaches libsecp256k1 as
+    it stands. That is the whole of the difference: a `bytes` or a
+    `bytearray` is copied at the boundary, deliberately, so that nothing
+    can change what libsecp256k1 is about to read, and the copy of a
+    secret is an immutable object nothing can overwrite. A caller signing
+    again and again under one key can therefore hold it in memory it
+    owns, wipe that memory when done, and have no `bytes` of the key made
+    per call. What this does not change is what came before: the value
+    the buffer was filled from existed already, and the arithmetic that
+    produced it happened where this package cannot see — which is why
+    filling one from an `int` buys nothing the bullet above does not
+    already refuse. And the wipe stays the caller's, as it is for `into`:
+    a buffer never overwritten is the same un-zeroizable copy under
+    another name.
+
+    **What the caller takes on is three things, and `_scalar` names them
+    where it refuses the shapes it cannot take.** The octets must stay
+    put for the whole call, which is more than one read — libsecp256k1
+    loads the scalar and then derives the nonce from the same pointer, and
+    grinding and the check read it again — so a write in between yields a
+    nonce and a signature under two different keys, reported as the fault
+    it is indistinguishable from. The memory must outlive the call, which
+    no python argument has had to promise: a cffi *view*, a slice or a
+    cast, does not keep its owner alive, and a dangling one reads freed
+    memory as a private key. And the length is the declaration's word:
+    `ffi.cast("unsigned char[32]", ...)` over 8 octets is accepted, cffi
+    having no way to report what was really allocated.
+
+    Four calls copy the octets into a buffer of their own instead, and
+    have to: `keys.prvkey_negate`, `keys.prvkey_tweak_add`,
+    `keys.prvkey_tweak_mul` have libsecp256k1 write the answer through
+    that pointer, and the sender side of `silentpayments` wipes it on the
+    way out — so passing the caller's memory would negate or zero the key
+    they handed in. Each of those answers a *new* secret, which is what
+    `into` above is for
+
+    ```python
+    prvkey = ffi.new("unsigned char[32]", secret_octets)
+    try:
+        sig = dsa.sign(msg, prvkey)   # no bytes of the key is made
+    finally:
+        ffi.buffer(prvkey)[:] = bytes(32)   # the caller's wipe
+    ```
+
 - randomness comes from `secrets.token_bytes`, i.e. from the operating
     system, both for the context randomization and for the auxiliary
     randomness of BIP340 signing and of ElligatorSwift encoding

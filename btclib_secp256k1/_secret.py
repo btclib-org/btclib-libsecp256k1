@@ -226,6 +226,52 @@ def take(buffer: CData, *, into: MutableBytesLike | None = None) -> bytes | None
     return None
 
 
+def scalar_buffer(prvkey: BytesLike | int | CData, name: str) -> CData:
+    """Copy a scalar into 32 octets of this package's own memory.
+
+    The copy `_scalar.scalar` does not take, taken where it is owed --
+    which is two situations rather than one, and neither is about
+    distrusting the caller:
+
+    - libsecp256k1 *writes through* the pointer.
+      `secp256k1_ec_seckey_negate`, `_tweak_add` and `_tweak_mul` all
+      answer in place, and the caller's own key must not be overwritten
+      by a function that returns a new one;
+    - this package *wipes* the buffer afterwards, which
+      `silentpayments._create_outputs_` does in a `finally` for every
+      private key it built. Wiping memory the caller handed in would zero
+      their key on the way out of a call that only read it.
+
+    So a `bytes` or a cdata arrives here and 32 octets of ours leave, and
+    `take` or an explicit `wipe` is what the caller of this owes in turn.
+    `ffi.memmove` is what fills it, rather than `ffi.new(cdecl, ...)`:
+    that takes an initializer, which is `bytes` or a list and never a
+    cdata of another item type -- the four call sites used to spell it
+    that way and refused a caller's buffer with cffi's own message about
+    an internal `char[32]`. It also means no `bytes` of the secret is made
+    in between, which is the whole of what a caller holding a buffer came
+    for.
+
+    Args:
+        prvkey: the scalar, as the caller passed it, in any form
+            `_scalar.scalar` accepts.
+        name: what the scalar is, as the exception should call it.
+
+    Returns:
+        A `char[32]` holding those octets, for the caller of this to hand
+        libsecp256k1 and then to wipe.
+
+    Raises:
+        TypeError: propagated from `_scalar.scalar`.
+        ValueError: propagated from it too, a length among the reasons.
+    """
+    buffer = ffi.new("char[32]")
+    # the length is the buffer's own, as it is in `wipe`, rather than a
+    # literal written a second time beside the cdecl
+    ffi.memmove(buffer, scalar(prvkey, name), ffi.sizeof(buffer))
+    return buffer
+
+
 def keypair(prvkey: BytesLike | int) -> CData:
     """Build the libsecp256k1 keypair of a private key.
 
