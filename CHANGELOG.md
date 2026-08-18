@@ -543,6 +543,36 @@ release-notes length in the first place, and are still in
   still does not buy is a check -- a rename falsifies it as quietly as an
   append falsified a position -- which is #258, and the count in the same
   docstring is #259.
+- **And that check exists now** (#258). `tests/test_citations.py` reads
+  every backticked span in this suite and in the package's own sources,
+  and holds each one that spells a test name to being a test that exists.
+  The package half is not incidental: `btclib_secp256k1/dsa.py` names two
+  of the cases behind a claim it makes about itself and
+  `btclib_secp256k1/recovery.py` names one, so a rename can falsify a
+  shipped docstring.
+- **The reader is the whole of the design**, and two shapes are why. A
+  citation is wrappable -- `tests/test_docs.py` breaks
+  `test_no_documented_module_has_gone_away` at an underscore across two
+  lines -- and a pattern anchored to one line does not report that as
+  dangling but never sees it, which is the failure a guard must not have;
+  so a span is collapsed, of whitespace and of the `#` a wrap inside a
+  comment block adds. And a cited name may be somebody else's:
+  `tests/test_vectors.py` names rust-secp256k1's own `test_low_r` to say
+  which upstream vector it reproduces. Those are listed with where each
+  comes from and each is held to still being cited, so the list cannot
+  become names nobody removed. Text rather than the syntax tree, which
+  inverts `tests/test_secret.py`'s reasoning for the opposite population:
+  there a mention had to be told from a call, and here the mention is the
+  subject -- half of them in comments no tree carries.
+- **The module reads every source but itself**, which is what makes the
+  staleness half mean anything: it names the exempted test in order to
+  explain the exemption, so reading itself would let the guard keep its
+  own exemptions alive, and its reader's cases are citations held as
+  fixtures rather than prose -- one of them a name that deliberately does
+  not exist. `CHANGELOG.md` and `HISTORY.md` are out of scope for a
+  different reason than noise: a released section is that release's
+  account of itself, and a check over it would ask for the record to be
+  edited whenever the tree moves.
 
 ### The frames between an entry point and libsecp256k1
 
