@@ -554,7 +554,7 @@ def test_a_fault_under_a_handed_in_key_is_not_reported_as_a_wrong_key() -> None:
             dsa.sign(MSG, PRVKEY, pubkey=pubkey)
 
 
-def test_the_derivation_is_not_made_where_the_key_handed_in_verifies() -> None:
+def test_the_derivation_the_argument_saves_is_not_made_at_all() -> None:
     """`dsa`'s early return, which is the whole of what its argument saves.
 
     `_checked` verifies under the key handed in and returns there,
@@ -684,7 +684,7 @@ def test_a_key_fixed_in_advance_cannot_pass_a_recovered_signature() -> None:
             recovery.sign(msg, other_key, pubkey=wrong)
 
 
-def test_the_derivation_the_argument_saves_is_not_made_at_all() -> None:
+def test_the_derivation_the_recoverable_check_saves_is_not_made_at_all() -> None:
     """The saving itself, asserted rather than measured.
 
     The check compares the recovered key with the one handed in and

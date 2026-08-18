@@ -309,7 +309,7 @@ release-notes length in the first place, and are still in
   derived comparison, which agreed and gave back the same signature, so
   every other case of the argument passed with the derivation paid for
   again -- the figures above false and nothing red.
-  `test_the_derivation_is_not_made_where_the_key_handed_in_verifies`
+  `test_the_derivation_the_argument_saves_is_not_made_at_all`
   substitutes the multiplication for one that raises, and the signature
   coming back at all is what says it was never made. That mutation now
   fails the suite, and it failed nothing before.
