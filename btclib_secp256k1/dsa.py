@@ -577,7 +577,9 @@ def _verify_(
             `parse_compact` return. Mutated in place where `normalize`
             asks for it.
         normalize: whether to verify the lower-s form of the signature
-            rather than reject a signature that is not in it.
+            rather than reject a signature that is not in it. The
+            rejection is `secp256k1_ecdsa_verify`'s own, and `verify`
+            documents what accepting the other form costs.
 
     Returns:
         True if the signature is valid for that key and message -- and
@@ -609,12 +611,25 @@ def verify(
     """Verify a ECDSA signature.
 
     A signature which is not in the normalized lower-s form is rejected,
-    unless `normalize` is set: which of the two forms a signature carries
-    was the signer's choice, so a caller checking signatures it did not
-    make normalizes rather than refuses, and says so here rather than
-    round-tripping the signature through `normalize` and back into DER.
-    The default is the refusal, that being what a caller enforcing the
-    lower-s form of its own signatures wants.
+    and the refusal is libsecp256k1's rather than this wrapper's:
+    `secp256k1_ecdsa_verify` accepts the lower-s form alone, so that the
+    second signature `is_low_s` describes does not verify. `normalize` is
+    therefore not a choice between two behaviours the library offers but
+    the one way of declining to pass that refusal on, and what it
+    verifies is s replaced by n - s -- a signature the caller was never
+    handed.
+
+    Which of the two forms a signature carries was the signer's choice,
+    so a caller checking signatures it did not make normalizes rather
+    than refuses, and says so here rather than round-tripping the
+    signature through `normalize` and back into DER. What it accepts in
+    exchange is the malleability itself: two encodings verify one message
+    under one key, and whatever hashes or stores the signature has both
+    to account for. Bitcoin Core makes the same refusal a standardness
+    rule, `SCRIPT_VERIFY_LOW_S`, so a signature from elsewhere and a
+    signature a transaction can carry are not the same set. The default
+    is the refusal, that being what a caller enforcing the lower-s form
+    of its own signatures wants too.
 
     Args:
         msg_bytes: the 32-byte hash of the message.
@@ -622,7 +637,9 @@ def verify(
         signature_bytes: the signature, DER encoded or the 64 octets of
             `r || s`, as `compact` says.
         normalize: whether to verify the lower-s form of the signature
-            rather than reject a signature that is not in it.
+            rather than reject a signature that is not in it. The
+            rejection is libsecp256k1's, and True is what accepts the
+            malleability it rules out.
         compact: whether the signature is the 64-byte `r || s` rather
             than DER. Which of the two it is has to be said and cannot be
             read off the length: a DER signature of 64 octets exists,

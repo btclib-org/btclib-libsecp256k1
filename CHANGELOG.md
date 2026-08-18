@@ -1913,6 +1913,24 @@ release-notes length in the first place, and are still in
   `serialize_label` does with it is the other kind of use and is named
   as such — unpacking the buffer this module declared, which is exactly
   what `keys` does with its own.
+- **`dsa.verify` says whose refusal the lower-s form is** (#249). The
+  docstring motivated the default by who wants it -- "what a caller
+  enforcing the lower-s form of its own signatures wants" -- which reads
+  as this wrapper choosing between two behaviours libsecp256k1 offers. It
+  is the other way round: `secp256k1_ecdsa_verify` accepts the lower-s
+  form alone, "to avoid accepting malleable signatures", so `False` is
+  that call passed through and `normalize=True` is the one way of not
+  passing it through. Which is also what makes the flag unlike the rest
+  of this module's booleans: `grind` and `verify` weigh a cost against a
+  benefit and `compact` picks a serialization, where this one spends no
+  measurable time and pays in the malleability itself -- two encodings
+  verifying one message under one key, which whatever hashes or stores
+  the signature has both to account for. Bitcoin Core makes the same
+  refusal a standardness rule, `SCRIPT_VERIFY_LOW_S`, so a signature
+  from elsewhere and a signature a transaction can carry are not the same
+  set, and "a caller checking signatures it did not make normalizes" is
+  now stated with what it accepts in exchange. `_verify_`'s argument
+  entry, which has no prose above it to lean on, points at both.
 
 ### CI
 
