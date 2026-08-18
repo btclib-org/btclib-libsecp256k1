@@ -22,6 +22,101 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### The recoverable check takes that key too
+
+- **`recovery.sign` and `recovery._sign_` take a keyword-only `pubkey`**
+  (#246), the key the recovered one is compared with, so that
+  `_abort_unless_recovered` no longer derives a key the caller is
+  holding. Everything around it is what #245 settled for `dsa` and is
+  not restated in a second shape: the key is taken on trust, it is
+  refused beside `verify=False` in both halves, and octets are parsed at
+  the boundary so that a mistyped argument is refused before anything is
+  signed rather than arriving as a verdict on a signature the caller now
+  has.
+- **The dearest check of the three, and the same saving as `dsa`'s.**
+  Measured in one session with `dsa.sign` beside it so the two
+  are comparable rather than merely printed together -- an Apple M5,
+  macOS 26.6, arm64, CPython 3.14.6, nine rounds of 3 000 calls with the
+  minimum of each kept, the private key handed in as octets in every row,
+  and the unchecked signature run a second time so the noise has a figure
+  of its own:
+
+  | `recovery.sign` | per call | the check |
+  | --- | --- | --- |
+  | `verify=False` | 12.07 | |
+  | the key derived, as before | 35.00 | 22.93 |
+  | a compressed key handed in | 29.67 | 17.60 |
+  | an uncompressed key handed in | 27.49 | 15.42 |
+  | the point already parsed, through `_sign_` | 27.25 | 15.18 |
+  | `verify=False` again (the noise) | 12.09 | ±0.02 |
+
+  `dsa.sign` in that same session was 12.14 unchecked, 31.97 with the key
+  derived and 24.55 with an uncompressed one handed in, so its check went
+  19.83 to 12.41 -- both within a few tenths of #245's own session, which
+  is between sessions and not within either. The 7.51 removed here is
+  `secp256k1_ec_pubkey_create` and nothing besides: timed alone in the
+  same session it is 7.53. The 2.18 between the two serializations is the
+  field square root that recovers y and the 0.24 under it is the
+  uncompressed parse only the private half avoids, both agreeing with the
+  2.02 and 0.26 measured for `dsa`. What is left is what a recovery and a
+  comparison cost over a verification, and it is the same ~3 microseconds
+  before and after -- 22.93 against 19.83 derived, 15.42 against 12.41
+  handed in -- which is what says the argument removed the derivation and
+  changed nothing else.
+
+  Which also settles a guess #246 made before anything was measured:
+  "It is the scheme whose check is doing the most work, so the saving is
+  largest". The check is the most work, 22.93 against 19.83; the saving
+  is not larger. 7.51 here against 7.42 in `dsa` is 0.09, in a session
+  whose own noise row is ±0.02 but which calls a 0.16 difference between
+  the two square roots "agreeing" -- and both land on the 7.53 the call
+  costs timed alone, which is the reading that matches "and nothing
+  besides". The saving is one `secp256k1_ec_pubkey_create`, in both
+  modules, at one price.
+- **A mismatch now has three causes, and two of them share an answer.**
+  The key given is not this private key's, the recovery id is not the
+  signature's, or the computation faulted; the first is an argument and
+  the other two are not. One comparison separates them and it is paid
+  only where something already went wrong: the recovered key against the
+  derived one. Where those agree the signature is the signer's and the
+  argument is wrong, which is the `ValueError`; where they do not, the
+  signature does not recover its own signer, which is what a wrong id and
+  a fault both look like from here. That they share the `RuntimeError` is
+  the decision rather than an oversight -- a caller of `sign` cannot pass
+  an id at all, it coming back from `secp256k1_ecdsa_sign_recoverable`
+  beside the signature, so an id that is not the signature's is a fault
+  by the time the check runs.
+- **So the discrimination is `dsa`'s shape, and the third cause is what
+  the issue asked about.** #246 left open whether `recovery` should take
+  the argument at all, the saving being the largest and the diagnosis
+  having the most ways to go wrong. What decided it is that the third
+  cause needs no third message: it is unreachable from any argument of
+  `sign`, and where it is reachable -- through the parsed signature the
+  private half takes -- it is the fault the `RuntimeError` already names.
+  So the cost of taking the saving is one comparison on a path that was
+  already failing.
+- **The case no other module in this package can write.** A wrong
+  recovery id is one `parse_compact` away, so all three causes are
+  reachable with no stand-in anywhere:
+  `test_a_wrong_id_under_a_right_key_is_not_reported_as_a_wrong_key`
+  signs once and asks the real libsecp256k1 three questions -- the
+  signature's own id under the signer's key, the other id under that same
+  key, and the signature's own id under a stranger's -- and holds the
+  first to passing and the other two to the two different exceptions.
+  Both misdiagnoses are what it rules out: a right key with a wrong id
+  reported as a wrong argument, and a wrong key reported as a fault.
+- **The rest of the group is `dsa`'s, asserted again here** rather than
+  assumed to carry over: the same signature and the same recovery id
+  whichever way the check got its key and in both serializations of it,
+  the refusal of a key beside `verify=False` in both halves, octets that
+  are not a key refused before signing, and the property over forty keys
+  and messages -- which is a stronger sentence here than there, since the
+  key handed in has to be the single key the signature recovers rather
+  than one of the keys it verifies under.
+- **The README's section on the check carries the tables**, and the
+  sentence that said the saving was "available and not yet taken" for
+  `recovery` is now the one that says what taking it cost.
+
 ### The check takes a public key the caller already has
 
 - **`dsa.sign` and `dsa._sign_` take a keyword-only `pubkey`**, the key
@@ -89,15 +184,15 @@ release-notes length in the first place, and are still in
   holding the point, so the argument would buy nothing and sell one
   thing: a second reason a check can fail, and the discrimination step
   that reason costs. btclib-org/btclib#982 has the measurement.
-- **Not on `recovery` yet, and that is a decision to take rather than
-  one taken.** `_abort_unless_recovered` derives the same key --
-  `keys._pubkey_cmp_(recovered, keys._pubkey_from_prvkey_(...))` -- so
-  the saving available there is exactly the one taken here: the recovery
-  stays and the derivation goes. What differs is the discrimination, a
-  recovered key that is not the one handed in having a third possible
-  cause the two schemes above do not, which is the recovery id. It wants
-  its own measurement and its own cases, so it is left to #246 rather
-  than folded in here.
+- **Not folded in for `recovery`, and taken there in a change of its
+  own** (#246, the section above). `_abort_unless_recovered` derived the
+  same key -- `keys._pubkey_cmp_(recovered,
+  keys._pubkey_from_prvkey_(...))` -- so the saving available there was
+  exactly the one taken here: the recovery stays and the derivation goes.
+  What differed was the discrimination, a recovered key that is not the
+  one handed in having a third possible cause the two schemes above do
+  not, which is the recovery id. That wanted a measurement and cases of
+  its own, and is what got them.
 - **The README carries all of this**, in the section on the check, which
   said `verify=False` was the only thing a caller could do about the
   cost and is where CLAUDE.md puts the design.

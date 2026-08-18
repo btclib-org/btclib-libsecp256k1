@@ -46,8 +46,18 @@ check instead of having it derived. Those turn on the key being taken on
 trust: what it costs -- a failure that has two causes, told apart in both
 directions, one of them needing the same stand-in as above -- and what it
 cannot cost, which is a signature wrongly accepted. That last one is the
-strongest thing in this file, and the only one here that is a property
-over many keys rather than a case.
+strongest thing in this file, and it is a property over many keys rather
+than a case.
+
+`recovery` takes the same key and adds the group after it, where the
+failure has three causes rather than two: the key given, the recovery id,
+or the computation. The first is an argument and the other two are not,
+and what separates them is the derivation the matching path skipped. The
+last of those tests is the one nothing else in the package can write --
+a right key and a wrong id, both real, no stand-in anywhere -- and the
+property over many keys is asserted again there, because what makes the
+trust safe is a different sentence when the key is recovered rather than
+verified against.
 """
 
 from __future__ import annotations
@@ -201,6 +211,25 @@ def _recovering_another_key(*_args: Any, **_kwargs: Any) -> CData:
         The parsed public key of a different private key.
     """
     return keys._pubkey_from_prvkey_(PRVKEY + 1)
+
+
+def _refusing_to_derive(*_args: Any, **_kwargs: Any) -> NoReturn:
+    """Stand in for the derivation, and fail if anything makes it.
+
+    What a key handed in is for is not deriving one, and every other test
+    of that argument would pass with the saving deleted: the derived
+    comparison that follows agrees with the one handed in, so a check
+    ignoring the argument answers the same signature. Substituting the
+    multiplication itself is what turns the saving into an assertion.
+
+    Args:
+        _args: whatever the derivation would have taken.
+        _kwargs: the same.
+
+    Raises:
+        AssertionError: always.
+    """
+    raise AssertionError("the key handed in was derived anyway")
 
 
 def _refuse_every_check(patch: pytest.MonkeyPatch) -> None:
@@ -395,17 +424,20 @@ def test_the_recovery_id_is_what_the_check_catches() -> None:
     # the id it was made with, which is what makes the refusals below a
     # refusal of the id rather than of the signature
     recovery._abort_unless_recovered(
-        recovery.parse_compact(signature, recid), MSG, PRVKEY_BYTES
+        recovery.parse_compact(signature, recid), MSG, PRVKEY_BYTES, None
     )
 
     with pytest.raises(RuntimeError, match="recovers another key"):
         recovery._abort_unless_recovered(
-            recovery.parse_compact(signature, 1 - recid), MSG, PRVKEY_BYTES
+            recovery.parse_compact(signature, 1 - recid), MSG, PRVKEY_BYTES, None
         )
     for beyond_the_field in (2, 3):
         with pytest.raises(RuntimeError, match=_UNRECOVERED):
             recovery._abort_unless_recovered(
-                recovery.parse_compact(signature, beyond_the_field), MSG, PRVKEY_BYTES
+                recovery.parse_compact(signature, beyond_the_field),
+                MSG,
+                PRVKEY_BYTES,
+                None,
             )
 
     assert dsa._verify_(
@@ -520,3 +552,132 @@ def test_a_fault_under_a_handed_in_key_is_not_reported_as_a_wrong_key() -> None:
         _refuse_every_check(patch)
         with pytest.raises(RuntimeError, match=_UNVERIFIED):
             dsa.sign(MSG, PRVKEY, pubkey=pubkey)
+
+
+def test_a_key_handed_in_is_the_key_recovery_would_have_derived() -> None:
+    """The signature is the same pair, whichever way the check got its key.
+
+    `recovery`'s answer is the compact signature and its id, so both have
+    to be the same: an argument that changed the id would be a different
+    signature recovering a different key, which is the one thing this
+    module cannot get wrong quietly. Both serializations of the key are
+    handed in, the parse being the only difference between them.
+    """
+    derived = recovery.sign(MSG, PRVKEY)
+    for held in (
+        keys.pubkey_from_prvkey(PRVKEY, compressed=False),
+        keys.pubkey_from_prvkey(PRVKEY, compressed=True),
+    ):
+        assert recovery.sign(MSG, PRVKEY, pubkey=held) == derived
+
+
+def test_the_key_given_is_told_apart_from_the_signature_being_wrong() -> None:
+    """A key that is not this private key's is an argument, not a fault.
+
+    The reason the failing branch derives, and here it separates one
+    cause from two rather than one from one: `RuntimeError` means the
+    signature does not recover its own signer -- a wrong id or a fault,
+    neither of them anything the caller passed -- while a wrong key given
+    is a `ValueError` and stays one.
+    """
+    other = keys.pubkey_from_prvkey(PRVKEY + 1, compressed=False)
+    with pytest.raises(ValueError, match="not this private key's"):
+        recovery.sign(MSG, PRVKEY, pubkey=other)
+
+
+def test_octets_that_are_not_a_key_are_refused_before_signing_recoverably() -> None:
+    """Parsed on the way in, so a mistyped argument is not a verdict.
+
+    `dsa.sign` is held to this too. Here what a key parsed inside the
+    check would produce is a report that the signature recovers somebody
+    else, which is the module's most alarming message and would be about
+    the caller's own typing.
+    """
+    with pytest.raises(ValueError, match="invalid public key"):
+        recovery.sign(MSG, PRVKEY, pubkey=b"\x02" + bytes(32))
+
+
+def test_a_key_is_refused_where_the_recoverable_check_is_declined() -> None:
+    """A key to compare with is refused where the comparison is declined.
+
+    Both halves refuse it, and the private one is not a copy for its own
+    sake: a caller holding a parsed point calls `_sign_` precisely to save
+    the parse, so that is where the argument is cheapest and where it must
+    not be silently ignored.
+    """
+    with pytest.raises(ValueError, match="verify=False declines"):
+        recovery.sign(MSG, PRVKEY, verify=False, pubkey=keys.pubkey_from_prvkey(PRVKEY))
+    with pytest.raises(ValueError, match="verify=False declines"):
+        recovery._sign_(
+            MSG, PRVKEY, verify=False, pubkey=keys._pubkey_from_prvkey_(PRVKEY_BYTES)
+        )
+
+
+def test_a_wrong_id_under_a_right_key_is_not_reported_as_a_wrong_key() -> None:
+    """The three-way failure, all three real, no stand-in anywhere.
+
+    This is the case no other module can write. A wrong recovery id is
+    reachable from an input -- `parse_compact` is one call -- so the two
+    causes that are not the caller's can be told from the one that is
+    without substituting a recovery: the same signature, its own id and
+    the other, and the signer's key handed in beside a stranger's.
+
+    What it guards is the misdiagnosis in both directions. A right key
+    with a wrong id must not arrive as "the public key given is not this
+    private key's", which would send a caller to check an argument that
+    was correct; and a wrong key with a right id must not arrive as the
+    `RuntimeError`, which is this package's word for the computation
+    having gone wrong.
+    """
+    signature, recid = recovery.sign(MSG, PRVKEY)
+    signer = keys._pubkey_from_prvkey_(PRVKEY_BYTES)
+    stranger = keys._pubkey_from_prvkey_(PRVKEY + 1)
+
+    # the signature's own id and the key that made it: the case the other
+    # two are read against
+    recovery._abort_unless_recovered(
+        recovery.parse_compact(signature, recid), MSG, PRVKEY_BYTES, signer
+    )
+
+    with pytest.raises(RuntimeError, match="recovers another key"):
+        recovery._abort_unless_recovered(
+            recovery.parse_compact(signature, 1 - recid), MSG, PRVKEY_BYTES, signer
+        )
+    with pytest.raises(ValueError, match="not this private key's"):
+        recovery._abort_unless_recovered(
+            recovery.parse_compact(signature, recid), MSG, PRVKEY_BYTES, stranger
+        )
+
+
+def test_a_key_fixed_in_advance_cannot_pass_a_recovered_signature() -> None:
+    """What makes taking the key on trust safe here, as a property.
+
+    Stronger than the `dsa` sentence rather than the same one: there the
+    key handed in has to be one of the keys the signature verifies under,
+    and here it has to be the single key the signature recovers. So a key
+    chosen before the signature exists passes only by having been the
+    signer's, and over forty keys and messages none of them is.
+    """
+    wrong = keys.pubkey_from_prvkey(PRVKEY, compressed=False)
+    for other_key in range(PRVKEY + 1, PRVKEY + 41):
+        msg = hashlib.sha256(other_key.to_bytes(32, "big")).digest()
+        with pytest.raises(ValueError, match="not this private key's"):
+            recovery.sign(msg, other_key, pubkey=wrong)
+
+
+def test_the_derivation_the_argument_saves_is_not_made_at_all() -> None:
+    """The saving itself, asserted rather than measured.
+
+    The check compares the recovered key with the one handed in and
+    derives only where they differ, so nothing that reads the answer can
+    tell that early return from its absence -- delete it and the derived
+    comparison below agrees, answering the same signature and the same
+    id. With the multiplication substituted for one that raises, the
+    signature coming back at all is what says it was never made.
+    """
+    pubkey = keys.pubkey_from_prvkey(PRVKEY)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(keys, "_pubkey_from_prvkey_", _refusing_to_derive)
+        assert recovery.sign(MSG, PRVKEY, pubkey=pubkey) == recovery.sign(
+            MSG, PRVKEY, verify=False
+        )

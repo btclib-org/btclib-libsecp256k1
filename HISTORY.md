@@ -109,6 +109,30 @@ against each other and not across two runs of the machine.
 So every signing call of the package now checks itself, and the same
 `verify=False` declines any of them.
 
+**And the check can be handed a key you already hold.** `dsa.sign` and
+`recovery.sign` take a keyword-only `pubkey`, the public key of the
+private key that is signing, so that the check verifies or compares
+against it rather than deriving it again:
+
+```diff
+-sig = dsa.sign(msg, prvkey)
++sig = dsa.sign(msg, prvkey, pubkey=pubkey)
+```
+
+That derivation is most of what ECDSA's check costs over BIP340's, and it
+is one call at one price in both modules — what differs is the check
+around it, `recovery`'s being the dearest of the three. Measured in one
+session, which is what makes the pair comparable: `dsa.sign` 31.97
+microseconds with the key derived and 24.55 with an uncompressed one
+handed in, `recovery.sign` 35.00 and 27.49. The key is taken on trust
+rather than checked against the private one, that check being the very
+multiplication the argument saves — so a key that is not this private
+key's raises `ValueError` and says so, which
+is told apart from the `RuntimeError` that means the computation went
+wrong. A `pubkey` beside `verify=False` is refused rather than ignored,
+and `ssa` takes no such argument because its keypair already holds the
+point.
+
 What the rest of the release adds: one for a caller that signs more than
 once under one key, one for a caller whose ECDSA signatures go into a
 transaction, one for a caller computing a taproot output key from a

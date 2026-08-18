@@ -20,6 +20,13 @@ comparison, and 32 bytes from an ECDH that succeeded with nobody. The
 public entry points are the counter-case, parsing their octets and so
 leaving the thread clean.
 
+One of those shapes is not an object the caller handed `lib` but an
+argument of a wrapper: the public key `recovery._sign_` compares against
+is taken on trust, so an unreadable one is recorded on the thread from
+inside a call that answers its own `ValueError` about the key. That the
+verdict is right anyway is the reasoning that docstring gives, and the
+last test here is it.
+
 An internal error is reachable through neither: libsecp256k1 reports
 through that callback what it holds to be unreachable, so the recording
 function is called directly, the way test_extension.py drives the branch
@@ -32,7 +39,7 @@ import threading
 
 import pytest
 
-from btclib_secp256k1 import context, dsa, ecdh, ffi, keys, lib, ssa, xonly
+from btclib_secp256k1 import context, dsa, ecdh, ffi, keys, lib, recovery, ssa, xonly
 from btclib_secp256k1.context import ctx
 
 # a public key libsecp256k1 is asked to parse into nowhere: the bindings
@@ -304,4 +311,30 @@ def test_reported_per_thread() -> None:
     assert elsewhere == ["nothing reported"]
     # the calling thread still has it
     with pytest.raises(ValueError, match="pubkey != NULL"):
+        context.check()
+
+
+def test_the_key_the_recoverable_check_trusts_is_the_one_nobody_validated() -> None:
+    """A wrapper's own argument, unreadable, and a verdict that still holds.
+
+    Every other shape above is an object a caller passed through `lib`.
+    This one is an argument of a wrapper: `recovery._sign_` takes the key
+    its check compares against on trust -- that being what the private
+    half is for -- so a `secp256k1_pubkey` nothing has written to reaches
+    `secp256k1_ec_pubkey_cmp`, and the illegal argument is recorded from
+    inside a call that raises about the key instead.
+
+    What is pinned here is that the answer is right regardless.
+    libsecp256k1 serializes a key it cannot load as 33 zero octets,
+    "less than any valid public key" by its own comment, so the readable
+    recovered key compares unequal to it: the comparison falls through to
+    the derivation, finds the signature is the signer's after all, and
+    reports the key handed in. A `RuntimeError` there would have told the
+    caller their hardware was faulty because they passed a zeroed struct.
+    """
+    msg = bytes(range(32))
+    unreadable = ffi.new("secp256k1_pubkey *")
+    with pytest.raises(ValueError, match="not this private key's"):
+        recovery._sign_(msg, 7, pubkey=unreadable)
+    with pytest.raises(ValueError, match="secp256k1_fe_is_zero"):
         context.check()

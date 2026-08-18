@@ -690,12 +690,12 @@ does not agree with one that came from anywhere else.
 `ssa.sign` takes no such argument, and that is a decision rather than an
 omission: its check is a bare verification already, the keypair holding
 the point, so there would be nothing to save and one more way for a
-check to fail. `recovery.sign` is the one where the same saving is
-available and not yet taken — its check derives the very same key before
-comparing what it recovered against it — and what it would cost to take
-is
-[issue 246](https://github.com/btclib-org/btclib-secp256k1/issues/246):
-a third way for the comparison to fail, which is the recovery id.
+check to fail. `recovery.sign` takes it: its check derived the very same
+key before comparing what it recovered against it, and that check is the
+dearest of the three. The saving is not larger for that, being the same
+call at the same price, and the table below is where both are read. What
+taking it cost is a third cause a mismatch can have, which is the
+recovery id.
 
 **`recovery.sign` recovers instead of verifying**, and the difference is
 the recovery id. A verification does not look at it: a recoverable
@@ -737,6 +737,49 @@ as it is in Core, whose `CKey::Sign` verifies the
 defensible, the serializers being memcpy-shaped where the signing is
 arithmetic, and the difference is worth a sentence rather than a
 change.
+
+**The derivation inside it is what a caller can hand in**, exactly as
+`dsa.sign` takes it. Measured in one session with `dsa.sign` beside it so
+that the two are comparable rather than merely printed together — an
+Apple M5, macOS 26.6, arm64, CPython 3.14.6, nine rounds of 3 000 calls
+with the minimum of each kept, and the unchecked signature run a second
+time so the noise has a figure of its own:
+
+| `recovery.sign` | per call | the check |
+| --- | --- | --- |
+| `verify=False` | 12.07 | |
+| the key derived, as before | 35.00 | 22.93 |
+| a compressed key handed in | 29.67 | 17.60 |
+| an uncompressed key handed in | 27.49 | 15.42 |
+| the point already parsed, through `_sign_` | 27.25 | 15.18 |
+| `verify=False` again (the noise) | 12.09 | ±0.02 |
+
+`dsa.sign` in that same session was 12.14 unchecked, 31.97 with the key
+derived and 24.55 with an uncompressed one handed in — a check of 19.83
+becoming 12.41 — which puts both of its tables here within a few tenths
+of the ones above, between sessions and not within either. The 7.51 the
+argument removes is `secp256k1_ec_pubkey_create` and nothing else: timed
+alone in the same session it is 7.53. The 2.18 between the two
+serializations is the field square root that recovers y, and the 0.24
+under it is the uncompressed parse only the private half avoids. What
+stays is what a recovery and a comparison cost over a verification, about
+3 microseconds either way it is read — 15.42 against 12.41 with a key
+handed in, 22.93 against 19.83 with it derived — and that it is the same
+3 both times is what says the argument took the derivation away and left
+the rest alone.
+
+The diagnosis costs one comparison more than `dsa`'s, and pays it only
+where something is already wrong. A mismatch here has three causes where
+`dsa`'s has two — the key given, the recovery id, or the computation —
+and the derivation the matching path skipped is what separates the one
+that is an argument from the two that are not. Where the recovered key
+is the signer's after all, the key handed in is the wrong one, which is a
+`ValueError`; where it is not, the signature does not recover its own
+signer, which is what a wrong id and a fault both look like from here.
+Neither of those is anything a caller of `sign` passed — the id comes
+back from `secp256k1_ecdsa_sign_recoverable` beside the signature, so a
+wrong one is a fault by the time the check runs — and that is why the two
+share the `RuntimeError`.
 
 Every other microsecond figure in this file was measured before this
 argument existed and is therefore the signature without the check:

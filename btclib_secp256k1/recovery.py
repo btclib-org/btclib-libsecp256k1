@@ -34,7 +34,7 @@ _COMPACT_BUFFER_TYPE = ffi.typeof(f"char[{_COMPACT_SIZE}]")
 
 
 def _abort_unless_recovered(
-    signature: CData, msg_bytes: bytes, prvkey_bytes: bytes
+    signature: CData, msg_bytes: bytes, prvkey_bytes: bytes, pubkey: CData | None
 ) -> None:
     """Recover from a signature just made, and refuse another key.
 
@@ -65,13 +65,47 @@ def _abort_unless_recovered(
     it raises where a `_foo_` half would answer, and the verb is the one
     BIP340 uses of the step.
 
+    **A key handed in is compared with instead of derived**, which is
+    `dsa._checked`'s arrangement and buys the same
+    `secp256k1_ec_pubkey_create` here, at the same price it costs there:
+    what is dearest in this package is the check, not the saving. What it
+    costs is that a mismatch now has three causes where `dsa`'s has two:
+    the key given is not this private key's, the recovery id is not the
+    signature's, or
+    the computation faulted. The first is an argument and the other two
+    are not, and one comparison separates them -- the recovered key
+    against the derived one, paid only where something already went
+    wrong. Where they agree, the signature is the signer's and it is the
+    argument that is wrong; where they do not, the signature does not
+    recover its own signer, which is what a wrong id and a fault both
+    look like from here and neither is anything the caller passed.
+
+    That those two share an answer is the decision rather than an
+    oversight. A caller of `sign` cannot pass an id at all -- it comes
+    back from `secp256k1_ecdsa_sign_recoverable` beside the signature --
+    so an id that is not the signature's is a fault by the time this
+    runs, and `test_the_recovery_id_is_what_the_check_catches` reaches
+    that state the only way anything can: through the parsed signature
+    this private half takes.
+
     **Neither call below needs a `context.check` behind it, and both are
     the kind that usually would.** `keys._pubkey_cmp_` answers an
     ordering that means nothing where libsecp256k1 could not read an
-    object, and that answer is a security decision here -- but both
-    objects come from calls that returned success a line earlier, so the
-    only way its `0` could lie is both keys being unreadable at once,
-    which is not a state either call can leave behind. And
+    object, and that answer is a security decision here. One of the two
+    objects is no longer proved by a preceding success: `recovered` is,
+    but `pubkey` is what this half takes on trust, and a caller handing
+    in a `secp256k1_pubkey` nothing has written to reaches
+    `secp256k1_ec_pubkey_cmp` with it -- so an illegal argument *is*
+    recorded on the thread here, which the comparison against a derived
+    key could not do. What holds instead is the comparison itself:
+    libsecp256k1 serializes a key it cannot load as 33 zero octets,
+    documented there as "less than any valid public key", and the
+    recovered key is readable and serializes with an `0x02` or `0x03`
+    prefix. So the `0` still cannot lie -- an unreadable key compares
+    *unequal*, the fall-through derives, and what the caller is told is
+    that the key they gave is not this private key's, which is the truth
+    about it. `dsa._verify_` documents the same trust from the other
+    side, and `dsa._checked` passes such a key straight into it. And
     `keys._pubkey_from_prvkey_` raises a `ValueError` for a key outside
     [1, n-1], which this one is not: libsecp256k1 accepted it for signing
     immediately above. That is why `_recover_`'s `ValueError` is
@@ -84,13 +118,20 @@ def _abort_unless_recovered(
         signature: the recoverable signature just made.
         msg_bytes: the 32-byte hash it was made over, already checked.
         prvkey_bytes: the 32-byte private key that made it, already
-            checked.
+            checked, and what the failing branch derives from.
+        pubkey: the public key the recovered one is compared with,
+            parsed, or None to derive it -- which is what a caller
+            holding nothing gets.
 
     Raises:
         RuntimeError: if no key recovers from the signature, or if the
             one that does is not the signer's. Neither is reachable by
-            any input: what they report is the computation itself having
-            gone wrong.
+            any input to `sign`: what they report is the computation
+            itself having gone wrong, the recovery id included.
+        ValueError: if the recovered key is the signer's and not the one
+            handed in, which is the wrong key given -- or a private key
+            that was already corrupt when it was signed with, as
+            `dsa._checked` says of the same branch.
     """
     try:
         recovered = _recover_(msg_bytes, signature)
@@ -102,8 +143,14 @@ def _abort_unless_recovered(
         raise RuntimeError("signing produced a signature no key recovers from") from (
             failure
         )
+    if pubkey is not None and not keys._pubkey_cmp_(recovered, pubkey):
+        return
+    # either nothing was handed in, or what was did not match: the
+    # derivation the common path skipped is what says which
     if keys._pubkey_cmp_(recovered, keys._pubkey_from_prvkey_(prvkey_bytes)):
         raise RuntimeError("signing produced a signature that recovers another key")
+    if pubkey is not None:
+        raise ValueError("the public key given is not this private key's")
 
 
 def _sign_(
@@ -112,6 +159,7 @@ def _sign_(
     aux_rand32: BytesLike | None = None,
     *,
     verify: bool = True,
+    pubkey: CData | None = None,
 ) -> CData:
     """Create a recoverable ECDSA signature, as the parsed signature.
 
@@ -130,19 +178,32 @@ def _sign_(
         verify: whether to recover the key from the signature and refuse
             one that is not the signer's, as `sign` documents and
             `_abort_unless_recovered` reasons about.
+        pubkey: the public key the recovered one is compared with,
+            parsed, where the caller already holds it and would rather
+            not have it derived again. Taken on trust;
+            `_abort_unless_recovered` says what that does and does not
+            risk. Refused beside `verify=False`, which declines the
+            check it is for.
 
     Returns:
         The libsecp256k1 recoverable signature object.
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
-            given and is not 32 bytes, or if the private key is not 32
-            bytes, does not fit in them, or is not in [1, n-1].
+            given and is not 32 bytes, if the private key is not 32
+            bytes, does not fit in them, or is not in [1, n-1], if a
+            `pubkey` is given beside `verify=False`, or if the recovered
+            key is this private key's and not the one given -- the wrong
+            key handed in, most likely, and `_abort_unless_recovered`
+            says what else it can be.
         RuntimeError: if `verify` asks and the signature does not recover
             the key that made it.
     """
     prvkey_bytes = scalar(prvkey, "private key")
     msg_bytes = octets(msg_bytes, "message hash", 32)
+
+    if pubkey is not None and not verify:
+        raise ValueError("pubkey is for the check that verify=False declines")
 
     signature = ffi.new("secp256k1_ecdsa_recoverable_signature *")
 
@@ -159,7 +220,7 @@ def _sign_(
     ):
         raise ValueError("invalid private key: not in [1, n-1]")
     if verify:
-        _abort_unless_recovered(signature, msg_bytes, prvkey_bytes)
+        _abort_unless_recovered(signature, msg_bytes, prvkey_bytes, pubkey)
     return signature
 
 
@@ -169,6 +230,7 @@ def sign(
     aux_rand32: BytesLike | None = None,
     *,
     verify: bool = True,
+    pubkey: BytesLike | None = None,
 ) -> tuple[bytes, int]:
     """Create a recoverable ECDSA signature.
 
@@ -194,6 +256,19 @@ def sign(
     verification's work, and the comparison and the derivation are the
     rest. CHANGELOG.md names the session.
 
+    `pubkey` is how a caller already holding the key stops the comparison
+    deriving it, and what it removes is the same call `dsa.sign` removes,
+    at the same price: the check here is the dearest of the three, the
+    saving is not. In a session of its own: 35.00 microseconds with the
+    key derived, 29.67 with a compressed one handed in, 27.49 with an
+    uncompressed one, against 12.07 unchecked and a noise of
+    ±0.02. The 7.51 that removes is `secp256k1_ec_pubkey_create`, which
+    timed alone there is 7.53, and what stays is the recovery and the
+    comparison -- about 3 microseconds over what `dsa.sign` pays for a
+    verification, whether the key is handed in or derived. The README
+    carries both tables, and `_abort_unless_recovered` what the trust
+    costs in diagnosis.
+
     Args:
         msg_bytes: the 32-byte hash of the message.
         prvkey: the private key, 32 bytes or an int below 2**256.
@@ -203,6 +278,14 @@ def sign(
             does not give the signer's back. It costs a recovery, a point
             multiplication and a comparison, and False is what a caller
             that has measured those against its own threat model passes.
+        pubkey: the public key of this private key, where the caller
+            already holds it, so that the comparison does not derive it
+            again. That derivation is the multiplication named above, and
+            this is how not to pay it twice. It is taken on trust rather
+            than checked against the private key, which would cost the
+            multiplication it saves; where it is wrong, the check says so
+            and says which of the three things went wrong. Refused
+            beside `verify=False`, which declines the check it is for.
 
     Returns:
         The 64-byte compact signature and its recovery id. The id is 0
@@ -212,8 +295,11 @@ def sign(
 
     Raises:
         ValueError: if the message hash is not 32 bytes, if aux_rand32 is
-            given and is not 32 bytes, or if the private key is not 32
-            bytes, does not fit in them, or is not in [1, n-1].
+            given and is not 32 bytes, if the private key is not 32
+            bytes, does not fit in them, or is not in [1, n-1], if pubkey
+            is not a public key or is given beside `verify=False`, or if
+            pubkey is not this private key's -- which is told apart from
+            the failure below rather than reported as it.
         RuntimeError: if libsecp256k1 fails to serialize the signature,
             which no input can make it do, or if `verify` asks and the
             signature does not recover the key that made it.
@@ -227,7 +313,26 @@ def sign(
         >>> pubkey == keys.pubkey_from_prvkey(1)
         True
     """
-    return serialize_compact(_sign_(msg_bytes, prvkey, aux_rand32, verify=verify))
+    # the contradiction before the value, as `dsa.sign` answers it and
+    # for the same reason: a caller who asked for no check and handed in
+    # a key to check with should hear about the two arguments rather than
+    # about the octets of one of them
+    if pubkey is not None and not verify:
+        raise ValueError("pubkey is for the check that verify=False declines")
+
+    return serialize_compact(
+        _sign_(
+            msg_bytes,
+            prvkey,
+            aux_rand32,
+            verify=verify,
+            # parsed here rather than inside the check, so that octets
+            # which are not a public key are refused before anything is
+            # signed: a caller who mistyped an argument should not be
+            # told about it by a check on a signature they now hold
+            pubkey=None if pubkey is None else keys.parse(pubkey),
+        )
+    )
 
 
 def _recover_(msg_bytes: BytesLike, signature: CData) -> CData:
