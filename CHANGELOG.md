@@ -22,6 +22,38 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### Claude reads a pull request against REVIEWING.md
+
+- **`claude-review.yml`**, two jobs: one on every non-draft pull request,
+  whose prompt names `REVIEWING.md` rather than restating it, so the
+  standard moves without the workflow being edited; one answering
+  `@claude` in a comment, carrying no prompt of ours on purpose — the
+  action reads the comment that triggered it. It gates nothing and must
+  not: `main`'s required contexts are named outside the repository, and
+  a review that held a merge would make a model's judgement a branch
+  rule. The gates are not re-run, `test.yml`, `lint.yml` and `docs.yml`
+  running them beside it on the same sha.
+
+  Three things it refuses to do silently, each measured in btclib before
+  being asked not to. Without `CLAUDE_CODE_OAUTH_TOKEN` the action
+  reviews nothing and reports **success**. Without `id-token: write` it
+  dies before authentication, the action minting a GitHub OIDC token at
+  startup whatever the Anthropic credential is. And it refuses to run at
+  all when the workflow file differs from the copy on the default
+  branch — a pull request must not be able to edit the workflow holding
+  the credential — reporting that refusal by skipping, green. It now
+  fails on an empty secret and on an empty `execution_file`, which is
+  exactly when no review was written. The consequence is deliberate: on
+  a pull request that adds or edits this file the job is red until the
+  change is on `main`.
+
+  The automatic job skips a pull request from a fork, which is not a
+  policy but what secrets do: none but `GITHUB_TOKEN` reaches a runner a
+  fork triggered. `@claude` still answers there, `issue_comment` being a
+  base-repository event. It is also the one workflow in
+  `CONTRIBUTING.md`'s table taking no `workflow_dispatch`, both jobs
+  reading the pull request or the comment that triggered them.
+
 ### The pull request is the only way into main, and the review has a standard
 
 - **The landing convention says what is in force: the squash button.**
