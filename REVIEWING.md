@@ -246,7 +246,6 @@ because that document, and not this one, is where the rule lives.
   `REPOSITORY.md` before any rule or setting is touched. A renamed job is
   a required check renamed out of existence.
 
-
 ## The verdict
 
 Inline comments for the line-anchored findings, then exactly one summary
