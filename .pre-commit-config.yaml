@@ -175,6 +175,21 @@ repos:
         entry: python .github/scripts/check_submodule_pin.py
         always_run: true
         pass_filenames: false
+  # a test named in tests/*.py's own prose -- a docstring or a comment --
+  # is still a test: an append cannot falsify such a citation, but a
+  # rename does, silently, and #255's rename of two test names is why
+  # that is not hypothetical. always_run and no `files`, for the same
+  # reason as submodule-pin above: the file a rename breaks a citation
+  # in is not necessarily the file the rename touches, so a `files`
+  # filter on what changed would miss exactly the case this exists for
+  - repo: local
+    hooks:
+      - id: test-citations
+        name: a test named in tests/*.py's prose is still a test
+        language: python
+        entry: python .github/scripts/check_test_citations.py
+        always_run: true
+        pass_filenames: false
   # .github/dependabot.yml is validated by nothing else, and a typo in it
   # updates nothing and says nothing: the whole point of that file is to
   # move the pins this repository depends on for its security updates.

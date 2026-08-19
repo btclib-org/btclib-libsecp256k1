@@ -550,6 +550,9 @@ max-complexity = 10
 # else: what it prints is what pre-commit shows the developer whose
 # commit it just refused, and stderr is where all of that goes
 ".github/scripts/check_submodule_pin.py" = ["print"]
+# same reason, same exemption: the test-citations check is a hook too,
+# and what it prints is the developer's own commit being refused
+".github/scripts/check_test_citations.py" = ["print"]
 
 [tool.ruff.lint.flake8-copyright]
 # notice-rgx is COPYRIGHT's text as one regex, anchored with ^ so a
