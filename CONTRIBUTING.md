@@ -608,8 +608,14 @@ Every change starts with an open issue; `Closes #N` in the pull
 request's description is what closes it, once a reviewed pull request
 merges. A pull request needs an approving review from somebody other
 than its author before it can merge — GitHub refuses a self-approval.
-Allow maintainer edits so the branch can be updated for a merge, and
-mark review conversations resolved as you address them.
+[REVIEWING.md](./REVIEWING.md) is the standard that review is written
+against, and is this file's other half: what a review establishes before
+it gives an ack, how a finding states its severity, and why everything it
+notices that the pull request is not about becomes an issue rather than a
+comment. Read before opening a pull request, it is what the pull request
+will be answered against. Allow maintainer edits so the branch can be
+updated for a merge, and mark review conversations resolved as you
+address them.
 
 `main` enforces four things on every commit that reaches it, not only
 at review time: a verified signature, linear history, no force push, no
@@ -643,33 +649,21 @@ landed change. A merge commit would put the branch's steps into `main`
 and a rebase merge would replay them one by one — `main` is linear by
 branch rule, and one change is one commit there.
 
-**How that commit reaches `main` is a push rather than a button**, which
-is the maintainer's own path and needs the `main-self-merge` bypass no
-contributor has: REPOSITORY.md describes it, squashing the branch locally
-where it carries more than one commit, pushing that squash to the branch,
-and fast-forwarding the branch from there. Three things about it are
-worth knowing from here. The commit that lands is signed by the
-maintainer rather than by GitHub's web-flow key. Where your branch is
-already a single commit and needs no rebase to land, its sha does not
-change, so `main` receives the very commit the gates ran on and a branch
-stacked on it keeps applying — a rebase moves the sha like any other
-force-push, which is why the gates are asked for after one and not only
-before. And the squash reaches your branch before it reaches `main`,
-which is the second of those two force-pushes: that order is what leaves
-the pull request naming the commit that lands, so GitHub marks it
-**Merged** on its own and the `Closes #N` in the description closes the
-issue. Landed from a worktree instead, the pull request would name an
-object `main` never received, and would be closed by hand with the change
-in it all the same. None of the three changes the shape of a correction:
-whether a branch is squashed or fast-forwarded is decided when it lands,
-and by then the review has its record either way.
+**How that commit reaches `main` is the squash button**, pressed by
+auto-merge once the review and the checks are in. GitHub composes it and
+signs it with its web-flow key, which is a valid signature and therefore
+all the branch rule asks for. There is no other way in: `main` takes a
+pull request and nothing else, a direct push being refused for everyone.
+REPOSITORY.md has the settings that make that true, and what the other
+two merge methods would have cost.
 
-Squash is the only merge *button* this repository enables, so there is
-no other to read; REPOSITORY.md has that setting, what the other two
-would have cost, and the fast-forward that is not a button at all.
-Auto-merge is what presses it, the dialog that switches it on carrying
-one method: what a pull request set to merge itself once the checks go
-green is holding is still `gh pr view <n> --json autoMergeRequest`.
+What a pull request set to merge itself once the checks go green is
+holding is `gh pr view <n> --json autoMergeRequest`.
+
+None of that changes the shape of a correction: it is decided at the
+landing and not on the branch, so a fix added on top of a reviewed branch
+is still the right shape — by the time it is squashed the review has its
+record.
 Enabling it is the way to not wait for a matrix that compiles C on every
 platform, and what it costs is the paragraph above: GitHub signs what it
 composes, so a pull request left to merge itself lands a commit signed
