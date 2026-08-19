@@ -256,6 +256,10 @@ def test_the_submodule_is_read_with_the_hook_environment_off(
     monkeypatch.setenv("GIT_DIR", "/elsewhere/.git")
     monkeypatch.setenv("GIT_INDEX_FILE", "/elsewhere/.git/index")
     monkeypatch.setattr(check.subprocess, "run", fake_run)
+    # this test is about the environment a real git call is made with, not
+    # about whether the submodule is checked out -- true in a git checkout,
+    # false in the sdist jobs, which unpack a tarball with no .git in it
+    monkeypatch.setattr(check, "_checked_out", lambda _path: True)
 
     check.commit_of("v0.8.0")
     submodule_env = captured[-1]
