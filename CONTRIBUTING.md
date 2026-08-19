@@ -183,6 +183,7 @@ read by every checkout of this repository.
 | --- | --- | --- |
 | `test` | pull request, push | the wheels, and ubuntu × every interpreter |
 | `lint`, `docs` | pull request, push | — |
+| `claude-review` | pull request, and `@claude` in a comment | — |
 | `vendored-vectors` | monthly, a change to itself | — |
 | `codeql` | push to main, Tuesday | the two scanned languages |
 | `macos` | Wednesday, a release | both macOS images, both linkages |
@@ -211,7 +212,9 @@ it builds it, and the release publishes the artifacts of that run. What
 waits a week is pip's *selection* among them, and the dynamic build.
 Everything but the first two rows also takes `workflow_dispatch`, which for
 `codeql` and the two platform workflows is the only way to ask about a
-branch at all.
+branch at all. `claude-review` is the exception that takes none: both its
+jobs read the pull request or the comment that triggered them, so a manual
+run would start with nothing to read.
 
 `codeql` runs on `main` and on its Tuesday schedule and not on a pull
 request, which is the same arithmetic as the rows above: three slots held

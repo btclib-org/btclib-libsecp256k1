@@ -28,8 +28,16 @@ on:
     # ready_for_review, so a pull request marked ready gets the run the
     # draft condition below withheld while it was a draft: the default types
     # do not include it, and without it a readied pull request would wait
-    # for its next push to be checked at all
-    types: [opened, reopened, synchronize, ready_for_review]
+    # for its next push to be checked at all.
+    # closed joins them for a different reason: merging or closing a pull
+    # request is neither a push nor a synchronize, so a run still held in
+    # this ref's concurrency group survives it -- cancel-in-progress only
+    # fires when a new run lands in that group, and nothing otherwise does.
+    # Landing the closed event there is what lets it supersede the stale
+    # run instead of leaving it to finish on a branch nobody is going to
+    # look at again; the job below declines the real work on it, the merge
+    # commit being main's own push trigger's question
+    types: [opened, reopened, synchronize, ready_for_review, closed]
   # allows the release workflow to reuse this gate
   workflow_call:
     inputs:
@@ -65,7 +73,11 @@ jobs:
     # workflow that reported it, which is what let the move happen without
     # touching the rule
     name: Build the documentation
-    if: ${{ !github.event.pull_request.draft }}
+    # a draft pull request is work in progress and spends no runner here
+    # either. Neither does a closed one -- the trigger above takes the
+    # closed event only to let cancel-in-progress supersede a run still
+    # holding in this ref's group
+    if: ${{ !github.event.pull_request.draft && github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
