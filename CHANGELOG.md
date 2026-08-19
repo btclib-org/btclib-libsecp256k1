@@ -22,6 +22,39 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### The pull request is the only way into main, and the review has a standard
+
+- **The landing convention says what is in force: the squash button.**
+  `CONTRIBUTING.md` said the landing is "a push rather than a button",
+  `REPOSITORY.md` titled a section for the push its bypass was for, and
+  `CLAUDE.md` kept a fast-forward exception for a stacked pull request.
+  The `main-self-merge` bypass now reads `pull_request` mode, so it
+  excuses the approving review a solo-maintainer repository cannot
+  produce and excuses nothing else: a direct push to `main` is refused
+  for everyone, the holder included. The ruleset also names `squash` as
+  the only merge method it accepts, stating the constraint where the
+  rule is rather than only in a repository toggle. What the exception
+  bought — a stacked child keeping its base — is paid for with a rebase
+  instead, a button recreating rather than moving whatever the count of
+  commits: GitHub's documentation has rebase-and-merge "always updates
+  the committer information and creates new commit SHAs". The
+  configuration is the organization's, identical in btclib,
+  bitcoin-core-rpc and btclib-benchmarks.
+
+- **`REVIEWING.md` is the standard a review is written against**, the
+  reviewer's half of `CONTRIBUTING.md`: what a review establishes before
+  it gives an ack, what a finding must contain and how it labels its
+  severity, and what becomes of everything a reviewer notices that the
+  diff is not about — every collateral finding is filed as an issue
+  rather than asked for in a comment. It states no new rule; the rules
+  it cites stay in the files that state them. Registered the way
+  `CONTRIBUTING.md` is: a page of the sphinx toctree through a
+  `reviewing_link.md` shim, named from the README and from `CLAUDE.md`,
+  which is the file a repository-aware reviewer reads.
+  `.claude/commands/review.md` is it as the `/review` command. The body
+  is deliberately the text btclib carries, one section excepted: the
+  questions a review of *this* tree asks and a generic one would not.
+
 ### The recoverable check takes that key too
 
 - **`recovery.sign` and `recovery._sign_` take a keyword-only `pubkey`**
