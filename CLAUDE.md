@@ -290,21 +290,23 @@ kill rate, which is the one failure mode that looks like good news.
   version named in `README.md` and `HISTORY.md` moved with it
 - **`main` is the only long-lived branch**, so a pull request targets it
   and a tag on it is a release; it is protected, and every change gets
-  there through a pull request. No button is what lands it: a branch of
-  more than one commit is squashed locally, and the result is
-  fast-forwarded onto `main` from the command line, which is what keeps
-  the signature the maintainer's and, where what lands is the head the
-  gates ran on, that sha with it. Push the squash to the branch before
-  landing it: GitHub reconciles a push whose commit the pull request
-  names — Merged, and `Closes #N` in the description fires — and
+  there through a pull request. Squash is the only merge button enabled,
+  and auto-merge is what presses it once review and checks are in — the
+  default way a pull request lands, one commit regardless of how many
+  the branch carried. GitHub signs that commit itself, and that
+  signature is as good as the maintainer's own on a commit landed from
+  the command line. The exception is a single-commit pull request that
+  is the base of a stacked one: fast-forward it from the command line
+  instead, so `main` gets that exact sha — the head the gates ran on —
+  rather than a new one. Push the fast-forwarded commit to the branch
+  before it lands: GitHub reconciles a push whose commit the pull
+  request names — Merged, and `Closes #N` in the description fires — and
   reconciles nothing when the object is one it has never seen, which
   leaves the pull request to be closed by hand and the issue to the
-  keyword in the commit message. REPOSITORY.md has the sequence, the
-  `main-self-merge` bypass it needs, and both outcomes. Squash is the
-  only button enabled, and auto-merge is what would press it — GitHub
-  signing what that produces. The `dev` this repository used to
-  develop on, and the release merge into `master` that went with it, are
-  gone; RELEASING.md is the file that describes what replaced them
+  keyword in the commit message. REPOSITORY.md has the sequence and both
+  outcomes. The `dev` this repository used to develop on, and the
+  release merge into `master` that went with it, are gone; RELEASING.md
+  is the file that describes what replaced them
 
 ## Conventions the workflows hold to
 
