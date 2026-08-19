@@ -1173,7 +1173,9 @@ x86_64 only.
 How to get the submodule, set up the development environment, run the
 suite, reproduce each CI job locally, and what a change is expected to
 satisfy are in
-[CONTRIBUTING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/CONTRIBUTING.md);
+what a pull request is answered against is in
+[REVIEWING.md](https://github.com/btclib-org/btclib-secp256k1/blob/main/REVIEWING.md).
 
 ## Release process
 

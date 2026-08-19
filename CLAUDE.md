@@ -14,6 +14,11 @@ permissions, publishing environments, Dependabot, secret scanning — is in
 [REPOSITORY.md](REPOSITORY.md). Read that file before changing a workflow,
 a branch rule or a repository setting. Writing code does not need it.
 
+Reviewing a pull request — what a review establishes before it gives
+an ack, what a finding must contain, and why everything it notices
+that the diff is not about becomes an issue rather than a comment — is
+[REVIEWING.md](REVIEWING.md), and `/review` is that file as a command.
+
 This file is for what is not written down elsewhere. The documentation is,
 and stays, in:
 
@@ -290,21 +295,18 @@ kill rate, which is the one failure mode that looks like good news.
   version named in `README.md` and `HISTORY.md` moved with it
 - **`main` is the only long-lived branch**, so a pull request targets it
   and a tag on it is a release; it is protected, and every change gets
-  there through a pull request. Squash is the only merge button enabled,
-  and auto-merge is what presses it once review and checks are in — the
-  default way a pull request lands, one commit regardless of how many
-  the branch carried. GitHub signs that commit itself, and that
-  signature is as good as the maintainer's own on a commit landed from
-  the command line. The exception is a single-commit pull request that
-  is the base of a stacked one: fast-forward it from the command line
-  instead, so `main` gets that exact sha — the head the gates ran on —
-  rather than a new one. Push the fast-forwarded commit to the branch
-  before it lands: GitHub reconciles a push whose commit the pull
-  request names — Merged, and `Closes #N` in the description fires — and
-  reconciles nothing when the object is one it has never seen, which
-  leaves the pull request to be closed by hand and the issue to the
-  keyword in the commit message. REPOSITORY.md has the sequence and both
-  outcomes. The `dev` this repository used to develop on, and the
+  there through a pull request, and through nothing else — a direct push
+  is refused for everyone. Squash is the only merge button enabled, and
+  auto-merge is what presses it once review and checks are in: one
+  commit regardless of how many the branch carried, composed and signed
+  by GitHub, whose signature is what the rule asks for, a valid one
+  rather than a particular signer's. GitHub therefore reconciles every
+  landing — Merged, `Closes #N` in the description fires, and the head
+  branch goes — with no case left where a commit arrives that no pull
+  request names. REPOSITORY.md has the settings that make that true. A
+  pull request stacked on another is rebased once its parent lands, and
+  pays a fresh run of the matrix for it. The `dev` this repository used
+  to develop on, and the
   release merge into `master` that went with it, are gone; RELEASING.md
   is the file that describes what replaced them
 
