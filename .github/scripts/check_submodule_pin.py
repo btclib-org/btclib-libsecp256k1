@@ -144,6 +144,29 @@ def pinned_commit() -> str | None:
     return fields[1] if len(fields) == 4 and fields[0] == "160000" else None
 
 
+def _checked_out(path: Path) -> bool:
+    """Whether a submodule has a `.git` of its own under `path`.
+
+    `-C path` does not stop git from discovering a repository above
+    `path` when `path` has no `.git` -- a fresh `git worktree add` does
+    not initialize submodules, so `path` can exist, empty, with the
+    wrapper repository one directory up being the first `.git` upward
+    discovery finds. Checking for `path/.git` directly, before any git
+    command runs in it, is what keeps that discovery from having
+    anywhere to walk to: a submodule's `.git` is a file pointing at its
+    module elsewhere, a plain clone's is a directory, and `Path.exists`
+    reads either without caring which.
+
+    Args:
+        path: the submodule's working directory.
+
+    Returns:
+        True where `path/.git` exists, False where the submodule was
+        never initialized (or `path` itself does not exist).
+    """
+    return (path / ".git").exists()
+
+
 def commit_of(tag: str) -> str | None:
     """Return the commit a tag names in the vendored clone.
 
@@ -155,6 +178,8 @@ def commit_of(tag: str) -> str | None:
         does not have that tag -- an uninitialized submodule, or a
         shallow checkout carrying no tags.
     """
+    if not _checked_out(_ROOT / _SUBMODULE):
+        return None
     return _git(
         "rev-parse",
         "--verify",
@@ -182,7 +207,7 @@ def why_no_tag(tag: str) -> str:
     Returns:
         A sentence naming the state and what would change it.
     """
-    if _git("rev-parse", "--git-dir", cwd=_ROOT / _SUBMODULE, disown=True) is None:
+    if not _checked_out(_ROOT / _SUBMODULE):
         return (
             f"the {_SUBMODULE} submodule is not checked out, so nothing here"
             " can resolve a tag: git submodule update --init"
