@@ -611,10 +611,10 @@ release-notes length in the first place, and are still in
 - **And that check exists now** (#258). `tests/test_citations.py` reads
   every backticked span in this suite and in the package's own sources,
   and holds each one that spells a test name to being a test that exists.
-  The package half is not incidental: `btclib_secp256k1/dsa.py` names two
-  of the cases behind a claim it makes about itself and
-  `btclib_secp256k1/recovery.py` names one, so a rename can falsify a
-  shipped docstring.
+  The package half is not incidental: `btclib_secp256k1/dsa.py` names
+  cases behind a claim it makes about itself, and so does
+  `btclib_secp256k1/recovery.py`, so a rename can falsify a shipped
+  docstring.
 - **The reader is the whole of the design**, and two shapes are why. A
   citation is wrappable -- `tests/test_docs.py` breaks
   `test_no_documented_module_has_gone_away` at an underscore across two

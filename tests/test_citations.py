@@ -7,7 +7,7 @@
 
 The prose here points at tests by name -- the module docstring of
 `tests/test_verified_signing.py` names several, and `btclib_secp256k1/dsa.py`
-names two of the cases behind a claim it makes about itself -- and nothing
+names cases behind a claim it makes about itself -- and nothing
 said whether the name still belonged to anything. #256 was two landmarks
 that had come to point at the wrong test, and naming the test instead of
 its position is better only until a rename: an append falsifies a
