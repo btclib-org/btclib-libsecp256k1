@@ -10,6 +10,7 @@ btclib_secp256k1 documentation
    README <readme_link.md>
    PYTHON PACKAGE <modules>
    CONTRIBUTING <contributing_link.md>
+   REVIEWING <reviewing_link.md>
    SECURITY <security_link.md>
    HISTORY <history_link.md>
    CHANGELOG <changelog_link.md>
