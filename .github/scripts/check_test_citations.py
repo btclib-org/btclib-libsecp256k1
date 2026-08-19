@@ -59,13 +59,24 @@ _CITATION = re_compile(r"`(test_[A-Za-z0-9_]+)`")
 # a citation attributed to a name other than this suite's own: a
 # possessive naming whose test it is ("rust-secp256k1's `test_low_r`"),
 # or a source file foreign to this package's own tests -- which are
-# Python -- named in the same breath ("src/lib.rs\n`test_low_r`")
-_POSSESSIVE = re_compile(r"'s\s*$")
-_FOREIGN_SOURCE = re_compile(r"\.(?:c|cc|cpp|h|hpp|rs)\b")
+# Python -- named in the same breath ("src/lib.rs\n`test_low_r`"). Both
+# are anchored to sit right before the citation, with only whitespace
+# between: unanchored, "the parser's `test_renamed_away`" would read an
+# ordinary English possessive as attribution, and a `.c`/`.cpp`/`.rs`
+# mention anywhere in the look-back window would excuse a citation a
+# whole unrelated sentence later. The possessive's own noun is also
+# required to look like a project slug -- a hyphen or a digit in it,
+# "rust-secp256k1" having both -- which is what tells that from "the
+# parser's" or "this suite's" without a hand-maintained list of names
+_POSSESSIVE = re_compile(r"[\w][\w.-]*[-0-9][\w.-]*'s\s*$")
+_FOREIGN_SOURCE = re_compile(r"\.(?:c|cc|cpp|h|hpp|rs)\b\s*$")
 
 # far enough back to reach across one wrapped line -- a path ending one
 # line and the citation opening the next -- and no further: a citation
-# earns its own attribution, not one borrowed from a paragraph away
+# earns its own attribution, not one borrowed from a paragraph away.
+# Both patterns above are anchored to the end of the window regardless,
+# so this bounds how far a *wrapped* attribution can reach rather than
+# doing the anchoring itself
 _LOOKBACK = 200
 
 

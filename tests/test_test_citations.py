@@ -132,6 +132,48 @@ def test_attribution_does_not_reach_across_a_paragraph(tmp_path: Path) -> None:
     assert [name for _, _, name in dangling] == ["test_renamed_away"]
 
 
+def test_a_foreign_source_path_one_sentence_back_excuses_nothing(
+    tmp_path: Path,
+) -> None:
+    """The anchor, not just the look-back window, bounds attribution.
+
+    A `.rs` mention well inside `_LOOKBACK` but separated by an unrelated
+    sentence used to excuse a dangling citation anyway -- unlike
+    `_POSSESSIVE`, `_FOREIGN_SOURCE` was matched anywhere in the window
+    rather than anchored right before the citation.
+    """
+    _write(
+        tmp_path,
+        "a.py",
+        '"""Ported from upstream src/lib.rs some time ago. Since then this'
+        " suite renamed things and `test_totally_renamed_away` no longer"
+        ' exists."""\n',
+    )
+
+    dangling = check.dangling_citations(tmp_path)
+
+    assert [name for _, _, name in dangling] == ["test_totally_renamed_away"]
+
+
+def test_an_ordinary_possessive_is_not_read_as_external_attribution(
+    tmp_path: Path,
+) -> None:
+    """An ordinary possessive is this suite's own prose, not attribution.
+
+    `_POSSESSIVE` used to accept any word ending in "'s", which reads an
+    ordinary English possessive -- this repository's own prose style,
+    happy to say "this suite's" or "the parser's" -- as if it named
+    another project. Requiring a hyphen or a digit in the possessive
+    noun is what a project slug like "rust-secp256k1" has and an English
+    word does not.
+    """
+    _write(tmp_path, "a.py", '"""See the parser\'s `test_renamed_away`."""\n')
+
+    dangling = check.dangling_citations(tmp_path)
+
+    assert [name for _, _, name in dangling] == ["test_renamed_away"]
+
+
 def test_main_fails_and_names_the_dangling_citation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
