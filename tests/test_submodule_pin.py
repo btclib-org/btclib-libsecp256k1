@@ -141,11 +141,8 @@ def test_a_readme_naming_no_release_fails(
     "answers, expected",
     [
         ({}, "is not checked out"),
-        ({"--git-dir": ".git", "--is-shallow-repository": "true"}, "is shallow"),
-        (
-            {"--git-dir": ".git", "--is-shallow-repository": "false"},
-            "neither absent nor shallow",
-        ),
+        ({"--is-shallow-repository": "true"}, "is shallow"),
+        ({"--is-shallow-repository": "false"}, "neither absent nor shallow"),
     ],
 )
 def test_a_clone_without_the_tag_says_which_of_the_three_it_is(
@@ -168,14 +165,50 @@ def test_a_clone_without_the_tag_says_which_of_the_three_it_is(
         tmp_path: where the README the check reads is written.
         capsys: the captured streams.
         answers: what git answers each question, by its last argument; a
-            question missing from it is a git that exited non-zero.
+            question missing from it is a git that exited non-zero. An
+            empty dict is also the signal to leave `secp256k1/.git`
+            absent, `why_no_tag` reading that state off the filesystem
+            rather than asking git.
         expected: the clause the message has to carry.
     """
     _tree(monkeypatch, tmp_path, tagged=None)
+    if answers:
+        (tmp_path / "secp256k1").mkdir()
+        (tmp_path / "secp256k1" / ".git").touch()
     monkeypatch.setattr(check, "_git", lambda *args, **_kwargs: answers.get(args[-1]))
 
     assert check.main() == 1
     assert expected in capsys.readouterr().err
+
+
+def test_git_is_never_asked_when_the_submodule_has_no_git_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A missing `secp256k1/.git` is read from the filesystem, not asked of git.
+
+    `-C secp256k1` does not stop git's own upward directory discovery
+    when `secp256k1/` has no `.git` -- a fresh `git worktree add` does
+    not initialize submodules, and the first `.git` discovery finds
+    walking up from an uninitialized `secp256k1/` is this wrapper
+    repository's, one directory up. Never calling git at all for that
+    question is what keeps that discovery from having anywhere to run;
+    a stub that raises is what makes a regression here fail loudly
+    rather than pass by resolving against the wrong repository.
+
+    Args:
+        monkeypatch: the fixture the substitutions are made through.
+        tmp_path: stands in for the wrapper repository's root.
+    """
+    monkeypatch.setattr(check, "_ROOT", tmp_path)
+    (tmp_path / "secp256k1").mkdir()
+
+    def _unreachable(*args: str, **_kwargs: Any) -> str:
+        raise AssertionError(f"git must not run when secp256k1/.git is absent: {args}")
+
+    monkeypatch.setattr(check, "_git", _unreachable)
+
+    assert check.commit_of("v0.8.0") is None
+    assert "is not checked out" in check.why_no_tag("v0.8.0")
 
 
 def test_a_tree_with_no_submodule_fails(
