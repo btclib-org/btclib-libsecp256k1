@@ -31,8 +31,15 @@ on:
     # ready_for_review, so a pull request marked ready gets the run the
     # draft condition below withheld while it was a draft: the default
     # types do not include it, and without it a readied pull request
-    # would wait for its next push to be checked at all
-    types: [opened, reopened, synchronize, ready_for_review]
+    # would wait for its next push to be checked at all.
+    # closed joins them for a different reason: merging or closing a pull
+    # request is neither a push nor a synchronize, so a run still held in
+    # this ref's concurrency group survives it -- cancel-in-progress only
+    # fires when a new run lands in that group, and nothing otherwise
+    # does. Landing the closed event there is what lets it supersede the
+    # stale run instead of leaving it to finish on a branch nobody is
+    # going to look at again
+    types: [opened, reopened, synchronize, ready_for_review, closed]
     paths:
       - .github/workflows/vendored-vectors.yml
       - .github/scripts/check_vendored_vectors.py
@@ -57,8 +64,11 @@ jobs:
     name: Check vendored vectors against upstream
     # a draft pull request is work in progress and spends no runner
     # here either: the same condition lint.yml and test.yml carry, and
-    # ready_for_review is a trigger type above for the same reason
-    if: ${{ !github.event.pull_request.draft }}
+    # ready_for_review is a trigger type above for the same reason.
+    # A closed pull request spends none either -- the trigger above
+    # takes the closed event only to let cancel-in-progress supersede a
+    # run still holding in this ref's group
+    if: ${{ !github.event.pull_request.draft && github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # the issue is this job's to open, close or edit, and only this
@@ -117,7 +127,7 @@ jobs:
   # signature that stops verifying, and a red run says all of that.
   pin:
     name: Check the pinned libsecp256k1 release
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
