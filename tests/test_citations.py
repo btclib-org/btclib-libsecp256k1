@@ -69,8 +69,11 @@ _SOURCES = [
 ]
 
 # any backticked span, across lines: what is inside is decided after the
-# whitespace comes out, a citation being wrappable at an underscore
-_SPAN = re.compile(r"`([^`]+)`", re.DOTALL)
+# whitespace comes out, a citation being wrappable at an underscore. The
+# negated character class is what crosses the line, matching a newline
+# same as any other character; no re.DOTALL, which changes what `.`
+# matches and this pattern has no `.` in it
+_SPAN = re.compile(r"`([^`]+)`")
 
 # what a test is called here, which the naming hook already enforces of
 # every definition
