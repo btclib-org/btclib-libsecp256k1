@@ -20,7 +20,7 @@ at. So the refusal substituted below is per module rather than one for
 all three.
 
 For `dsa` and `ssa` the fault itself is out of reach -- no input makes a
-fresh signature fail its own verification -- so what is tested is the
+fresh signature fail its own verification -- so what the two share is the
 four things around it: that the check changes no signature, that it is on
 where nothing asks, that a refusal is wired to the raise rather than
 merely written near it, and that `verify=False` does not reach the check
@@ -33,12 +33,19 @@ ignored altogether would answer exactly what it should. Replacing every
 `if verify:` in the package with `if True:` leaves every other test here
 passing.
 
-`recovery` adds a fifth, and it is the one that says what the check is
-for rather than that the raise is wired to it. There the fault *is*
-reachable from an input -- a wrong recovery id is one `parse_compact`
-away -- so `test_the_recovery_id_is_what_the_check_catches` needs no
-stand-in at all: it signs, re-parses under each id, and holds real
-libsecp256k1 to refusing every one but the signature's own, while a
+`ssa` adds a fifth of its own, and it is not about the raise but about
+which key the check reads: BIP340 negates an odd-y key before verifying,
+and `test_the_keypair_is_checked_against_the_key_that_signed` holds the
+check to that same rule -- the failure it rules out is a check that
+passes for the wrong reason. It signs under keys of both parities and
+asserts both occur.
+
+`recovery` adds a fifth of its own too, and it is the one that says what
+the check is for rather than that the raise is wired to it. There the
+fault *is* reachable from an input -- a wrong recovery id is one
+`parse_compact` away -- so `test_the_recovery_id_is_what_the_check_catches`
+needs no stand-in at all: it signs, re-parses under each id, and holds
+real libsecp256k1 to refusing every one but the signature's own, while a
 verification of the same octets still succeeds.
 
 `dsa` adds a group of its own, for the public key a caller may hand the
