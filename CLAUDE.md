@@ -292,7 +292,7 @@ kill rate, which is the one failure mode that looks like good news.
   opened straight after one, so that the tree stops claiming the version
   it shipped: step 10 of RELEASING.md, and the reason it is a step
 - **the `secp256k1` submodule moves in a change of its own,** with the
-  version named in `README.md` and `HISTORY.md` moved with it
+  version named in `README.md` and `RELEASE_NOTES.md` moved with it
 - **`main` is the only long-lived branch**, so a pull request targets it
   and a tag on it is a release; it is protected, and every change gets
   there through a pull request, and through nothing else — a direct push

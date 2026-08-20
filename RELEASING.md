@@ -17,10 +17,10 @@ them, and runs before anything is built: a `v0.7.1` tag on a tree still
 reading `0.7.1rc1` fails there, rather than burning `0.7.1rc1` on PyPI.
 The same job checks that `uv.lock` carries the version the tree declares,
 that the libsecp256k1 release named in `README.md` is the commit the
-submodule is pinned to, that `HISTORY.md` and `CHANGELOG.md` each carry a
-section headed by the tag alone and not empty, and that the tagged commit
-is on `main`. Every invariant a release rests on is checked there, before
-the point of no return.
+submodule is pinned to, that `RELEASE_NOTES.md` and `CHANGELOG.md` each
+carry a section headed by the tag alone and not empty, and that the
+tagged commit is on `main`. Every invariant a release rests on is
+checked there, before the point of no return.
 
 ## Which version string is which
 
@@ -102,19 +102,20 @@ Then:
    left a fourth number open, by step 10 below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
    submodule has moved since
-1. close the release notes. `CHANGELOG.md` and `HISTORY.md` are written
-   as each change lands, not here, so what is left is to read the open
-   section of both against `git log`, drop the `(work in progress, not
-   released yet)` from each heading, and renumber them if step 1
-   renumbered the version. `version-check` refuses a tag whose section
-   in either file is missing, empty, or still carrying anything after
-   the version in its heading, so a forgotten retitle stops the release
-   before the matrix builds anything. Dropping those five words is the
-   whole of what that check asks, and it asks it of both files: it is
-   the step this one exists to be, not a formality downstream of it. If
-   the vendored libsecp256k1 moved, update the version named at the top
-   of `README.md` too (`grep -n 'wraps libsecp256k1' README.md` finds
-   the line without a search through the prose)
+1. close the release notes. `CHANGELOG.md` and `RELEASE_NOTES.md` are
+   written as each change lands, not here, so what is left is to read
+   the open section of both against `git log`, drop the `(work in
+   progress, not released yet)` from each heading, and renumber them
+   if step 1 renumbered the version. `version-check` refuses a tag
+   whose section in either file is missing, empty, or still carrying
+   anything after the version in its heading, so a forgotten retitle
+   stops the release before the matrix builds anything. Dropping those
+   five words is the whole of what that check asks, and it asks it of
+   both files: it is the step this one exists to be, not a formality
+   downstream of it. If the vendored libsecp256k1 moved, update the
+   version named at the top of `README.md` too (`grep -n 'wraps
+   libsecp256k1' README.md` finds the line without a search through
+   the prose)
 1. give the pull request its title and its body before merging it, not
    after. The title is the version; the body says what the release is —
    what moved, what did not, and which of the two a user would notice.
@@ -132,11 +133,12 @@ Then:
    git log v<previous version>..main --oneline
    ```
 
-   and against the open sections of `CHANGELOG.md` and `HISTORY.md`,
-   which step 2 has just closed and which are where each change was
-   described as it landed. `latest`'s result belongs here too, a line
-   rather than a screenshot: it gates nothing, and a pull request that
-   never mentions it having run reads exactly like one that skipped it.
+   and against the open sections of `CHANGELOG.md` and
+   `RELEASE_NOTES.md`, which step 2 has just closed and which are
+   where each change was described as it landed. `latest`'s result
+   belongs here too, a line rather than a screenshot: it gates
+   nothing, and a pull request that never mentions it having run
+   reads exactly like one that skipped it.
 
    A deliberate skip and an item nobody has gotten to yet are different
    facts and do not fit under one checkbox: 0.7.1.2's own checklist
@@ -327,7 +329,7 @@ Then:
      $0 ~ "^## " tag "( |$)" {found=1; next}
      /^## / && found {exit}
      found {print}
-   ' HISTORY.md > notes.md
+   ' RELEASE_NOTES.md > notes.md
    gh release create "$tag" dist/* "$tag.attestation.jsonl" \
      --repo "$repo" --title "$tag" --notes-file notes.md
    ```
@@ -335,10 +337,11 @@ Then:
    Verify the sdist this produces the same way the step below does: the
    hash has to match the file `pypi.org/pypi/<project>/<version>/json`
    already lists, since nothing rebuilt it. Its notes are the tag's
-   section of `HISTORY.md`, and the sdist is attached, with
-   `<tag>.attestation.jsonl` beside it. A run that warns `HISTORY.md has
-   no v0.7.1 section` generated the notes from the merged pull requests
-   instead, and they are worth replacing by hand either way
+   section of `RELEASE_NOTES.md`, and the sdist is attached, with
+   `<tag>.attestation.jsonl` beside it. A run that warns
+   `RELEASE_NOTES.md has no v0.7.1 section` generated the notes from
+   the merged pull requests instead, and they are worth replacing by
+   hand either way
 1. verify the sdist on the releases page, which is the copy PyPI's
    attestation says nothing about — the step above says the file is
    there, this one says where it came from:
@@ -372,8 +375,8 @@ Then:
     number below the published one would be worse than no bump at all:
     `0.7.0.1` sorts *under* `0.7.1`, so nothing would ever resolve it,
     and `version-check` accepts it, being digits and dots. Open the
-    section for it in `CHANGELOG.md` and in `HISTORY.md` at the same
-    time, headed `## v<version> (work in progress, not released yet)`
+    section for it in `CHANGELOG.md` and in `RELEASE_NOTES.md` at the
+    same time, headed `## v<version> (work in progress, not released yet)`
     and empty: what lands next then has somewhere to be written down as
     it lands, which is the whole of step 2 — and, with one branch and no
     long-lived release pull request to hold a body, the whole of what
@@ -487,7 +490,7 @@ cannot cover is the trusted publisher on PyPI itself, a separate
 registration that can be wrong on its own, nor the deployment branch
 policy of the `pypi` environment, which the environment a rehearsal does
 reach has none of, nor the checks of `version-check` that need a tag: the
-version comparison, the `HISTORY.md` section, and the ancestry on
+version comparison, the `RELEASE_NOTES.md` section, and the ancestry on
 `main`.
 
 ## When a release turns out to be broken

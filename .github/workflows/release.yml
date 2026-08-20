@@ -151,10 +151,11 @@ jobs:
 
       # the fourth invariant, and the last one that was checked only
       # after the point of no return: github-release reads the tag's
-      # section out of HISTORY.md for the release notes, and a section
-      # that is not there is a ::warning:: with generated notes as the
-      # fallback -- correct there, PyPI having accepted the upload
-      # already, and no use at all as the place the omission is found.
+      # section out of RELEASE_NOTES.md for the release notes, and a
+      # section that is not there is a ::warning:: with generated notes
+      # as the fallback -- correct there, PyPI having accepted the
+      # upload already, and no use at all as the place the omission is
+      # found.
       # The fallback downstream stays: it covers the release deleted by
       # hand and recreated.
       #
@@ -168,11 +169,11 @@ jobs:
       # until now nothing checked that it had been done.
       #
       # CHANGELOG.md is checked beside it because RELEASING.md retitles
-      # the two together, and HISTORY.md's section points at CHANGELOG.md
-      # for the detail: a heading left open there makes that a link into
-      # nothing. Matching btclib and bitcoin-core-rpc, which carry this
-      # same step -- the awk is theirs, and the three repositories now
-      # refuse the same tag for the same three reasons.
+      # the two together, and RELEASE_NOTES.md's section points at
+      # CHANGELOG.md for the detail: a heading left open there makes
+      # that a link into nothing. Matching btclib and bitcoin-core-rpc,
+      # which carry this same step -- the awk is theirs, and the three
+      # repositories now refuse the same tag for the same three reasons.
       #
       # Release-only, like the comparison above and for the same reason: a
       # rehearsal is what runs *before* the retitle, so requiring it there
@@ -185,7 +186,7 @@ jobs:
       - name: Check that the release notes are retitled for the tag
         if: github.event_name == 'push'
         run: |
-          for file in HISTORY.md CHANGELOG.md; do
+          for file in RELEASE_NOTES.md CHANGELOG.md; do
             awk -v tag="$GITHUB_REF_NAME" -v file="$file" '
               $0 == "## " tag {heading = NR; next}
               index($0, "## " tag " ") == 1 {heading = NR; extra = $0; next}
@@ -500,19 +501,19 @@ jobs:
           name: attestation
           path: attestation
 
-      - name: Create the release, with HISTORY.md as its notes
+      - name: Create the release, with RELEASE_NOTES.md as its notes
         env:
           GH_TOKEN: ${{ github.token }}
-        # the notes are the tag's own section of HISTORY.md; a missing
-        # section is a warning rather than a failure, the upload having
-        # already happened, and the notes then come from the merged pull
-        # requests instead
+        # the notes are the tag's own section of RELEASE_NOTES.md; a
+        # missing section is a warning rather than a failure, the upload
+        # having already happened, and the notes then come from the
+        # merged pull requests instead
         run: |
           awk -v tag="$GITHUB_REF_NAME" '
             $0 ~ "^## " tag "( |$)" {found=1; next}
             /^## / && found {exit}
             found {print}
-          ' HISTORY.md > "$RUNNER_TEMP/notes.md"
+          ' RELEASE_NOTES.md > "$RUNNER_TEMP/notes.md"
           # named for the tag only here, where the ref is one: nothing
           # inside the bundle says which release it belongs to, the way
           # the sdist's own file name does
@@ -522,7 +523,7 @@ jobs:
             gh release create "$GITHUB_REF_NAME" dist/* "$bundle" \
               --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
           else
-            echo "::warning::HISTORY.md has no $GITHUB_REF_NAME section"
+            echo "::warning::RELEASE_NOTES.md has no $GITHUB_REF_NAME section"
             gh release create "$GITHUB_REF_NAME" dist/* "$bundle" \
               --title "$GITHUB_REF_NAME" --generate-notes
           fi
