@@ -228,7 +228,28 @@ Then:
 
    `git push --tags` would push whatever other local tags happen to
    exist. The workflow then builds and tests every artifact the release
-   ships and stops at the `pypi` environment
+   ships and stops at the `pypi` environment.
+
+   A run that comes back `startup_failure` with **zero jobs
+   scheduled** -- not even `version-check`, which has no dependencies
+   at all -- is not the matrix failing to build; `release.yml` itself
+   was refused before a single job started, and the REST API says
+   nothing more than a generic "workflow file issue": the actual error
+   is on the run page alone, not in anything `gh run view` or
+   `gh api .../runs/<id>/jobs` prints. `v0.8.0.3` hit this on three tag
+   pushes and a `workflow_dispatch`, all identical and independent of
+   the trigger, because a called workflow's jobs are capped at what
+   the *caller* grants, not at what the called workflow's own
+   top-level default declares -- `test.yml`'s `changes` job (#189)
+   asks for `pull-requests: read`, and `release.yml` granted only
+   `contents: read`. Retagging does not help here the way it does for
+   `invalid-publisher` below: nothing had been built yet either way,
+   but this is a structural defect in the workflow file, not a
+   transient one, and a freshly re-signed tag on the same commit failed
+   the same way two hours later. What answered it was the missing
+   permission, granted on the calling job (#281) -- confirmed with a
+   `workflow_dispatch` rehearsal on the fix branch before retagging,
+   scheduling dozens of jobs where the unfixed commit scheduled none
 1. approve the `pypi` deployment when the run pauses for review. Up to
    here nothing is public and the tag can still be deleted; the upload
    that follows is the point of no return — the upload, and not the
