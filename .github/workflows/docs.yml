@@ -21,8 +21,10 @@ on:
   push:
     # main only, for the reason lint.yml gives at the same key: a push to a
     # branch with an open pull request would run this twice, in two
-    # concurrency groups that do not cancel each other, and the pull_request
-    # run is the one worth keeping
+    # concurrency groups that do not cancel each other for every
+    # pull_request action except closed on a merge -- see that trigger's
+    # own comment below -- and the pull_request run is the one worth
+    # keeping
     branches: [main]
   pull_request:
     # ready_for_review, so a pull request marked ready gets the run the
@@ -31,12 +33,20 @@ on:
     # for its next push to be checked at all.
     # closed joins them for a different reason: merging or closing a pull
     # request is neither a push nor a synchronize, so a run still held in
-    # this ref's concurrency group survives it -- cancel-in-progress only
-    # fires when a new run lands in that group, and nothing otherwise does.
-    # Landing the closed event there is what lets it supersede the stale
-    # run instead of leaving it to finish on a branch nobody is going to
-    # look at again; the job below declines the real work on it, the merge
-    # commit being main's own push trigger's question
+    # this pull request's own concurrency group survives it --
+    # cancel-in-progress only fires when a new run lands in that group,
+    # and nothing otherwise does. Landing the closed event there is what
+    # lets it supersede the stale run instead of leaving it to finish on
+    # a branch nobody is going to look at again; the job below declines
+    # the real work on it, the merge commit being main's own push
+    # trigger's question. "This pull request's own group" is the part
+    # github.ref alone got wrong: for a closed, merged pull request it
+    # resolves to the base branch's ref, the same one the push trigger's
+    # own run computes, so the closed run landed in *that* group instead
+    # and cancelled the run building the actual merge commit's
+    # documentation -- observed on this repository's own main. The
+    # concurrency block below groups by the pull request's own number
+    # instead, immune to that collision under any action
     types: [opened, reopened, synchronize, ready_for_review, closed]
   # allows the release workflow to reuse this gate
   workflow_call:
@@ -59,11 +69,11 @@ permissions:
 
 # cancel superseded runs on the same branch/PR, named literally and
 # discriminated by an input rather than left to github.ref alone, for the
-# two reasons lint.yml gives at length: release.yml calls this workflow
+# three reasons lint.yml gives at length: release.yml calls this workflow
 # beside lint.yml and test.yml, and a group computed from github.workflow
 # would have the three cancel each other
 concurrency:
-  group: docs-${{ github.ref }}${{ inputs.concurrency-suffix }}
+  group: docs-${{ github.event.pull_request.number || github.ref }}${{ inputs.concurrency-suffix }}
   cancel-in-progress: true
 
 jobs:
