@@ -270,6 +270,23 @@ jobs:
     # not match the tree is worth discovering before the matrices start
     needs: version-check
     uses: ./.github/workflows/test.yml
+    # a called workflow's jobs are capped at what the caller grants here,
+    # not at what the called workflow's own top-level default declares:
+    # this workflow's contents: read alone left `changes`, which asks for
+    # pull-requests: read to list a pull request's files, "only allowed
+    # pull-requests: none" -- refused before a single job starts, version
+    # -check included, rather than started and skipped for the one job
+    # that asked for more. `changes` never runs on a pull request here --
+    # it answers code=true unconditionally and reads no file list -- but
+    # the check is against what the job declares, not against what it
+    # goes on to do. contents: read is repeated rather than left to
+    # test.yml's own default for the same reason: a caller's grant
+    # replaces the callee's default outright, so anything this list
+    # leaves off becomes none for every job over there, not only for the
+    # one this comment names
+    permissions:
+      contents: read
+      pull-requests: read
     with:
       # empty on the tag path, where the step computing it is skipped and
       # a skipped step's output is the empty string: a release ships the
