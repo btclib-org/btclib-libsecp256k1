@@ -2678,7 +2678,7 @@ release-notes length in the first place, and are still in
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for
 
-- **The 17 `musig` entry points, all of them.** Parse and serialize for
+- **Every `musig` entry point.** Parse and serialize for
   `pubnonce`, `aggnonce` and `partial_sig`; `pubkey_agg`, `pubkey_get`,
   `pubkey_ec_tweak_add` and `pubkey_xonly_tweak_add` for key
   aggregation; `nonce_gen`, `nonce_gen_counter` and `nonce_agg` for

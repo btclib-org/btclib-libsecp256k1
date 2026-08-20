@@ -70,6 +70,7 @@ loop that found it already knew it.
 from __future__ import annotations
 
 import secrets
+import threading
 from collections.abc import Sequence
 from types import TracebackType
 
@@ -643,6 +644,22 @@ class SecretNonce:
     the second buffer in this package whose zeroing is asked for rather
     than done.
 
+    Signing at most once is the whole reason this class exists, and on
+    a free-threaded interpreter that has to be true of two threads
+    calling `partial_sign` on the same object, not only of one: reading
+    `self._secnonce` and then clearing it are two statements, and two
+    threads each passing the read before either reaches the clear would
+    both go on to drive `secp256k1_musig_partial_sign` over the same
+    native secnonce at once, an unsynchronized concurrent access on the
+    exact memory a nonce-reuse leak comes from. `_take` is where the
+    read and the clear become one statement instead of two, under a
+    lock private to this instance -- there being no reason for two
+    `SecretNonce` objects to serialize on each other's locks, unlike the
+    one shared libsecp256k1 context. Thread safety here is that lock,
+    not the constness `ssa.Signer`'s relies on: this is the one buffer
+    in the package meant to be read exactly once, where a keypair is
+    meant to be read any number of times.
+
     Args:
         secnonce: the libsecp256k1 secret nonce object `nonce_gen` or
             `nonce_gen_counter` built.
@@ -665,6 +682,10 @@ class SecretNonce:
         self._pubnonce = pubnonce
         self._pubkey = pubkey
         self.pubnonce = pubnonce_serialize(pubnonce)
+        # private to this instance: what it orders is one SecretNonce's
+        # own check-and-clear, not calls into libsecp256k1, so it is not
+        # the shared context's lock and does not compete with it
+        self._lock = threading.Lock()
 
     def partial_sign(
         self,
@@ -707,7 +728,12 @@ class SecretNonce:
                 not verify, which no input reaching this far can make
                 happen.
         """
-        secnonce = self._held()
+        # _take, not _held: it clears self._secnonce as the one
+        # statement that reads it, which is what keeps two threads
+        # calling this on the same object from both passing a check and
+        # both going on to sign -- the class docstring says why that
+        # race is the one this class exists to rule out
+        secnonce = self._take()
         keypair_obj: CData | None = None
         partial_sig = ffi.new("secp256k1_musig_partial_sig *")
         try:
@@ -736,11 +762,12 @@ class SecretNonce:
             # so this wipes it here too, unconditionally, rather than
             # trust a C side effect that this exception proves did not
             # run. Wiping twice is not a problem, so which of the two
-            # happened is not asked
+            # happened is not asked. self._secnonce is already cleared,
+            # by _take above, before this thread did anything else with
+            # the object it returned
             if keypair_obj is not None:
                 wipe(keypair_obj)
             wipe(secnonce)
-            self._secnonce = None
         if not signed:
             msg = (
                 "the private key, key aggregation cache or session do not"
@@ -766,11 +793,18 @@ class SecretNonce:
         Signing afterwards raises rather than signing with the zeros
         left behind, and there is no reviving it: nothing here keeps the
         nonce anywhere else, so a session abandoned this way is
-        restarted with a fresh `nonce_gen` rather than resumed.
+        restarted with a fresh `nonce_gen` rather than resumed. Takes
+        the same lock `partial_sign` does, so a `wipe` racing a
+        `partial_sign` call on another thread cannot see the buffer
+        between the two: whichever of them clears `self._secnonce`
+        first is the one that goes on to act on it, and the other finds
+        nothing left to take.
         """
-        if self._secnonce is not None:
-            wipe(self._secnonce)
+        with self._lock:
+            secnonce = self._secnonce
             self._secnonce = None
+        if secnonce is not None:
+            wipe(secnonce)
 
     # PYI034 asks for `typing.Self` here, and that is 3.11 while this
     # package supports 3.10, as ssa.Signer's own comment says
@@ -799,19 +833,32 @@ class SecretNonce:
         """
         self.wipe()
 
-    def _held(self) -> CData:
-        """Return the secret nonce, or refuse if it is gone.
+    def _take(self) -> CData:
+        """Read the secret nonce and clear it, as one atomic step.
+
+        The private half of the guarantee `partial_sign` and `wipe`
+        both make: "is there a secret nonce" and "take it" have to be
+        one operation, under `self._lock`, or two threads calling
+        `partial_sign` on the same object could each pass the read
+        before either reaches the clear, and both go on to sign with
+        it -- the class docstring says what that race would cost.
 
         Returns:
-            The libsecp256k1 secret nonce object.
+            The libsecp256k1 secret nonce object. `self._secnonce` is
+            already `None` by the time this returns it, so no other
+            call -- from any thread -- can receive the same object
+            again.
 
         Raises:
             ValueError: if `wipe` or a previous `partial_sign` has
-                already overwritten it.
+                already taken it.
         """
-        if self._secnonce is None:
+        with self._lock:
+            secnonce = self._secnonce
+            self._secnonce = None
+        if secnonce is None:
             raise ValueError("this secret nonce has been wiped or already spent")
-        return self._secnonce
+        return secnonce
 
 
 class Session:

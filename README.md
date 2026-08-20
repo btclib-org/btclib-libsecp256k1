@@ -1119,12 +1119,24 @@ tweaking one race, where two threads only ever *reading* it — through
 `nonce_gen`, `Session.__init__`, `partial_sign` — do not, none of those
 calls writing to it.
 
-`musig.SecretNonce` costs no guarantee of its own to state, being
-narrower than either: `partial_sign` consumes it exactly once, by
-design, so a second call from any thread is already refused before
-concurrency is the question — the ordering that matters is the one
-`wipe` and `partial_sign` already impose on a single nonce, not one
-between threads.
+`musig.SecretNonce` is neither of the two shapes above, being narrower
+than both: it is meant to be read exactly once, from whichever thread
+gets there first, and refused everywhere else — a keypair's read-any-
+number-of-times constness does not apply, and neither does a chain's
+one-object-one-thread convention, since a shared secret nonce is
+exactly the case this class has to make safe rather than ask a caller
+to avoid. Reading `self._secnonce` and then clearing it are two
+statements, and without ordering them two threads calling
+`partial_sign` on the same object could each pass the read before
+either reaches the clear, and both go on to drive
+`secp256k1_musig_partial_sign` over the same native secnonce at once —
+an unsynchronized concurrent access on the exact memory a MuSig2
+nonce-reuse leak comes from, the worst failure this module has. A lock
+private to the instance is what orders it: `SecretNonce._take` makes
+the read and the clear one atomic step, so at most one caller — from
+any thread — ever receives the object. `tests/test_concurrency.py`
+races `WORKERS` threads on one `SecretNonce` and asserts exactly one
+signs.
 
 The one way to lose that guarantee is to re-randomize the shared context
 while it is in use. `context._randomize(context.ctx)` is there for a
