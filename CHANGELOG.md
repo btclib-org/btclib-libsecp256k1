@@ -2574,6 +2574,20 @@ release-notes length in the first place, and are still in
   both greps. `test: every job passed` gets an entry in the same pass,
   that being the neighbouring gap and the check a contributor sees red:
   it reproduces as nothing, reading the conclusions of the jobs above it.
+- **`test-passed` skips a cancelled run instead of failing it** (#274).
+  It carried `always()`, so a run the next push's concurrency group
+  already superseded — every needed job reporting `cancelled` — still
+  reached the `case " $RESULTS " in *" failure "* | *" cancelled "*)`
+  step and turned that into a required check with no defect behind it,
+  red beside the newer run's green on the same head sha. The job's own
+  comment had called this deliberate, "Cancelled is a failure here too,
+  a superseded run being no evidence either way" — the framing #273
+  disputes: the case that is wrong is the concurrency one, where the
+  cancellation means a newer run is authoritative rather than that this
+  tree is unproven. `always()` becomes `!cancelled()`; a skipped
+  required check satisfies branch protection the same as a passing one,
+  and the step below is unchanged, so a job cancelled on its own rather
+  than by the run's own cancellation still fails the gate as before.
 
 ## v0.8.0.2
 

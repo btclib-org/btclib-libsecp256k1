@@ -922,17 +922,23 @@ jobs:
   # check, and macos.yml and windows.yml are two more workflows over the
   # same matrix shape.
   #
-  # `if: always()` because a job with unmet `needs` is skipped, and a
+  # `if: !cancelled()` because a job with unmet `needs` is skipped, and a
   # skipped check is not a failed one: without it a failing matrix cell
   # would leave this context reported as skipped, which satisfies a
-  # required check rather than blocking on it. Cancelled is a failure here
-  # too, a superseded run being no evidence either way
+  # required check rather than blocking on it. A cancellation of this
+  # run itself, though, is no evidence either way -- the concurrency
+  # group superseding it with a newer push -- and `always()` used to
+  # carry that into an explicit failure below despite the run's own
+  # cancellation already speaking for it. `!cancelled()` skips this job
+  # in that case instead, which satisfies the check the way any other
+  # skip does, while a job cancelled on its own rather than by the run's
+  # own cancellation still fails below
   test-passed:
     name: "test: every job passed"
     # and the draft condition every job above carries, so a draft
     # skips uniformly rather than tripping the skip check below -- the
     # closed one for the same reason, added at the trigger above
-    if: ${{ always() && !github.event.pull_request.draft && github.event.action != 'closed' }}
+    if: ${{ !cancelled() && !github.event.pull_request.draft && github.event.action != 'closed' }}
     needs:
       - changes
       - coverage
