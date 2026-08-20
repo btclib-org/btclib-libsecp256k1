@@ -46,11 +46,18 @@ on:
     # would wait for its next push to be checked at all.
     # closed joins them for a different reason: merging or closing a pull
     # request is neither a push nor a synchronize, so a run still held in
-    # this ref's concurrency group survives it -- cancel-in-progress only
-    # fires when a new run lands in that group, and nothing otherwise
-    # does. Landing the closed event there is what lets it supersede the
-    # stale run instead of leaving it to finish on a branch nobody is
-    # going to look at again
+    # this pull request's own concurrency group survives it --
+    # cancel-in-progress only fires when a new run lands in that group,
+    # and nothing otherwise does. Landing the closed event there is what
+    # lets it supersede the stale run instead of leaving it to finish on
+    # a branch nobody is going to look at again. "This pull request's
+    # own group" is the part github.ref alone gets wrong: for a closed,
+    # merged pull request it resolves to the base branch's ref, which
+    # this workflow has no push trigger to collide with, but the weekly
+    # schedule and a workflow_dispatch both also run on the default
+    # branch and would resolve to that same ref. The concurrency block
+    # below groups by the pull request's own number instead, immune to
+    # that under any action
     types: [opened, reopened, synchronize, ready_for_review, closed]
     paths:
       - .github/workflows/links.yml
@@ -69,9 +76,14 @@ permissions:
 
 # cancel superseded runs. Named literally rather than through
 # github.workflow, as everywhere else here: in a called workflow what that
-# expression resolves to is undocumented
+# expression resolves to is undocumented.
+# github.event.pull_request.number, not github.ref alone, is what a
+# pull_request run of any action groups by -- the pull_request trigger's
+# own comment above has the reasoning. Neither schedule nor
+# workflow_dispatch carries pull_request context, so github.ref is still
+# what groups either, unchanged
 concurrency:
-  group: links-${{ github.ref }}
+  group: links-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

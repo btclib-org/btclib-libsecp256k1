@@ -2588,6 +2588,25 @@ release-notes length in the first place, and are still in
   required check satisfies branch protection the same as a passing one,
   and the step below is unchanged, so a job cancelled on its own rather
   than by the run's own cancellation still fails the gate as before.
+- **A closed pull request's run no longer lands in its merge's own push
+  run's concurrency group** (#276). `test.yml`, `lint.yml` and
+  `docs.yml` grouped by `github.ref` alone, and `github.ref` for a
+  closed, merged pull request's run resolves to the base branch's ref
+  rather than `refs/pull/N/merge`, landing it in the same group as the
+  push the merge itself triggers. The two events fire about a second
+  apart on every merge, and after bitcoin-core-rpc's own #136 landed
+  there, its `docs` push run for the merge commit was cancelled two
+  seconds after being created, before any job started -- required
+  checks reading `cancelled` for a commit the run that got to run never
+  tested. The group is now
+  `github.event.pull_request.number || github.ref`: a pull_request run
+  of any action, closed included, groups by the pull request's own
+  number instead, which still cancels that same pull request's own
+  earlier run exactly as `closed` was added for, and cannot equal any
+  push's `github.ref`. `links.yml` and `vendored-vectors.yml` get the
+  same fix though neither has a push trigger to collide with, their
+  `schedule` and `workflow_dispatch` triggers resolving to the same ref
+  a closed run does.
 
 ## v0.8.0.2
 
