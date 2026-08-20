@@ -2626,6 +2626,24 @@ release-notes length in the first place, and are still in
   same fix though neither has a push trigger to collide with, their
   `schedule` and `workflow_dispatch` triggers resolving to the same ref
   a closed run does.
+- **`release.yml`'s call into `test.yml` grants `pull-requests: read`
+  now, `contents: read` beside it** (#281). A called workflow's jobs
+  are capped at what the caller grants, not at what the called
+  workflow's own top-level default declares, and `release.yml` granted
+  only `contents: read` -- so `test.yml`'s `changes` job (#189), which
+  declares `pull-requests: read` to list a pull request's files,
+  refused the whole call before a single job started, `version-check`
+  included, `changes` never actually reading a file list on a release
+  or a rehearsal. Found tagging `v0.8.0.3`: three tag pushes and a
+  `workflow_dispatch` all came back `startup_failure` with zero jobs
+  scheduled, the REST API answering nothing more than a generic
+  "workflow file issue" -- the actual error only shows on the run page
+  itself. Nothing had exercised this call since `changes` was added,
+  the prior release predating it. `contents: read` is repeated rather
+  than left to `test.yml`'s own default because a caller's grant
+  replaces the callee's default outright: leaving it off would have
+  starved every other job over there of the checkout permission it has
+  today, not only `changes` of the one it asked for.
 
 ### `HISTORY.md` is `RELEASE_NOTES.md` now
 
