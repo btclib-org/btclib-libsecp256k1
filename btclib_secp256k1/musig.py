@@ -708,9 +708,15 @@ class SecretNonce:
                 happen.
         """
         secnonce = self._held()
-        keypair_obj = keypair(prvkey)
+        keypair_obj: CData | None = None
         partial_sig = ffi.new("secp256k1_musig_partial_sig *")
         try:
+            # keypair(prvkey) is inside the try on purpose: it is the
+            # one fallible step here that runs before libsecp256k1 ever
+            # sees secnonce, and the docstring's guarantee -- the secret
+            # nonce does not survive the call, whatever the outcome --
+            # has to hold even when this raises before that call is made
+            keypair_obj = keypair(prvkey)
             signed = lib.secp256k1_musig_partial_sign(
                 ctx,
                 partial_sig,
@@ -721,10 +727,19 @@ class SecretNonce:
             )
         finally:
             # the keypair carries the private key, wiped as ssa.sign
-            # wipes its own; the secret nonce is spent by the call above
-            # regardless of its outcome -- libsecp256k1 zeroes it right
-            # after loading it and before any of its own checks can fail
-            wipe(keypair_obj)
+            # wipes its own -- and only if it was built at all, a
+            # private key `keypair` refused never having become one.
+            # The secret nonce is spent regardless: libsecp256k1
+            # zeroes it once its own call is made, right after loading
+            # it and before any of its other checks can fail, but a
+            # keypair that failed to build never reaches that call --
+            # so this wipes it here too, unconditionally, rather than
+            # trust a C side effect that this exception proves did not
+            # run. Wiping twice is not a problem, so which of the two
+            # happened is not asked
+            if keypair_obj is not None:
+                wipe(keypair_obj)
+            wipe(secnonce)
             self._secnonce = None
         if not signed:
             msg = (

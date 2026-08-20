@@ -253,6 +253,29 @@ def test_partial_sign_refuses_a_mismatched_private_key() -> None:
     check()  # and now the thread is clean
 
 
+def test_partial_sign_wipes_the_secret_nonce_even_when_keypair_raises() -> None:
+    """A private key `keypair` refuses spends the nonce just the same.
+
+    `keypair(prvkey)` is the one fallible step of `partial_sign` that
+    runs before libsecp256k1 ever sees the secret nonce -- an ordinary,
+    documented failure, a caller's malformed or out-of-range private key
+    -- and the class docstring's guarantee does not carve out an
+    exception for it: "whatever the outcome... the secret nonce this
+    holds does not survive the call." What is asserted is that same
+    triple as the mismatch test above, for a refusal that happens before
+    the C call rather than inside it: the exception, the zeroed memory,
+    and a `SecretNonce` that refuses to sign again rather than being
+    retried with a corrected key -- which is the nonce reuse this class
+    exists to refuse in the first place.
+    """
+    cache, secnonces, session = two_of_two_session()
+    with pytest.raises(ValueError, match="private key"):
+        secnonces[0].partial_sign(0, cache, session)
+    assert secnonce_memory(secnonces[0]) == b""
+    with pytest.raises(ValueError, match="wiped or already spent"):
+        secnonces[0].partial_sign(PRVKEYS[0], cache, session)
+
+
 def test_a_wiped_secret_nonce_refuses_to_sign() -> None:
     """Rather than signing with the zeros the wipe left."""
     cache, secnonces, session = two_of_two_session()
