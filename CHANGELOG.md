@@ -22,6 +22,81 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.4 (work in progress, not released yet)
 
+### `musig` wraps MuSig2, closing the one exception `lib` was for
+
+- **Every `musig` entry point.** Parse and serialize for
+  `pubnonce`, `aggnonce` and `partial_sig`; `pubkey_agg`, `pubkey_get`,
+  `pubkey_ec_tweak_add` and `pubkey_xonly_tweak_add` for key
+  aggregation; `nonce_gen`, `nonce_gen_counter` and `nonce_agg` for
+  round one; `nonce_process`, `partial_sign`, `partial_sig_verify` and
+  `partial_sig_agg` for round two. Closes #282, "may deserve an issue of
+  its own" in #156, and unblocks
+  [btclib#1048](https://github.com/btclib-org/btclib/issues/1048) (the
+  bindings as a test oracle for `btclib.ecc.musig2`) and
+  [btclib#1049](https://github.com/btclib-org/btclib/issues/1049)
+  (delegating `partial_sig_verify_`).
+
+  `secp256k1_musig_keyagg_cache` and `secp256k1_musig_session` have no
+  serialization -- "no serialization and parsing functions (yet)" in the
+  header's own words -- and #87 declined an opaque *handle* for exactly
+  that shape, "a handle is a lifetime someone has to own and invalidate."
+  `_secret.py` recorded the clause that reopened it: the handle "belongs
+  where the signing state lives," and a MuSig2 session is that place.
+  `KeyAggCache` and `Session` are the exception taken, held state beside
+  `ssa.Signer` and `keys.PubkeyTweakChain` -- and, unlike either of
+  those, not chosen for a saving over octets that do not exist to be
+  saved: *Outposts past the boundary* in the README says why the
+  existing rule for holding an object does not reach them.
+
+  `SecretNonce`, the third class this module adds, is the one that has
+  to be wiped: `ssa.Signer` is the model, a `with` statement overwriting
+  it whether the block signs or raises, and a wiped object refusing to
+  sign rather than signing with the zeros. libsecp256k1 already zeroes a
+  secnonce inside `partial_sign` -- "will abort if given a secnonce that
+  is all zeros" -- for a session that runs to completion; what
+  `SecretNonce` adds is the wipe for one abandoned before that, which
+  the C side never sees. SECURITY.md now names two such buffers instead
+  of one. The check and the wipe are also made safe against two threads
+  sharing one `SecretNonce`: `_take` reads `self._secnonce` and clears
+  it as one atomic step under a lock private to the instance, rather
+  than as two statements a scheduler could interleave between -- which
+  on the free-threaded interpreter this package ships a wheel for
+  (`cp314t`) would otherwise let two threads both pass the check and
+  both drive `secp256k1_musig_partial_sign` over the same secnonce at
+  once, the MuSig2 nonce-reuse condition that leaks the private key.
+
+  `partial_sign` verifies the partial signature it makes, by default:
+  the C call "does not verify the output partial signature, deviating
+  from the BIP 327 specification," and its header recommends verifying
+  with `partial_sig_verify` "to prevent random or adversarially
+  provoked computation errors" -- `ssa.sign`'s own argument for its
+  `verify`, on a signature assembled from more moving parts than a solo
+  one.
+
+  A parse failure and a semantic failure both answer libsecp256k1's bare
+  `0`, with nothing on the thread for `context.check` to raise: `KeyAggCache`,
+  `nonce_agg` and `Session.partial_sig_agg` each parse their array one
+  contribution at a time under its own name instead of handing a
+  comprehension to the array they build, so a `ValueError` on a bad
+  public key, nonce or partial signature names its position -- "public
+  key at index 2" rather than a refusal that could be any of them. A
+  handful of failures that examining every C code path showed
+  unreachable given already-parsed objects -- `nonce_agg`'s own
+  aggregation, `pubkey_agg`'s, `nonce_process`'s, and
+  `partial_sig_agg`'s -- are `RuntimeError` instead, matching the
+  distinction `pyproject.toml`'s coverage configuration already draws
+  between the two exceptions this package raises.
+
+  `tests/test_vectors.py`'s BIP327 cases now drive `musig` itself rather
+  than the raw bindings underneath it, `tests/test_musig.py` is new,
+  holding the three classes to the lifetime `tests/test_signer.py`
+  already holds `ssa.Signer` to, and `tests/test_concurrency.py` races
+  threads on one `SecretNonce` to hold the lock above to the guarantee
+  it exists for. The README's *Wrapped modules*, *Design*, *Outposts
+  past the boundary* and *Thread safety* sections, REVIEWING.md's own
+  checklist, and `tests/README.md`'s vendored-vector record, are
+  updated with it; `docs/source` gains the module's stanza.
+
 ## v0.8.0.3
 
 ### A tag-integrity ruleset closes the last unsigned link in the release chain

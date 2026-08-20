@@ -3,18 +3,17 @@
 # Distributed under the MIT software license, see the accompanying
 # LICENSE file or https://opensource.org/license/mit for the full text.
 
-"""Tests for the ecdh, recovery, ellswift, and musig libsecp256k1 modules.
+"""Tests for the ecdh, recovery and ellswift libsecp256k1 modules.
 
 Wherever possible the results are cross-checked against the other
 bindings (dsa, ssa, keys) instead of against vendored constants: the
-ECDH secret is recomputed from the shared point, the recoverable
-signature is compared with the deterministic ECDSA one, and the
-MuSig2 aggregate signature is verified as a plain BIP340 signature.
+ECDH secret is recomputed from the shared point, and the recoverable
+signature is compared with the deterministic ECDSA one.
 
-MuSig2 has no wrapper module, by decision, its two-round protocol
-belonging where the signing state lives: it is exercised through the raw
-cffi bindings, and this test doubles as the usage example the README
-points at.
+`musig` has its own tests, in `tests/test_musig.py`: it is the one
+module here that holds state across calls, which is a different shape
+of test from the other three, one call each against an equation checked
+another way.
 """
 
 from __future__ import annotations
@@ -25,19 +24,16 @@ import pytest
 
 from btclib_secp256k1 import (
     _secret,
-    context,
     dsa,
     ecdh,
     ellswift,
     ffi,
     keys,
-    lib,
     recovery,
     silentpayments,
     ssa,
     xonly,
 )
-from btclib_secp256k1.context import ctx
 
 msg = hashlib.sha256(b"btclib_secp256k1").digest()
 
@@ -223,93 +219,6 @@ def test_ellswift_invalid_inputs() -> None:
         ellswift.xdh(ell, ell, 11, 2)
     with pytest.raises(ValueError, match="private key"):
         ellswift.xdh(ell, ell, 0, 0)
-
-
-def test_musig() -> None:
-    """Run a 2-of-2 MuSig2 signing session, then verify it with ssa."""
-    prvkeys = [(1).to_bytes(32, "big"), (2).to_bytes(32, "big")]
-
-    keypairs, pubkeys = [], []
-    for prvkey in prvkeys:
-        keypair = ffi.new("secp256k1_keypair *")
-        assert lib.secp256k1_keypair_create(ctx, keypair, prvkey)
-        pubkey = ffi.new("secp256k1_pubkey *")
-        assert lib.secp256k1_keypair_pub(ctx, pubkey, keypair)
-        keypairs.append(keypair)
-        pubkeys.append(pubkey)
-
-    # key aggregation
-    keyagg_cache = ffi.new("secp256k1_musig_keyagg_cache *")
-    agg_pubkey = ffi.new("secp256k1_xonly_pubkey *")
-    assert lib.secp256k1_musig_pubkey_agg(
-        ctx, agg_pubkey, keyagg_cache, ffi.new("secp256k1_pubkey *[]", pubkeys), 2
-    )
-
-    # nonce generation, first round
-    secnonces, pubnonces = [], []
-    for i, prvkey in enumerate(prvkeys):
-        secnonce = ffi.new("secp256k1_musig_secnonce *")
-        pubnonce = ffi.new("secp256k1_musig_pubnonce *")
-        # the session randomness is zeroed by the call
-        session_secrand = ffi.new("char[32]", bytes([i + 10]) * 32)
-        assert lib.secp256k1_musig_nonce_gen(
-            ctx,
-            secnonce,
-            pubnonce,
-            session_secrand,
-            prvkey,
-            pubkeys[i],
-            msg,
-            keyagg_cache,
-            ffi.NULL,
-        )
-        secnonces.append(secnonce)
-        pubnonces.append(pubnonce)
-
-    aggnonce = ffi.new("secp256k1_musig_aggnonce *")
-    assert lib.secp256k1_musig_nonce_agg(
-        ctx, aggnonce, ffi.new("secp256k1_musig_pubnonce *[]", pubnonces), 2
-    )
-
-    # partial signatures, second round
-    session = ffi.new("secp256k1_musig_session *")
-    assert lib.secp256k1_musig_nonce_process(ctx, session, aggnonce, msg, keyagg_cache)
-
-    partial_sigs = []
-    for i in range(2):
-        partial_sig = ffi.new("secp256k1_musig_partial_sig *")
-        assert lib.secp256k1_musig_partial_sign(
-            ctx, partial_sig, secnonces[i], keypairs[i], keyagg_cache, session
-        )
-        assert lib.secp256k1_musig_partial_sig_verify(
-            ctx, partial_sig, pubnonces[i], pubkeys[i], keyagg_cache, session
-        )
-        partial_sigs.append(partial_sig)
-
-    sig = ffi.new("char[64]")
-    assert lib.secp256k1_musig_partial_sig_agg(
-        ctx,
-        sig,
-        session,
-        ffi.new("secp256k1_musig_partial_sig *[]", partial_sigs),
-        2,
-    )
-
-    # the aggregate signature is a plain BIP340 one, for the aggregate key
-    xonly_bytes = ffi.new("char[32]")
-    assert lib.secp256k1_xonly_pubkey_serialize(ctx, xonly_bytes, agg_pubkey)
-    pubkey_bytes = ffi.unpack(xonly_bytes, 32)
-    assert ssa.verify(msg, pubkey_bytes, ffi.unpack(sig, 64))
-
-    # signing zeroed the secret nonces, so signing again with one of them
-    # is refused: the whole point of the session, and the reason a call
-    # made through lib is worth following with context.check(), which
-    # turns the bare 0 into what libsecp256k1 has to say about it
-    assert not lib.secp256k1_musig_partial_sign(
-        ctx, partial_sigs[0], secnonces[0], keypairs[0], keyagg_cache, session
-    )
-    with pytest.raises(ValueError, match="secnonce_magic"):
-        context.check()
 
 
 def test_size_checks_refuse_both_sides() -> None:

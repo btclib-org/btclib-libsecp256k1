@@ -7,6 +7,16 @@ a tag is generated from.
 
 ## v0.8.0.4 (work in progress, not released yet)
 
+Non-breaking. `musig` is new: it wraps MuSig2 (BIP327), previously
+reachable only through the raw `lib` bindings this package also exports.
+`musig.KeyAggCache` aggregates signers' public keys and applies the
+BIP32 and BIP341 tweaks; `musig.nonce_gen` (or `nonce_gen_counter`)
+starts a signing round and returns a `musig.SecretNonce`, wiped whether
+`partial_sign` signs with it or is refused, and refusing a second use of
+the same one even from a different thread; `musig.Session`, opened from
+the signers' aggregate nonce, verifies and aggregates the resulting
+partial signatures into a plain BIP340 signature `ssa.verify` checks.
+
 ## v0.8.0.3
 
 **Breaking: one module is gone, and every other break is a rename.**
