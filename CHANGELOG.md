@@ -2590,7 +2590,7 @@ release-notes length in the first place, and are still in
   than by the run's own cancellation still fails the gate as before.
 - **A closed pull request's run no longer lands in its merge's own push
   run's concurrency group** (#276). `test.yml`, `lint.yml` and
-  `docs.yml` grouped by `github.ref` alone, and github.ref for a
+  `docs.yml` grouped by `github.ref` alone, and `github.ref` for a
   closed, merged pull request's run resolves to the base branch's ref
   rather than `refs/pull/N/merge`, landing it in the same group as the
   push the merge itself triggers. The two events fire about a second

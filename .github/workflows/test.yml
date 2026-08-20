@@ -67,10 +67,11 @@ on:
     # part github.ref alone got wrong: for a closed, merged pull request
     # it resolves to the base branch's ref, the same one the push
     # trigger's own run computes, so the closed run landed in *that*
-    # group instead and cancelled the run testing the actual merge
-    # commit -- observed on this repository's own main. The concurrency
-    # block below groups by the pull request's own number instead,
-    # immune to that collision under any action
+    # group instead and would cancel the run testing the actual merge
+    # commit -- observed doing exactly that to bitcoin-core-rpc's own
+    # main, after its #136 merged there. The concurrency block below
+    # groups by the pull request's own number instead, immune to that
+    # collision under any action
     types: [opened, reopened, synchronize, ready_for_review, closed]
   # allows the release workflow to reuse the whole build/test pipeline
   workflow_call:
