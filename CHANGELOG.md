@@ -2640,7 +2640,8 @@ release-notes length in the first place, and are still in
   a stranger meets first. `CHANGELOG.md` is unchanged: it is the file
   whose name and contents already agree, and every entry it has ever
   made about the old name stays written as it was true then. Sibling
-  repository btclib closed the same gap as issue #1011.
+  repository btclib closed the same gap as issue
+  [btclib#1011](https://github.com/btclib-org/btclib/issues/1011).
 
   Every other reference moved, past `CHANGELOG.md` itself. Two were
   load-bearing: `release.yml` lifts the GitHub release notes out of the
