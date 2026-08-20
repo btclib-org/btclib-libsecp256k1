@@ -231,8 +231,10 @@ because that document, and not this one, is where the rule lives.
   typecheck a module which exists only after a build.
 - A new module: is it more than one call of another? `mult` was exactly
   that, and was folded into `keys`. And is it one the README's Design
-  section says belongs here at all — MuSig2 is deliberately not wrapped,
-  its two-round session belonging where the signing state is.
+  section says belongs here at all — `musig.KeyAggCache` and
+  `musig.Session` are the one place this package holds a libsecp256k1
+  object with no serialization to be one, and the reasoning for taking
+  that exception is in `musig.py`'s own module docstring.
 - A check added to a workflow: is it in `.pre-commit-config.yaml`
   instead? `CLAUDE.md` states that file as the single definition of
   clean, and a check discovered by CI after a push is a check in the

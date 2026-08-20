@@ -159,9 +159,8 @@ went:
 - the surface is complete: every optional module is compiled in and
   reachable, through a validated binding where a function suffices and
   through the raw `lib` where only an object would do (see Wrapped
-  modules). What is absent — a MuSig2 session, the ECDH hash callback,
-  linking a system library — is absent by recorded decision, not by
-  omission
+  modules). What is absent — the ECDH hash callback, linking a system
+  library — is absent by recorded decision, not by omission
 - no input can take the process down: the bindings validate before
   calling, so a malformed key or signature raises `ValueError` naming
   the check that failed, before the C call could meet it; and the
@@ -291,9 +290,10 @@ python cannot give back is what happens on either side of that call:
 records both limits as inherent.
 
 And there is a way past all of it: `lib` and `ffi` are exported, and a
-call made through them has no python in front of it whatsoever. That is
-how MuSig2 is reachable, and it is the path for a caller who wants the
-library and nothing added to it.
+call made through them has no python in front of it whatsoever. It is
+the path for a caller who wants the library and nothing added to it --
+`musig` included, nothing stopping a caller from driving a MuSig2 session
+through `lib` directly the way `musig.py` itself does underneath.
 
 ## Parsing the key once
 
@@ -393,7 +393,7 @@ which is flat in the number of terms.
 already holds, which is a read rather than a multiplication, and so is
 cheaper than any composition could be.
 
-## Two outposts past the boundary
+## Outposts past the boundary
 
 The private halves above hand one object from a call to the next. What
 they do not answer is the caller who crosses the boundary again and
@@ -404,10 +404,11 @@ compressed key is a field square root — and pays it for a key it had
 already converted.
 
 `ssa.Signer` and `keys.PubkeyTweakChain` are the two outposts on that
-side of the boundary, and the only things in these bindings that hold
-state at all. Each holds the converted object across calls, so the
-conversion happens once and every crossing afterwards carries only what
-changes: a message, a tweak.
+side of the boundary held for that reason. Each holds the converted
+object across calls, so the conversion happens once and every crossing
+afterwards carries only what changes: a message, a tweak. `musig`'s
+`KeyAggCache`, `Session` and `SecretNonce` hold state too, and for a
+different reason the rule below makes precise.
 
 The two are not worth the same, and the numbers below say which is
 which. A keypair is *arithmetic* — a point multiplication, half of what
@@ -417,14 +418,23 @@ carrying the uncompressed form instead: 0.269 microseconds against
 2.326. So the signer saves what nothing else can, and the chain saves
 what a caller free to choose its serialization could have saved itself.
 
-**The rule that separates them is the test a third outpost would have to
-pass**, and it is worth stating on its own, because the answer to every
-proposal of one — a held public key for verifying, for ECDH, for
-combining — is here rather than in the proposal:
+**The rule that separates them is the test a proposal for a third one
+would have to pass**, and it is worth stating on its own, because the
+answer to every proposal of that kind — a held public key for
+verifying, for ECDH, for combining — is here rather than in the
+proposal:
 
 > what an object saves is the cost of *rebuilding, from octets, whatever
 > it holds*. It earns its state when that cost is arithmetic, and does
 > not when it is a parse.
+
+`musig`'s three do not answer to this rule, and are not measured against
+it below: there is no octets form of a keyagg cache, a session or a
+secret nonce to rebuild from in the first place, `musig.py`'s own module
+docstring saying why. What decides *that* exception is #87's own test —
+"a handle is a lifetime someone has to own and invalidate" — which
+`ssa.Signer` and `keys.PubkeyTweakChain` never had to pass, holding an
+object this package could equally have handed back as bytes.
 
 The saving is not merely bounded by that cost; it *is* that cost, and by
 construction rather than by measurement. `ssa.sign` builds the keypair,
@@ -454,12 +464,12 @@ held holds it — `keys.parse` hands back the object and the private
 halves take it, which is what "the private halves above hand one object
 from a call to the next" already promised. What a class would add there
 is a name, not a saving. The second is the other side of the ledger:
-this package is [stateless by construction](#design), which is also why
-MuSig2 is not wrapped, so an object is an exception to that, with an
-owner and an invalidation and a threading story, and the rule is what
-the exception has to be paid for with. What it does not weigh is
-ergonomics — the line a caller does not have to write is real, and
-belongs in btclib along with the lifetimes.
+this package is [stateless by construction](#design), and
+`musig.KeyAggCache` and `musig.Session` are its exception, each an
+object with an owner and an invalidation and, [Thread safety](#thread-safety)
+says, its own answer to sharing one across threads. What the rule above
+does not weigh is ergonomics — the line a caller does not have to write
+is real, and belongs in btclib along with the lifetimes.
 
 So the numbers **confirm** the rule rather than establish it, and it is
 worth being clear which of them would survive a different machine. Not
@@ -674,7 +684,7 @@ Microseconds per signature. The finding is the gap between the two
 increments: 19.5 for ECDSA against 12.7 for BIP340, and the 6.8 between
 them is the multiplication `secp256k1_ec_pubkey_create` does and
 `secp256k1_keypair_xonly_pub` does not — the keypair holds the point
-already, which is the same 7.55 the [signer](#two-outposts-past-the-boundary)
+already, which is the same 7.55 the [signer](#outposts-past-the-boundary)
 hoists. So the step the specification prescribes is also the cheaper of
 the two, and a `Signer` pays it at the same price as a bare `ssa.sign`.
 
@@ -911,7 +921,7 @@ declarations are available through the `lib` and `ffi` cffi objects:
 | `recovery`          | `recovery`                                |
 | `extrakeys`         | `xonly`, used by `ssa`                    |
 | `schnorrsig`        | `ssa`                                     |
-| `musig`             | raw `lib` bindings, by decision           |
+| `musig`             | `musig` (BIP327)                          |
 | `ellswift`          | `ellswift` (BIP324)                       |
 | `silentpayments`    | `silentpayments` (BIP352)                 |
 
@@ -1011,35 +1021,51 @@ unreachable through these bindings and what it would be is a way to make
 them slow. It remains available through `lib` for a caller who has a C
 function pointer to give it.
 
-MuSig2 has no binding module, by decision. What its two-round protocol
-needs is a session whose secret nonce cannot be reused, and that is a
-property of an object's lifetime rather than of a function: only whoever
-owns the session can invalidate it. This package is stateless by
-construction, every function being one libsecp256k1 call with its
-arguments validated, so the place to enforce it is where the signing
-state already lives, in [btclib](https://github.com/btclib-org/btclib):
-its PSBT is the multi-party signing machinery MuSig2 plugs into, and the
-specifications say the same (BIP327 the protocol, BIP373 its PSBT
-fields, BIP328 its descriptors). That place already holds the session:
-`btclib.ecc.musig2.sign` zeroes the secret nonce it consumes, so a
-second call with it fails before a second signature exists, and
-`btclib.psbt.musig2.partial_sign` carries the same guarantee into a PSBT
-round.
+MuSig2 is wrapped, in `musig`. What its two-round protocol needs is a
+session whose secret nonce cannot be reused, and that is a property of
+an object's lifetime rather than of a function: only whoever owns the
+session can invalidate it. This package is otherwise stateless by
+construction, every other function being one libsecp256k1 call with its
+arguments validated, and `musig.KeyAggCache` and `musig.Session` are its
+exception -- the *Outposts past the boundary* section above says why the
+existing rule for holding an object does not reach them, and `musig.py`'s
+own module docstring records the decision to take the exception rather
+than to leave the state to whoever calls this package, `KeyAggCache` and
+`Session` having no serialization to hand back regardless.
 
-What MuSig2 needs from here is what has no state, and it is all present:
-`keys.pubkey_sort` for the key ordering and `keys.pubkey_combine` for
-aggregation, `xonly.tweak_add` for the taproot output,
-`hashes.tagged_sha256`, and `ssa.verify`, an aggregate MuSig2 signature
-being a plain BIP340 signature. The 17 `musig` entry points remain
-available through `lib`, and `tests/test_modules.py` drives a complete
-2-of-2 signing session with them.
+`musig.SecretNonce` is the object that carries the secret: `nonce_gen`
+and `nonce_gen_counter` return one, `partial_sign` wipes it whether it
+signs or is refused, and a session abandoned before that -- the case
+libsecp256k1 itself cannot see -- is `wipe`, or the `with` statement that
+calls it on the way out. `ssa.Signer` is the model this follows, and
+SECURITY.md records both as the buffers in this package whose zeroing is
+asked for rather than done.
 
-A call made through `lib` has no argument validation in front of it, so
-libsecp256k1 is the only thing checking its preconditions: it reports a
-violated one through a callback of the context and returns 0, leaving
-nothing in the return value to say what happened. `context.check()`
-raises what was reported, the failed precondition verbatim, and is meant
-to follow such a call:
+[btclib](https://github.com/btclib-org/btclib) still carries its own
+MuSig2 signing state, independent of the C library's: its PSBT is the
+multi-party signing machinery MuSig2 plugs into, and the specifications
+say so too (BIP327 the protocol, BIP373 its PSBT fields, BIP328 its
+descriptors). `btclib.ecc.musig2.sign` zeroes the secret nonce it
+consumes and `btclib.psbt.musig2.partial_sign` carries the same
+guarantee into a PSBT round, in a pure-python implementation of BIP327
+that is a different thing from wrapping libsecp256k1's own session --
+`musig` is what btclib can now check that implementation against,
+rather than only against published vectors.
+
+The aggregate signature `Session.partial_sig_agg` answers is a plain
+BIP340 signature, over the aggregate key `KeyAggCache.pubkey_get` or
+`agg_pubkey` names: `ssa.verify` is what checks it, and nothing in
+`musig` duplicates that call. `keys.pubkey_sort` is BIP327's key
+ordering, applied before `KeyAggCache` if the signers have not agreed on
+another one.
+
+A call made through `lib` directly -- which `musig`'s own functions are,
+underneath, and which a caller reaching past them is free to make too --
+has no argument validation in front of it, so libsecp256k1 is the only
+thing checking its preconditions: it reports a violated one through a
+callback of the context and returns 0, leaving nothing in the return
+value to say what happened. `context.check()` raises what was reported,
+the failed precondition verbatim, and is meant to follow such a call:
 
 ```python
 if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
@@ -1047,13 +1073,15 @@ if not lib.secp256k1_musig_partial_sign(ctx, psig, secnonce, ...):
 ```
 
 That example is the one that matters: partial signing zeroes the secret
-nonce, so signing twice with it is refused, and this is how a session
-learns why. The entry points taking octets need none of it, validating
-their arguments before calling; the private halves taking an object need
-exactly it, for the reason *Parsing the key once* gives. Either way the
-abort()ing libsecp256k1 defaults are replaced by do-nothing stubs in the
-vendored build, so no illegal argument can take the hosting process
-down.
+nonce, so signing twice with it is refused, and this is how a caller
+reaching `lib` directly learns why -- `musig.SecretNonce.partial_sign`
+answers its own `ValueError` for the same case instead, its callers
+having no callback to read. The entry points taking octets need none of
+it, validating their arguments before calling; the private halves taking
+an object need exactly it, for the reason *Parsing the key once* gives.
+Either way the abort()ing libsecp256k1 defaults are replaced by
+do-nothing stubs in the vendored build, so no illegal argument can take
+the hosting process down.
 
 ## Thread safety
 
@@ -1067,13 +1095,17 @@ This matters on a free-threaded interpreter, for which a wheel is built
 (`cp314t`), where those calls are no longer serialized;
 `tests/test_concurrency.py` exercises it.
 
-The two outposts above are what hold a buffer across calls, and they
-answer differently. `ssa.Signer` does not cost that guarantee:
-libsecp256k1 takes a keypair const, so several threads may sign through
-one signer. What is theirs to order is the wipe, which overwrites the
-very memory a concurrent signature is reading — the same shape of race as
+The outposts above are what hold a buffer across calls, and they answer
+differently. `ssa.Signer` does not cost that guarantee: libsecp256k1
+takes a keypair const, so several threads may sign through one signer.
+What is theirs to order is the wipe, which overwrites the very memory a
+concurrent signature is reading — the same shape of race as
 re-randomizing the context below, and the reason the `with` block ends
-where the threads have joined.
+where the threads have joined. `musig.Session` reads the same way: every
+call that takes one — `SecretNonce.partial_sign`, `partial_sig_verify`,
+`partial_sig_agg` — takes it const, `secp256k1_musig_session` never
+being written to after `Session.__init__` builds it, so several threads
+may verify or sign through one session at once.
 
 `keys.PubkeyTweakChain` is the exception, and by construction:
 `secp256k1_ec_pubkey_tweak_add` takes its key as *in and out*, so every
@@ -1081,7 +1113,18 @@ where the threads have joined.
 thread, and a path is a sequence in any case — two threads sharing one
 are not two walkers of it but two writers of the same point. Each thread
 that wants one builds its own, which costs the parse the chain exists to
-pay once.
+pay once. `musig.KeyAggCache` is the same shape: `pubkey_ec_tweak_add`
+and `pubkey_xonly_tweak_add` write the cache in place, so two threads
+tweaking one race, where two threads only ever *reading* it — through
+`nonce_gen`, `Session.__init__`, `partial_sign` — do not, none of those
+calls writing to it.
+
+`musig.SecretNonce` costs no guarantee of its own to state, being
+narrower than either: `partial_sign` consumes it exactly once, by
+design, so a second call from any thread is already refused before
+concurrency is the question — the ordering that matters is the one
+`wipe` and `partial_sign` already impose on a single nonce, not one
+between threads.
 
 The one way to lose that guarantee is to re-randomize the shared context
 while it is in use. `context._randomize(context.ctx)` is there for a
