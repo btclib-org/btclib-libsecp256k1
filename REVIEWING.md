@@ -239,9 +239,10 @@ because that document, and not this one, is where the rule lives.
   wrong place.
 - Does the diff **state a count** of anything? `CONTRIBUTING.md` says why
   it must not, and only some of those are caught by a test.
-- If the branch was rebased: do `CHANGELOG.md` and `HISTORY.md` say what
-  the branch meant them to say? They are `merge=union`, so they never
-  conflict and a rebase can put back a line the branch had removed.
+- If the branch was rebased: do `CHANGELOG.md` and `RELEASE_NOTES.md`
+  say what the branch meant them to say? They are `merge=union`, so
+  they never conflict and a rebase can put back a line the branch had
+  removed.
 - A new or changed workflow: the conventions in `CLAUDE.md`, and
   `REPOSITORY.md` before any rule or setting is touched. A renamed job is
   a required check renamed out of existence.

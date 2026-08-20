@@ -12,13 +12,13 @@
 -->
 
 Every change of a release, in full: what changed, why, and what it cost.
-[HISTORY.md](./HISTORY.md) has the release notes, which say what a user has
-to act on; this file is the record behind them, and is where a claim in
-those notes can be checked.
+[RELEASE_NOTES.md](./RELEASE_NOTES.md) has the release notes, which say
+what a user has to act on; this file is the record behind them, and is
+where a claim in those notes can be checked.
 
 This file starts at v0.7.1.2. The releases before it were documented at
 release-notes length in the first place, and are still in
-[HISTORY.md](./HISTORY.md) rather than duplicated here.
+[RELEASE_NOTES.md](./RELEASE_NOTES.md) rather than duplicated here.
 
 ## v0.8.0.3 (work in progress, not released yet)
 
@@ -2626,6 +2626,35 @@ release-notes length in the first place, and are still in
   same fix though neither has a push trigger to collide with, their
   `schedule` and `workflow_dispatch` triggers resolving to the same ref
   a closed run does.
+
+### `HISTORY.md` is `RELEASE_NOTES.md` now
+
+- **Its own H1 always read `# Release notes`; the filename did not.**
+  In common usage the two words that were split name the same file,
+  where a project that does split them puts it the other way round --
+  [Keep a Changelog](https://keepachangelog.com/) defines CHANGELOG.md
+  as the curated, human-facing list, which is what this file is here.
+  PyPI's own **Changelog** link, read off `pyproject.toml`'s
+  `changelog` url, pointed past CHANGELOG.md at the file not named
+  changelog -- accurate about its content and wrong about the one thing
+  a stranger meets first. `CHANGELOG.md` is unchanged: it is the file
+  whose name and contents already agree, and every entry it has ever
+  made about the old name stays written as it was true then. Sibling
+  repository btclib closed the same gap as issue
+  [btclib#1011](https://github.com/btclib-org/btclib/issues/1011).
+
+  Every other reference moved, past `CHANGELOG.md` itself. Two were
+  load-bearing: `release.yml` lifts the GitHub release notes out of the
+  tag's own section by filename, and its retitle check reads both files
+  by name -- a tag whose heading is not retitled is refused in either.
+  `.gitattributes` keeps `merge=union` under the new name, so a
+  parallel release-note bullet still resolves without a conflict.
+  `docs/source/history_link.md` moves to
+  `docs/source/release_notes_link.md`, its toctree entry relabelled
+  `RELEASE NOTES` to match. No redirect for the old name: this
+  repository serves no website of its own to carry one -- its docs are
+  built by Read the Docs straight from `docs/source` -- and the file's
+  git history is where the old name stays reachable.
 
 ## v0.8.0.2
 

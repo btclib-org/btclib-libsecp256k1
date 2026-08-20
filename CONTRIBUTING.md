@@ -513,9 +513,9 @@ targets and where every change lands; a tag on `main` is a release.
   what it says
 - **the vendored submodule moves on purpose.** Bumping `secp256k1` is a
   change of what this package wraps: it belongs in its own pull request,
-  with the version named in the README and in `HISTORY.md` moved with it.
-  Dependabot signals upstream movement but tracks the default branch, so
-  a release always needs the tagged commit
+  with the version named in the README and in `RELEASE_NOTES.md` moved
+  with it. Dependabot signals upstream movement but tracks the default
+  branch, so a release always needs the tagged commit
 
 ### Documentation and comments
 
@@ -597,7 +597,7 @@ to be. "This is here rather than X because X breaks Y" stays, whatever
 prompted it; "this used to be X, until Z" goes — unless the old spelling
 is something a caller can still encounter, in which case it is not history
 but the present. History has a file of its own,
-[HISTORY.md](HISTORY.md), and the commit messages.
+[RELEASE_NOTES.md](RELEASE_NOTES.md), and the commit messages.
 
 ## Pull requests
 

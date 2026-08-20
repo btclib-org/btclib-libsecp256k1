@@ -41,9 +41,9 @@ A claim about the build matrix is measurable too: `gh run view <id>
 - [ ] comments that this change makes untrue have been updated, in the
       workflows and build scripts too
 - [ ] `CHANGELOG.md` has an entry for it, under the open version, and
-      `HISTORY.md` mentions it if a user of the package would notice.
-      Both are written as the change lands, not at release time: the
-      reasoning is here now and nowhere in three months
+      `RELEASE_NOTES.md` mentions it if a user of the package would
+      notice. Both are written as the change lands, not at release
+      time: the reasoning is here now and nowhere in three months
 - [ ] the `secp256k1` submodule is untouched, or moving it is what this
       pull request is about and the version named in `README.md` moved
       with it

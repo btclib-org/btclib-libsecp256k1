@@ -37,7 +37,7 @@ Two shapes make the reader what it is rather than a one-line pattern:
   applying fails rather than sitting there, which it could not do if the
   prose explaining it counted as a use.
 
-`CHANGELOG.md` and `HISTORY.md` are out of scope, and not for the
+`CHANGELOG.md` and `RELEASE_NOTES.md` are out of scope, and not for the
 citations they would add. A released section is that release's
 account of itself, so a test renamed afterwards does not make it wrong,
 and a check over it would ask for the record to be edited whenever the

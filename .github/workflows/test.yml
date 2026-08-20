@@ -195,7 +195,7 @@ jobs:
           # run, which is the expensive direction; leaving every workflow
           # change to run everything is the cheap one, at the cost this
           # comment now records
-          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|HISTORY|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$|^\.github/mutation/[^/]*\.toml$|^\.secrets\..*baseline$'
+          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|RELEASE_NOTES|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$|^\.github/mutation/[^/]*\.toml$|^\.secrets\..*baseline$'
           if [ ! -s files.txt ] || grep -qvE "$prose" files.txt; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "something the matrix reads changed: everything runs"

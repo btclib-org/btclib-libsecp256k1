@@ -95,10 +95,11 @@ html_theme = "sphinx_rtd_theme"
 # -- Links out of the included root markdown files ----------------------------
 
 # Four pages of the toctree are this repository's README, CONTRIBUTING,
-# SECURITY and HISTORY, each pulled into a *_link.md shim by a myst
+# SECURITY and RELEASE_NOTES, each pulled into a *_link.md shim by a myst
 # {include} -- three fewer than btclib, which also has CODE_OF_CONDUCT,
 # REPOSITORY and RELEASING among its root files but not among its shims,
-# and no CHANGELOG at all, HISTORY being the only release notes file here.
+# and no CHANGELOG at all, RELEASE_NOTES being the only release notes
+# file here.
 # Those root files are written for the three places that read them
 # unrendered -- the GitHub file view, the PyPI long description, and (for
 # this repository) nothing else, there being no website served from it --
