@@ -150,23 +150,25 @@ Then:
 
    Then merge it into `main` with a green CI. It is an ordinary pull
    request against the only branch there is, and it lands the way every
-   other one here does: squashed locally into one signed commit where it
-   carries more than one — a version bump and two retitles, not a cycle
-   of work — and fast-forwarded onto `main` from the command line,
-   REPOSITORY.md having the sequence and the bypass it needs.
+   other one here does: squash, pressed by auto-merge once the review and
+   the checks are in — the same button and the same `pull_request`-mode
+   bypass every other pull request lands through, REPOSITORY.md's "Merge
+   methods" and "Auto-merge" sections having the ruleset that grants it.
+   A direct push, fast-forwarded from the command line, is refused for
+   everyone now, this pull request included: the bypass that once allowed
+   it moved from `always` to `pull_request` mode, so nothing reaches
+   `main` outside a pull request GitHub itself merges.
 
-   The button is the wrong landing on this pull request in particular,
-   and not merely a second-best one: it is the release commit that gets
-   tagged, and a squash composed by GitHub would leave the tag over a
-   commit signed by the web-flow key rather than by the maintainer.
-
-   This branch is the squashed case every time — a version bump and two
-   retitles is never one commit — so push the squash to the branch before
-   fast-forwarding it, and the gates below run on the object that lands
-   and GitHub still marks the pull request Merged. Land the squash
-   straight from a worktree instead and nothing is reconciled: the pull
-   request has to be closed by hand, which is a surprise worth not having
-   between here and the tag. REPOSITORY.md has both outcomes.
+   The button used to be the wrong landing on this pull request in
+   particular: it is the release commit that gets tagged, and fast-
+   forwarding from the command line kept that commit's signature the
+   maintainer's own where a squash composed by GitHub would have left it
+   under the web-flow key instead. That distinction stopped mattering
+   once `required_signatures` was read as asking for a valid signature
+   and not for a particular signer — a commit GitHub composes and signs
+   on merge is exactly as good a base for the release tag as one signed
+   from the command line, and CLAUDE.md now says so for every pull
+   request here, this one included.
 
    What no landing here can cost any more is the history of a cycle. It
    could once: 0.7.1 was *Squash and merge* on a release pull request

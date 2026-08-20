@@ -5,7 +5,7 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
-## v0.8.0.3 (work in progress, not released yet)
+## v0.8.0.3
 
 **Breaking: one module is gone, and every other break is a rename.**
 The public surface of these bindings speaks in octets, and the two
