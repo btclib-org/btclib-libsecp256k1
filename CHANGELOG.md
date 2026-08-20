@@ -39,7 +39,8 @@ release-notes length in the first place, and are still in
   maintainer, a live repository-infrastructure change rather than a
   pull-request review — this entry documents it. Existing tags are
   unaffected, the ruleset applying to pushes going forward only.
-  Sibling repository btclib closed the same gap as issue #1022.
+  Sibling repository btclib closed the same gap as issue
+  [btclib#1022](https://github.com/btclib-org/btclib/issues/1022).
 
 ### Claude reads a pull request against REVIEWING.md
 
