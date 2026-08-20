@@ -22,6 +22,25 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.3 (work in progress, not released yet)
 
+### A tag-integrity ruleset closes the last unsigned link in the release chain
+
+- **`tag-integrity`, `target: tag`, `refs/tags/v*`: `required_signatures`,
+  no bypass actor.** `release.yml` publishes to PyPI on `push: tags:
+  ["v*"]`, and until now that tag was the one unattested link in an
+  otherwise fully-signed chain — every commit reaching `main` already
+  carried a verified signature, `main-integrity` requiring it with no
+  bypass actor, but nothing stopped an annotated, unsigned tag from
+  triggering a release. RELEASING.md's tagging step already produces a
+  signed tag (`git tag -s`); the ruleset now enforces the same thing at
+  the repository-settings level rather than only documenting it. No
+  `deletion` or `non_fast_forward` rule: RELEASING.md's own recovery
+  path deletes and re-tags a release that failed before the PyPI
+  upload, and either rule would block that. Created directly by the
+  maintainer, a live repository-infrastructure change rather than a
+  pull-request review — this entry documents it. Existing tags are
+  unaffected, the ruleset applying to pushes going forward only.
+  Sibling repository btclib closed the same gap as issue #1022.
+
 ### Claude reads a pull request against REVIEWING.md
 
 - **`claude-review.yml`**, two jobs: one on every non-draft pull request,
