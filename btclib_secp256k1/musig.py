@@ -12,8 +12,8 @@ The final signature this protocol produces is a plain BIP340 one, over
 the aggregate (and possibly tweaked) key `pubkey_agg` computes:
 `ssa.verify` is what checks it, and nothing here duplicates that call.
 
-**Two of the five libsecp256k1 objects this module wraps have no
-serialization.** `secp256k1_musig_keyagg_cache` and `secp256k1_musig_session`
+**`secp256k1_musig_keyagg_cache` and `secp256k1_musig_session` have no
+serialization**, unlike every other object this module wraps. They
 are, in the header's own words, structures with "no serialization and
 parsing functions (yet)", so they cannot cross this package's boundary as
 octets -- which is the rule the package docstring states for everything

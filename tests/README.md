@@ -170,7 +170,9 @@ behind  0 revisions; that commit is the tip of the path
 
 Verdict: **identical**. Every case, the tweaked ones included: the
 aggregate signature is compared with the published value and then
-verified as a plain BIP340 signature of the tweaked aggregate key.
+verified as a plain BIP340 signature of the tweaked aggregate key; the
+error ones are all refused at the parse of the partial signature, which
+is where libsecp256k1 puts that check.
 
 Not vendored from `bip-0327/vectors/`: `key_sort_vectors.json`,
 `nonce_gen_vectors.json`, `tweak_vectors.json` and
