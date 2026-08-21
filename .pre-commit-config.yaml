@@ -68,12 +68,28 @@ repos:
         exclude: ^tests/bip3(40|24)_.*\.csv$
       - id: check-case-conflict
       # off, and measured rather than assumed: nothing tracked here carries
-      # the execute bit and no python file opens with a shebang, so both of
-      # these apply to no file at all. check-hooks-apply below is what would
-      # report them, a hook matching nothing being a rule that has stopped
-      # running rather than a rule that passes
+      # the execute bit -- `git ls-files -s` reports mode 100644 for every
+      # path, the submodule gitlink aside -- and this hook selects on
+      # types [text, executable], so it applies to no file at all.
+      # check-hooks-apply below is what would report that, a hook matching
+      # nothing being a rule that has stopped running rather than a rule
+      # that passes
       # - id: check-executables-have-shebangs
-      # - id: check-shebang-scripts-are-executable
+      # its converse is on, the same measurement reading the other way.
+      # This one selects on types [text] alone, so it matches every file
+      # here whether or not any carries a shebang: what it enforces is the
+      # pair, and the day a file needs one it also needs chmod +x. Nothing
+      # needs one today, which is a fact about how these scripts are
+      # invoked rather than an omission -- a shebang is read by the kernel
+      # only when a file is exec'd directly, and none is. hatchling
+      # `exec()`s scripts/hatch_build.py and scripts/cffi_build.py from
+      # inside the build, `uv run python scripts/cffi_build.py` is how
+      # scripts/README.md gives the in-place build, and the three under
+      # .github/scripts/ are run as `python .github/scripts/<name>.py` by
+      # this file and by the workflows. In each the interpreter is named
+      # by the caller, so a shebang would announce one nothing consults --
+      # and, unpaired, would cost this guard
+      - id: check-shebang-scripts-are-executable
       # finds nothing today, and stops an editor on another platform from
       # adding three bytes tomorrow
       - id: fix-byte-order-marker

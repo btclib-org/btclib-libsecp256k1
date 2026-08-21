@@ -21,6 +21,7 @@ import inspect
 import mmap
 import pkgutil
 from types import FunctionType
+from typing import Any
 
 import pytest
 
@@ -66,6 +67,23 @@ def _calls(function: FunctionType) -> set[str]:
             elif isinstance(node.func, ast.Name):
                 names.add(node.func.id)
     return names
+
+
+def _take_through_a_table(buffer: Any) -> Any:
+    """Read a secret out through a subscript, which names no function.
+
+    Parsed and never run, and at module level because that is the only
+    source `_calls` can read: `inspect.getsource` of a nested function
+    answers its indented block, which `ast.parse` refuses outright.
+
+    Args:
+        buffer: whatever `_secret.take` would have been handed.
+
+    Returns:
+        Whatever `_secret.take` would have answered.
+    """
+    table = {"take": _secret.take}
+    return table["take"](buffer)
 
 
 def test_take_reads_the_secret_out_and_zeroes_the_buffer() -> None:
@@ -216,6 +234,30 @@ def test_take_refuses_a_view_of_wider_items() -> None:
     with pytest.raises(TypeError, match="not of 4-byte items"):
         _secret.take(buffer, into=wide)
     assert ffi.unpack(buffer, ffi.sizeof(buffer)) == bytes(ffi.sizeof(buffer))
+
+
+def test_calls_reads_nothing_from_a_call_that_names_no_function() -> None:
+    """A call reached through an expression contributes no name.
+
+    The population of the test below is the names `_calls` answers, so
+    what it cannot name it cannot include: a producer invoked as
+    `table[key]()` leaves that walk reporting no call site at all rather
+    than reporting a wrong one. The helper is run as well as read, which
+    is what makes the pair of assertions a finding and not a definition
+    -- it does take a secret out, and the walk says it calls nothing.
+    That is a blind spot of the same kind SECURITY.md records for a
+    secret that never passes through `take`, and it is measured here
+    rather than assumed, a walk having no other way to report which of
+    its two readings it took.
+    """
+    buffer = ffi.new("char[32]", SECRET)
+
+    assert _take_through_a_table(buffer) == SECRET
+    # the same narrowing the walk below reaches its population through:
+    # a bare `def` is a `Callable` to mypy, and `_calls` takes the
+    # `FunctionType` `inspect.isfunction` answers for
+    assert inspect.isfunction(_take_through_a_table)
+    assert _calls(_take_through_a_table) == set()
 
 
 def test_every_function_that_takes_a_secret_out_offers_into() -> None:

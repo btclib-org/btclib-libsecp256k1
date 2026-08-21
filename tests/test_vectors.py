@@ -134,6 +134,28 @@ def compressed(point: Point) -> bytes:
     return bytes([2 + (point[1] & 1)]) + point[0].to_bytes(32, "big")
 
 
+def test_point_add_at_infinity() -> None:
+    """The two cases the vectors below never reach, driven directly.
+
+    `point_mul` is the only caller here, and it never hands `point_add`
+    a second operand of None nor two points that cancel: it doubles and
+    adds a generator by scalars that are group elements. So the identity
+    on the right and the inverse are the arithmetic this file compares
+    the bindings against, and are exercised by nothing that compares
+    anything -- which is the shape a test of the reference itself exists
+    for, the reference being wrong in a way no vector would report.
+    """
+    assert point_add(G, None) == G
+    assert point_add(None, G) == G
+    assert point_add(None, None) is None
+    # -G is G mirrored across the x axis, and G + (-G) is the point at
+    # infinity: the one sum of two affine points that has no affine value
+    assert point_add(G, (G[0], P - G[1])) is None
+    # a point and itself is doubling and not cancellation, which is the
+    # distinction the first coordinate alone cannot make
+    assert point_add(G, G) == point_mul(2, G)
+
+
 def bip340_vectors() -> list[dict[str, str]]:
     """Read the BIP340 vector csv, vendored from bitcoin/bips."""
     path = pathlib.Path(__file__).parent / "bip340_test_vectors.csv"

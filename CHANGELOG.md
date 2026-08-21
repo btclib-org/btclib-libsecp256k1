@@ -187,6 +187,67 @@ release-notes length in the first place, and are still in
   their own; `btclib`'s `test.yml` carries no Windows row and
   `bitcoin-core-rpc`'s carried one further instance of its own.
 
+### The gate
+
+- **Coverage measures `tests/` as well as the package**
+  (btclib-org/.github#7). `[tool.coverage.run] source` named
+  `btclib_secp256k1` alone, so the one thing the 100% ratchet said
+  nothing about was the suite enforcing it: a helper no test calls and a
+  branch no fixture takes are dead code carrying the authority of a
+  test. `source = ["btclib_secp256k1", "tests"]` is what the sibling
+  repositories already name, and it found four gaps here rather than
+  none.
+
+  Two are closed by a test that had been missing. `point_add` in
+  `test_vectors.py` is the independent arithmetic the recovery id 2 and
+  3 fixture is built against, and its only caller, `point_mul`, never
+  hands it the identity on the right nor two points that cancel -- so
+  the group law's two special cases were reference code nothing
+  exercised, and a reference that is wrong is wrong in a way no vector
+  reports. `_calls` in `test_secret.py` reads a call whose function is
+  neither a name nor an attribute and answers nothing for it, which is
+  precisely the blind spot the population of
+  `test_every_function_that_takes_a_secret_out_offers_into` is defined
+  by: a producer invoked as `table[key]()` is not in it. The new test
+  runs the helper as well as reading it, so the pair of assertions is a
+  finding -- the secret does come out, and the walk reports no call --
+  rather than a restatement of the code. It is a module-level function
+  for a reason worth recording: `inspect.getsource` of a nested one
+  answers an indented block, which `ast.parse` refuses outright.
+
+  The other two are `raise AssertionError`, in the stubs
+  `test_submodule_pin.py` and `test_verified_signing.py` substitute to
+  prove a path is never taken. No test can cover those lines, and the
+  reason is stronger than reachability: executing one is the run in
+  which the suite is red, so a green run cannot reach it and no amount
+  of testing would. They join `raise RuntimeError` in `exclude_also`,
+  which is the same argument the entry above them already makes. The
+  package raises no `AssertionError`, so nothing shipped is excluded by
+  it. `# pragma: no cover` twice was the alternative, and it records the
+  decision once per occurrence instead of once.
+
+- **`check-shebang-scripts-are-executable` is on** (btclib-org/.github#7).
+  It sat commented out beside `check-executables-have-shebangs` under
+  one comment covering both, and that comment was right about one of
+  them: `git ls-files -s` reports mode 100644 for every path here, so a
+  hook selecting on `types: [text, executable]` matches nothing and
+  `check-hooks-apply` would say so. Its converse selects on
+  `types: [text]` alone and matches every file in the tree whether or
+  not any carries a shebang, so the same measurement enables it rather
+  than excluding it -- what it enforces is the pair, and the day a file
+  needs a shebang it also needs `chmod +x`.
+
+  That no file has one today is a fact about how these scripts are
+  invoked, not an omission: hatchling `exec()`s `scripts/hatch_build.py`
+  and `scripts/cffi_build.py` from inside the build,
+  `scripts/README.md` gives the in-place build as `uv run python
+  scripts/cffi_build.py`, and the three under `.github/scripts/` run as
+  `python .github/scripts/<name>.py` from `.pre-commit-config.yaml` and
+  the workflows. The caller names the interpreter every time, so a
+  shebang would announce one nothing consults -- and, unpaired with the
+  execute bit, would cost this guard. `fix-byte-order-marker`, the
+  entry of the same shape, was already on.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for

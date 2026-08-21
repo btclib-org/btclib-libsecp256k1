@@ -584,7 +584,13 @@ filterwarnings = ["error"]
 xfail_strict = true
 
 [tool.coverage.run]
-source = ["btclib_secp256k1"]
+# both trees are named, rather than left to --cov's default of "whatever
+# got imported": a module no test imports is then reported at 0% instead
+# of being absent from the table, which is the miss worth catching. tests
+# is measured for the same reason it is written -- a helper nothing calls
+# and a fixture branch nothing takes are dead code carrying the authority
+# of a test, and only a measured suite says so
+source = ["btclib_secp256k1", "tests"]
 # the interesting misses are the guard clauses of a wrapper: statement
 # coverage alone would call a half-tested if fully covered
 branch = true
@@ -603,8 +609,14 @@ precision = 2
 # reports an argument out of the domain, and every one of them is
 # exercised, while a RuntimeError reports a libsecp256k1 call failing
 # where no input can make it fail, and none of them can be. Excluding
-# the latter leaves a number that only untested code can lower
-exclude_also = ["raise RuntimeError"]
+# the latter leaves a number that only untested code can lower.
+# `raise AssertionError` joins it now that tests are measured, and for a
+# stronger reason than reachability: it is how a stub substituted to
+# prove a path is never taken reports being called, so executing that
+# line is the run in which the suite is red. A green run cannot cover
+# it, and no amount of testing would. The package raises none, so the
+# entry reaches the two stubs in tests/ and nothing shipped
+exclude_also = ["raise RuntimeError", "raise AssertionError"]
 # with those excluded the suite reaches every line and every branch, so
 # the ratchet can be the only value that fails on a single new untested
 # one. It assumes the static extension the coverage job builds: on a
