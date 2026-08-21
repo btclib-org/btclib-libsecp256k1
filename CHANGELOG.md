@@ -111,6 +111,40 @@ release-notes length in the first place, and are still in
   `0.12.1` still clears `0.12.0`, so the floor itself does not move here
   -- only the comment does.
 
+- **Every `run:` step that can land on a Windows runner declares
+  `shell: bash`** (btclib-org/btclib#1148). `suite-latest` in
+  `latest.yml`, `suite-windows` in `windows.yml`, and
+  `build-cibuildwheel` and `suite-sdist` in `test.yml` each carry a
+  `windows-latest` or `windows-11-arm` matrix cell, where the default
+  shell is PowerShell and `"$GITHUB_ENV"` and the rest of the POSIX
+  spelling are literals rather than variables; `build-cibuildwheel`'s
+  `Build wheels` step already sits beside one step that declares the
+  line for exactly this reason, and named the other Windows steps of
+  this file it did not yet reach. All six affected steps are one plain
+  command each and run identically under either shell today, so nothing
+  shipped broken -- the hazard is the next conditional, substitution or
+  loop added to one of them, which would fail only on Windows.
+  `latest.yml` and `windows.yml` run on neither a pull request nor a
+  push to `main`, so such an edit's first execution would be a scheduled
+  run; `test.yml`'s two steps are on the merge gate itself, where the
+  Windows cells of `build-cibuildwheel` and `suite-sdist` are exercised
+  on every pull request, but a shell-less step there would still go
+  green having run the wrong interpreter's syntax rather than the
+  intended one.
+
+  Enumerated by parsing every workflow file's `jobs.*.strategy.matrix`
+  (`os` and `include`) and `runs-on` with PyYAML, and flagging a `run:`
+  step whose job's runner set contains `windows` and which declares no
+  `shell:` of its own and inherits none from a job-level `defaults.run`
+  -- `actionlint`, the pinned linter in the pre-commit gate, reports
+  nothing for this shape, measured on a minimal workflow with a POSIX
+  `for` loop and no `shell:` under both a literal `windows-latest` and a
+  matrix naming it. `btclib` and `bitcoin-core-rpc` had the same defect
+  in their own copies of `latest.yml` and `windows.yml`
+  (`windows-arm.yml` in `bitcoin-core-rpc`), fixed in a pull request of
+  their own; `btclib`'s `test.yml` carries no Windows row and
+  `bitcoin-core-rpc`'s carried one further instance of its own.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for

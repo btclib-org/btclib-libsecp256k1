@@ -136,8 +136,18 @@ jobs:
 
       # the command CONTRIBUTING.md gives a developer, and the one the
       # coverage job of test.yml runs on ubuntu: a static build, where
-      # `_load_lib` returns the extension's own `lib`
+      # `_load_lib` returns the extension's own `lib`.
+      #
+      # both steps below run on windows-latest or windows-11-arm, where
+      # the default shell is PowerShell rather than bash -- see
+      # published.yml's own fix, issue btclib-org/btclib#1141, for the
+      # failure mode a POSIX-only step hits there unnoticed. Each is one
+      # plain command and runs identically under either shell today,
+      # which is exactly the hazard: a future edit adding POSIX-only
+      # syntax would go green on this cell having run nothing (issue
+      # btclib-org/btclib#1148)
       - name: Run pytest against a static build
+        shell: bash
         run: uv run --locked --no-default-groups --group test pytest
 
       # the other branch of `_load_lib`: cffi in ABI mode, dlopening the
@@ -149,6 +159,7 @@ jobs:
       - name: Run pytest against a dynamic build
         env:
           BTCLIB_LIBSECP256K1_DYNAMIC: "true"
+        shell: bash
         run: >
           uv run --locked --no-default-groups --group test
           --reinstall-package btclib_secp256k1 --no-cache pytest
