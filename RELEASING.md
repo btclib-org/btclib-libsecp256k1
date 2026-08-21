@@ -11,6 +11,22 @@ The `attest` job then signs a build provenance statement for the sdist,
 which is the file the GitHub release attaches and therefore the one copy
 the index's attestation says nothing about.
 
+**No CycloneDX bill of materials is attached, on purpose**, unlike
+btclib's release. A bill of materials built the way btclib's is would
+read `Requires-Dist` off the wheel's metadata, which names only `cffi`
+— the dependency this package actually wraps is the vendored,
+statically-linked libsecp256k1 C library, pinned by commit in the
+`secp256k1` submodule and compiled directly into the wheel, and no
+Python metadata says so. Describing that pin correctly needs a
+component the existing generator does not build, sourced from the same
+pin `check_submodule_pin.py` already checks rather than from
+`Requires-Dist` — a design question of its own, not a copy of btclib's
+workflow step. Shipping the naive version now would name the least
+interesting dependency and omit the one worth auditing, which is worse
+than attaching nothing. See issue
+[btclib-org/btclib#1159](https://github.com/btclib-org/btclib/issues/1159)
+for the evaluation and what would change it.
+
 The version published is the one in `pyproject.toml`; the tag only
 decides which index is reached. The `version-check` job cross-checks
 them, and runs before anything is built: a `v0.7.1` tag on a tree still
