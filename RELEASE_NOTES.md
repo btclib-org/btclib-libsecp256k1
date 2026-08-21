@@ -5,6 +5,8 @@ release is in [CHANGELOG.md](./CHANGELOG.md); what follows is what a user
 has to act on and what a user gains, and it is what the GitHub release of
 a tag is generated from.
 
+## v0.8.0.5 (work in progress, not released yet)
+
 ## v0.8.0.4
 
 Non-breaking. `musig` is new: it wraps MuSig2 (BIP327), previously
