@@ -31,7 +31,7 @@ hand. Telling them apart is most of what can go wrong:
   published, on either index, and the only one a human edits
 - **`0.7.1.1`**, a fourth number on an already-final version, plays two
   roles this list would otherwise leave out: right after 0.7.1 ships,
-  step 10 opens the tree on it as a placeholder, nothing having moved the
+  step 11 opens the tree on it as a placeholder, nothing having moved the
   submodule since to renumber it; and if 0.7.1 itself shipped broken,
   "When a release turns out to be broken" ships the very same string
   as the fix, tagged. Both are typed by hand, like `0.7.1` above, and
@@ -99,9 +99,42 @@ Then:
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
    Versioning section of [README.md](README.md). The previous release
-   left a fourth number open, by step 10 below, so this is often a matter
+   left a fourth number open, by step 11 below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
    submodule has moved since
+1. check the breaking-changes list against the API itself, which
+   nothing else here does:
+
+   ```shell
+   uv run --isolated --no-project --with griffe \
+       griffe check btclib_secp256k1 -a <previous release tag> -s .
+   ```
+
+   `uv run` alone syncs the project first, which builds the bindings —
+   cmake, the `secp256k1` submodule, the whole C library — and fails
+   before griffe is ever reached in a fresh clone; griffe is static, it
+   reads Python source and needs nothing built, so `--isolated
+   --no-project` skips that build and `-s .` points griffe at the
+   package in the working tree instead of an installed one. It reports
+   breakage alone — a public object removed, a parameter that changed
+   kind or default or moved — and says nothing about an addition, so
+   every line it prints wants an entry in `RELEASE_NOTES.md`. Discount
+   `__init__.py: __version__: Attribute value was changed:
+   version('btclib_secp256k1') -> unset` on sight and every time: not a
+   break, `__version__` reading installed metadata through a lazy
+   `__getattr__` that griffe's static read has nothing to compare
+   against — `python -c "import btclib_secp256k1 as m;
+   print(m.__version__)"` answers the real version regardless. The list
+   of what else to discount is per release rather than inherited, the
+   way btclib's own griffe step names `Union[X, Y] -> X | Y` as PEP 604
+   spelling and nothing to act on.
+
+   Measured rather than assumed: `v0.8.0.3` to `main` (0.8.0.4) reports
+   nothing beyond the `__version__` line above, `musig` being purely
+   additive; `v0.8.0.2` to `v0.8.0.3` reports 23 findings, matching what
+   that release's own `RELEASE_NOTES.md` already named one by one, and
+   is the positive control that says the command is reading the package
+   rather than finding nothing (issue #291)
 1. close the release notes. `CHANGELOG.md` and `RELEASE_NOTES.md` are
    written as each change lands, not here, so what is left is to read
    the open section of both against `git log`, drop the `(work in
@@ -134,11 +167,11 @@ Then:
    ```
 
    and against the open sections of `CHANGELOG.md` and
-   `RELEASE_NOTES.md`, which step 2 has just closed and which are
-   where each change was described as it landed. `latest`'s result
-   belongs here too, a line rather than a screenshot: it gates
-   nothing, and a pull request that never mentions it having run
-   reads exactly like one that skipped it.
+   `RELEASE_NOTES.md`, which step 3 has just closed and which are
+   where each change was described as it landed. `latest`'s result and
+   step 2's griffe findings belong here too, a line rather than a
+   screenshot: neither gates anything, and a pull request that never
+   mentions them having run reads exactly like one that skipped them.
 
    A deliberate skip and an item nobody has gotten to yet are different
    facts and do not fit under one checkbox: 0.7.1.2's own checklist
@@ -401,9 +434,9 @@ Then:
     section for it in `CHANGELOG.md` and in `RELEASE_NOTES.md` at the
     same time, headed `## v<version> (work in progress, not released yet)`
     and empty: what lands next then has somewhere to be written down as
-    it lands, which is the whole of step 2 — and, with one branch and no
+    it lands, which is the whole of step 3 — and, with one branch and no
     long-lived release pull request to hold a body, the whole of what
-    step 3 reads the cycle off at the end of it
+    step 4 reads the cycle off at the end of it
 
 ## Rehearsing on TestPyPI
 
