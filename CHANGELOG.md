@@ -46,6 +46,22 @@ release-notes length in the first place, and are still in
   baseline sizes, one of which had already drifted:
   `.secrets.baseline`'s documented 53 findings against the actual 54.
 
+### CI
+
+- **`[tool.uv]`'s `required-version` comment stated the wrong reason**
+  (#299): it read as though the floor were the version the uv-lock hook
+  of `.pre-commit-config.yaml` pins, but that hook pins `0.12.5` while
+  the floor reads `>=0.12.0` -- the two numbers were never the same
+  one. The real constraint is Dependabot's own uv-ecosystem updater: it
+  runs `uv lock` with exactly the uv it bundles
+  (`dependabot/dependabot-core`'s `uv/Dockerfile`, `0.12.1` at the time
+  of writing) and refuses instead of upgrading itself when that uv
+  falls short of this key. btclib's issue #485 is what a floor ahead of
+  it costs: every lock update it attempted, security ones included,
+  failed with `tool_version_not_supported` before a single one started.
+  `0.12.1` still clears `0.12.0`, so the floor itself does not move here
+  -- only the comment does.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for
