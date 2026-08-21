@@ -24,6 +24,18 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **The Slack badge is gone from `README.md` and `CONTRIBUTING.md`.**
+  The badge block's own comment states the criterion — a badge reports
+  state, which is why "we use ruff" is not one — and this badge reported
+  a route instead, to a channel of the course workspace btclib was first
+  taught in. What answers a question here is the issue tracker and a
+  pull request, which leave the answer where the next reader of these
+  files can find it, and a chat message does not. The badge stood alone
+  in both files, with no prose sending a contributor there, so each
+  block loses a line and nothing else changes. Both siblings do the
+  same, so that the badge goes everywhere it is rather than in one
+  place, and the organization profile no longer names Slack either.
+
 - **`RELEASING.md` checks the breaking-changes list against the API
   itself, with griffe** (#292, closing #291). Both sibling repositories
   already had this step; `v0.8.0.2` to `v0.8.0.3` is what makes it not
