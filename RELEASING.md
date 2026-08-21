@@ -171,20 +171,37 @@ Then:
    it moved from `always` to `pull_request` mode, so nothing reaches
    `main` outside a pull request GitHub itself merges.
 
-   `gh pr merge <n> --squash` alone still refuses this pull request —
-   `the base branch policy prohibits the merge`, gh's own client-side
+   `gh pr merge <n> --squash` alone refuses this pull request — `the
+   base branch policy prohibits the merge`, gh's own client-side
    mergeable check reading `REVIEW_REQUIRED` and declining before it
    asks the server at all. `--auto` is the wrong answer to that message:
    it waits for the same approving review that a solo-maintainer
-   repository cannot produce, so it never fires. `--admin` is gh's own
-   suggestion, asking for the pair REPOSITORY.md's "Branch protection"
-   names — `enforce_admins` `false` together with holding `admin` — and
+   repository cannot produce, so it never fires. `--admin` is the flag
+   that clears it — the pair REPOSITORY.md's "Branch protection" names,
+   `enforce_admins` `false` together with holding `admin` — and it is
+   the one to reach for first: measured across four pull requests on
+   btclib (#1111, #1113, #1114, #1133), each landing from `BLOCKED` and
+   `REVIEW_REQUIRED` with a verified signature. Name the release commit's
+   title and body explicitly when using it —
+   `gh pr merge <n> --squash --admin --subject "<title>" --body-file
+   <path>` — rather than leave them to `squash_merge_commit_message`'s
+   repository default, `COMMIT_MESSAGES` here: this branch carries more
+   than one commit every time (the paragraph below this one), and that
+   default composes the commit under the tag from all of them rather
+   than from what step 3 wrote.
+
    `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f
-   merge_method=squash` asks the same question of the endpoint directly,
-   bypassing gh's client-side check rather than satisfying it: this is
-   the one measured, on 0.8.0.4 (#288), which carried no approving
-   review — only comments — and landed through the direct call after
-   the plain `gh pr merge` refused it locally.
+   merge_method=squash` is the fallback for when `--admin` is
+   unavailable, asking the same question of the endpoint directly rather
+   than through gh's client-side check, and needs `commit_title` and
+   `commit_message` passed the same way for the same reason. It is what
+   landed 0.8.0.4 (#288) clean — but only because that branch carried a
+   single commit, so `COMMIT_MESSAGES`'s concatenation and that commit's
+   own message were the same string; a multi-commit release branch
+   without the two parameters would not be so lucky. Whether plain `gh
+   pr merge --squash`, with no flag at all, refuses on any repository
+   other than btclib-secp256k1 is not independently confirmed — every
+   merge measured above passed `--admin`.
 
    The button used to be the wrong landing on this pull request in
    particular: it is the release commit that gets tagged, and fast-
