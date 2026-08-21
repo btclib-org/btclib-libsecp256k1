@@ -12,20 +12,15 @@ which is the file the GitHub release attaches and therefore the one copy
 the index's attestation says nothing about.
 
 **No CycloneDX bill of materials is attached, on purpose**, unlike
-btclib's release. A bill of materials built the way btclib's is would
-read `Requires-Dist` off the wheel's metadata, which names only `cffi`
-— the dependency this package actually wraps is the vendored,
-statically-linked libsecp256k1 C library, pinned by commit in the
-`secp256k1` submodule and compiled directly into the wheel, and no
-Python metadata says so. Describing that pin correctly needs a
-component the existing generator does not build, sourced from the same
-pin `check_submodule_pin.py` already checks rather than from
-`Requires-Dist` — a design question of its own, not a copy of btclib's
-workflow step. Shipping the naive version now would name the least
-interesting dependency and omit the one worth auditing, which is worse
-than attaching nothing. See issue
+btclib's release. This package's `Requires-Dist` names only `cffi` —
+the dependency it actually wraps, the vendored, statically-linked
+libsecp256k1 C library pinned by commit in the `secp256k1` submodule
+and compiled directly into the wheel, does not appear there and so is
+invisible to the generator btclib uses. btclib's `RELEASING.md` (the
+"Read the bill of materials attached to the release" step) has the
+full reasoning, and issue
 [btclib-org/btclib#1159](https://github.com/btclib-org/btclib/issues/1159)
-for the evaluation and what would change it.
+has the evaluation behind it.
 
 The version published is the one in `pyproject.toml`; the tag only
 decides which index is reached. The `version-check` job cross-checks
