@@ -706,6 +706,17 @@ jobs:
       - name: Check wheel contents
         run: uv run --locked --only-group check check-wheel-contents dist/*.whl
 
+      # what check-wheel-contents cannot phrase without also refusing the
+      # compiled artifact this project's wheels legitimately carry outside
+      # any package tree: docs/source/package-content-policy.md has the
+      # three questions this answers and why check-wheel-contents --package
+      # is not one flag away from asking them here. --no-project, so it
+      # runs on the interpreter uv already fetched and installs nothing
+      - name: Check what the wheels contain
+        run: |
+          uv run --no-project --python 3.14 \
+            .github/scripts/verify_wheel_contents.py dist/*.whl
+
       # the wheel test jobs install cffi by hand and then the wheel with
       # --no-index, which resolves nothing: what the metadata declares is
       # only ever checked against a cffi that is already installed, so a

@@ -247,6 +247,32 @@ release-notes length in the first place, and are still in
   shebang would announce one nothing consults -- and, unpaired with the
   execute bit, would cost this guard. `fix-byte-order-marker`, the
   entry of the same shape, was already on.
+- **`check-dist` gains a wheel-content check**,
+  `.github/scripts/verify_wheel_contents.py`, closing this repository's
+  half of btclib-org/btclib#1160: `check-wheel-contents`, configured
+  here since `ignore = ["W003", "W009"]` entered `pyproject.toml`, reads
+  metadata and a wheel's declared top level; it has no way to say a
+  member is present and zero bytes, and `--package btclib_secp256k1`
+  -- the flag that would diff the wheel's package tree against this
+  checkout's -- reports the compiled artifact every wheel this project
+  ships as "not in package tree" whether or not it belongs, since that
+  artifact sits beside `btclib_secp256k1/` rather than inside it. The
+  new script asks both questions by hand instead: that
+  `btclib_secp256k1/` in the wheel is exactly what this checkout's own
+  directory has, and that the kind-appropriate top-level artifact -- one
+  compiled extension for a static wheel, the ABI-mode module and the
+  shared `libsecp256k1` for a dynamic one -- is there and not empty.
+  `docs/source/package-content-policy.md` states the policy in prose,
+  and `tests/test_wheel_contents.py` compares it against the script's
+  own constants in both directions, the same pairing `btclib`'s sibling
+  script and page keep. The sdist is not this script's subject:
+  `[tool.hatch.build.targets.sdist] exclude` here is an exclude list
+  rather than `btclib`'s include one, so the failure `btclib`'s own
+  script answers for -- a file the tree gains and the manifest does not
+  name, silently absent from the archive -- does not arise the same way,
+  and modelling the members the vendored `secp256k1/` submodule alone
+  contributes would be an allowlist nobody could maintain for a
+  question `exclude` already answers by construction.
 
 ## v0.8.0.4
 
