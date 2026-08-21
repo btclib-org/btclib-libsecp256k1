@@ -220,17 +220,21 @@ review without having passed them or passing them beside it on the same
 sha, and a reviewer may rely on that rather than establishing it again;
 `REVIEWING.md` has what the reliance takes.
 
-`lint`, `docs`, `test` and `codeql` are the gate, and `release` reuses the
-first three. It does not reuse `codeql`, and does not have to: a tag is an
-ancestor of `main` before the matrix builds anything (`version-check` in
-`release.yml`), so the tree it publishes is one the merge gate has already
-scanned — and `codeql` is weekly besides, which is what covers the code
-nobody touched. The rest are sentinels: each is a workflow of its own, has
-no aggregate job, is named by no branch rule, and opens no issue on failure
-(`vendored-vectors` excepted, for the reason its own header gives). That is
-deliberate in every case — each is expected to go red for a reason no pull
-request introduced, and a red check nobody can act on from a branch is
-noise. Their crons are spread out, because sentinels landing in one inbox
+`lint`, `docs` and `test` are the gate, and `release` reuses all three.
+`codeql` is not one of them and holds nothing: no branch rule names its
+aggregate, and it has no `pull_request` trigger at all, so a merge never
+waits on it. It runs on the push to `main` that a merge creates — its
+own `on:` block says what that trade bought and what it defers — and
+weekly besides, which is what covers the code nobody touched. `release`
+does not reuse it and does not have to: a tag is an ancestor of `main`
+before the matrix builds anything (`version-check` in `release.yml`), so
+the tree it publishes is one that push-triggered analysis has already
+read. The rest are sentinels: each is a workflow of its own, has no
+aggregate job, is named by no branch rule, and opens no issue on failure
+(`vendored-vectors` excepted, for the reason its own header gives). That
+is deliberate in every case — each is expected to go red for a reason no
+pull request introduced, and a red check nobody can act on from a branch
+is noise. Their crons are spread out, because sentinels landing in one inbox
 on one morning are one sentinel, and `codeql` keeps a morning of its own
 for the same reason. Two pairs share a morning even so. `macos` and
 `latest` do it deliberately, and both cron comments say why: half an hour
