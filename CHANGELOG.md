@@ -57,6 +57,22 @@ release-notes length in the first place, and are still in
   example, a redundant entry-point count, and two `detect-secrets`
   baseline sizes, one of which had already drifted:
   `.secrets.baseline`'s documented 53 findings against the actual 54.
+- **`RELEASING.md` gets a "Rebuild a release from its tag" section,
+  scoped to the sdist** (closing #298). Both siblings needed
+  `SOURCE_DATE_EPOCH` and a `.github/scripts/normalize_sdist.py` step
+  because `setuptools.build_meta`'s sdist writer stamps the checkout's
+  own clock, sub-second, when the variable is unset. This repository's
+  backend is `hatchling.build`, whose sdist and wheel writers default
+  to a fixed placeholder timestamp instead of the clock, which two
+  independent rebuilds of already-published tags (`v0.8.0` and
+  `v0.8.0.4`) reproduced byte for byte with neither a `SOURCE_DATE_EPOCH`
+  step nor a normalizing one. The section says so, rather than leaving
+  a reader who knows the siblings' files to go looking for a script
+  that was never needed and conclude it was forgotten. It also says why
+  the wheels stay out of scope: they are `cibuildwheel` output over the
+  vendored C library, and pinning a timestamp would not make two builds
+  of one the same bytes — the compiler, its version and the toolchain
+  the runner happened to have are inputs nothing here pins.
 
 ### CI
 
