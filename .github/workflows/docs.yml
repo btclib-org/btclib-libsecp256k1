@@ -122,9 +122,10 @@ jobs:
       # same claim made about the artifact rather than about the
       # configuration, and what would catch a suppression added back.
       #
-      # Two greps, not one (issue #1157). This repository's root files do
-      # not settle on one spelling: CONTRIBUTING.md and SECURITY.md link
-      # by bare name ("SECURITY.md" -> href="#SECURITY.md" if it broke,
+      # Two greps, not one (issue btclib-org/btclib#1157). This
+      # repository's root files do not settle on one spelling:
+      # CONTRIBUTING.md and SECURITY.md link by bare name
+      # ("SECURITY.md" -> href="#SECURITY.md" if it broke,
       # the second grep below), but CONTRIBUTING.md's own link to
       # REVIEWING.md and CHANGELOG.md's to RELEASE_NOTES.md are written
       # "./REVIEWING.md" and "./RELEASE_NOTES.md" -- the first grep, and

@@ -122,7 +122,8 @@ release-notes length in the first place, and are still in
   `0.12.1` still clears `0.12.0`, so the floor itself does not move here
   -- only the comment does.
 - **`docs.yml`'s unresolved-link grep now carries both known shapes**,
-  closing btclib-org/btclib#1157. MyST renders a link its
+  one of two companion fixes for btclib-org/btclib#1157, which
+  btclib-org/btclib's own PR closes. MyST renders a link its
   `RootFileLinks` transform cannot resolve as `href="#<target>"`
   verbatim, so what the grep matches depends on how the target was
   written -- `href="#[A-Za-z0-9_.-]*\.md"` for a bare `SECURITY.md` with
