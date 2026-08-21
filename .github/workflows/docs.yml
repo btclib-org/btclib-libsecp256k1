@@ -122,26 +122,27 @@ jobs:
       # same claim made about the artifact rather than about the
       # configuration, and what would catch a suppression added back.
       #
-      # Two greps, not one (issue btclib-org/btclib#1157). This
-      # repository's root files do not settle on one spelling:
-      # CONTRIBUTING.md and SECURITY.md link by bare name
-      # ("SECURITY.md" -> href="#SECURITY.md" if it broke,
-      # the second grep below), but CONTRIBUTING.md's own link to
-      # REVIEWING.md and CHANGELOG.md's to RELEASE_NOTES.md are written
-      # "./REVIEWING.md" and "./RELEASE_NOTES.md" -- the first grep, and
-      # the one a single-pattern check here used to leave uncovered. A
-      # survey of the other two repositories in this organization, and of
-      # every link these root files carry, found no third shape, so two
-      # greps is the union rather than a guess at how far to generalize.
+      # One grep, because there is one spelling to look for. myst's
+      # fallback renders the destination verbatim, so what this can match
+      # is decided upstream of here, in how the link was written -- and
+      # the local-link-prefix hook in .pre-commit-config.yaml refuses a
+      # local destination that does not begin "./", in the commit that
+      # writes it. Every destination the included root files carry
+      # therefore renders "#./<destination>" when it breaks, anchor,
+      # extension and nested path alike, which this pattern catches
+      # whole (issue btclib-org/.github#20; the hook's own comment has
+      # the measurement).
+      #
+      # Not a second grep for a bare destination beside it. It would be
+      # unreachable with the hook in place, and it is no superset of this
+      # one even without: a character class of name characters stops at
+      # the "#" of an anchor, so "#README.md#build" is a shape both
+      # patterns pass over. That is the whole argument for the hook. A
+      # check downstream of the rendering has to anticipate every way a
+      # link can be written; a rule upstream of it permits one.
       - name: Check the built pages for unresolved links
         run: |
-          status=0
           if grep -rn 'href="#\./' docs/build/html --include='*.html'; then
             echo "::error::the links above resolve to no page (unresolved relative path)"
-            status=1
+            exit 1
           fi
-          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
-            echo "::error::the links above resolve to no page (unresolved bare .md target)"
-            status=1
-          fi
-          exit $status

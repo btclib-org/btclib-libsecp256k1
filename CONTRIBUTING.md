@@ -18,10 +18,10 @@ libsecp256k1 release rather than the calendar. -->
 Thank you for investing your time in this project. What follows is how to
 build and test these bindings, and what this repository
 expects of a change. What the build itself does on each platform is in
-the [Build](README.md#build) section of the README, which is not repeated
+the [Build](./README.md#build) section of the README, which is not repeated
 here.
 
-Please read the [Code of Conduct](CODE_OF_CONDUCT.md) too.
+Please read the [Code of Conduct](./CODE_OF_CONDUCT.md) too.
 
 ## Which project is this
 
@@ -44,7 +44,7 @@ to route:
   wheels
 
 A vulnerability is never an issue: see the
-[security policy](SECURITY.md).
+[security policy](./SECURITY.md).
 
 ## Opening an issue
 
@@ -593,7 +593,7 @@ exception, and it is dated for exactly that reason.
 
 **One fact in one place.** Two files stating the same thing become two
 files disagreeing about it; the second one points at the first. That is
-why [REPOSITORY.md](REPOSITORY.md) holds the repository settings and
+why [REPOSITORY.md](./REPOSITORY.md) holds the repository settings and
 CLAUDE.md points at it.
 
 **No history in the prose.** Comments and docstrings say why the code is
@@ -602,7 +602,7 @@ to be. "This is here rather than X because X breaks Y" stays, whatever
 prompted it; "this used to be X, until Z" goes — unless the old spelling
 is something a caller can still encounter, in which case it is not history
 but the present. History has a file of its own,
-[RELEASE_NOTES.md](RELEASE_NOTES.md), and the commit messages.
+[RELEASE_NOTES.md](./RELEASE_NOTES.md), and the commit messages.
 
 ## Pull requests
 
@@ -680,7 +680,7 @@ branch never carried. GitHub only offers it while something is still
 pending, and it merges nothing the branch rule would not have let
 through by hand.
 
-Releases are cut by a maintainer, following [RELEASING.md](RELEASING.md);
+Releases are cut by a maintainer, following [RELEASING.md](./RELEASING.md);
 nothing about a version needs to be touched in a pull request.
 
 Once merged, your contribution is visible on the

@@ -133,7 +133,7 @@ Then:
 1. bump the version in `pyproject.toml` and run `uv lock`, which carries
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
-   Versioning section of [README.md](README.md). The previous release
+   Versioning section of [README.md](./README.md). The previous release
    left a fourth number open, by the step that opens the next version
    below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
