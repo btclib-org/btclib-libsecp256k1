@@ -213,6 +213,13 @@ uvx --from detect-secrets detect-secrets scan --slim \
 
 ## The workflows that gate, and the ones that do not
 
+The suite's aggregate, the lint job and the documentation build are the
+required checks on a pull request, and `REPOSITORY.md` reads the rule
+back from the endpoint rather than asserting it. So code does not reach a
+review without having passed them or passing them beside it on the same
+sha, and a reviewer may rely on that rather than establishing it again;
+`REVIEWING.md` has what the reliance takes.
+
 `lint`, `docs`, `test` and `codeql` are the gate, and `release` reuses the
 first three. It does not reuse `codeql`, and does not have to: a tag is an
 ancestor of `main` before the matrix builds anything (`version-check` in
