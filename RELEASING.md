@@ -24,7 +24,12 @@ says nothing about the pin either way. btclib's `RELEASING.md` (the
 "Read the bill of materials attached to the release" step) has the
 full reasoning, and issue
 [btclib-org/btclib#1159](https://github.com/btclib-org/btclib/issues/1159)
-has the evaluation behind it.
+has the evaluation behind it. The limit is the generator's rather than
+this package's, so the decision is conditional: if the generator ever
+learns to describe a submodule pin as a component, it reopens.
+[btclib-org/.github#24](https://github.com/btclib-org/.github/issues/24)
+records that trigger and stays open; an issue no longer open watches
+nothing.
 
 The version published is the one in `pyproject.toml`; the tag only
 decides which index is reached. The `version-check` job cross-checks

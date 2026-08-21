@@ -106,6 +106,16 @@ release-notes length in the first place, and are still in
   "Read the bill of materials attached to the release" step and
   btclib-org/btclib#1159 for the evaluation.
 
+- **`RELEASING.md` says what would reopen that decision**
+  (btclib-org/.github#24). Stating a limitation is not the same as
+  stating that it can lift: what keeps the vendored library out of the
+  document is what the generator reads, so a generator that learned to
+  describe a submodule pin as a component would make the question worth
+  asking again, and the section gave a reader no reason to expect the
+  answer ever to change. It now carries that trigger and names the
+  issue holding it, which is open — btclib-org/btclib#1159, cited
+  beside it for the evaluation, is not, and watches nothing.
+
 ### CI
 
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
