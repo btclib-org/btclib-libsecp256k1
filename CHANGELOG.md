@@ -58,7 +58,7 @@ release-notes length in the first place, and are still in
   baseline sizes, one of which had already drifted:
   `.secrets.baseline`'s documented 53 findings against the actual 54.
 - **`RELEASING.md` gets a "Rebuild a release from its tag" section,
-  scoped to the sdist** (closing #298). Both siblings needed
+  scoped to the sdist** (#304, closing #298). Both siblings needed
   `SOURCE_DATE_EPOCH` and a `.github/scripts/normalize_sdist.py` step
   because `setuptools.build_meta`'s sdist writer stamps the checkout's
   own clock, sub-second, when the variable is unset. This repository's
