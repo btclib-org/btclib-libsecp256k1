@@ -508,9 +508,15 @@ gh pr view <n> --json autoMergeRequest
 needing more declares it:
 
 ```shell
-gh api repos/btclib-org/btclib-secp256k1/actions/permissions/workflow \
-  --jq '.default_workflow_permissions'   # "read"
+gh api repos/btclib-org/btclib-secp256k1/actions/permissions/workflow
+# {"default_workflow_permissions":"read",
+#  "can_approve_pull_request_reviews":false}
 ```
+
+The whole object rather than one field of it: a run that can approve a
+pull request is a way around the rule that somebody other than the
+author approves, so `can_approve_pull_request_reviews` is read back
+beside the token's own scope and not left to be assumed.
 
 Only `release.yml` asks for more: `contents: write` on `github-release`,
 `id-token: write` on the two publish jobs, which is what Trusted
@@ -519,6 +525,32 @@ Publishing exchanges, and `id-token: write` with `attestations: write` on
 releases holds no OIDC token, and the job that signs writes no release.
 The workflow-level `permissions: contents: read` in every file is belt and
 braces; keep it, it is what makes the intent readable where the job is.
+
+What the call above cannot say is whether either value is this
+repository's own or the organization's, no endpoint reporting an
+override and none clearing one: [the standard's tokens
+section](https://github.com/btclib-org/.github/blob/main/README.md#tokens-publishing-scanning)
+is where that is argued, and what this file adds is which of the two
+states this repository is in.
+
+It is **untested**, and the date is what makes it so: this repository
+already held `read` when the organization default moved there on
+21 August 2026, so it was not among the ones that could be *seen*
+following the move, and an override set before that day reads back
+exactly like an inheritance does. Nobody has recorded setting one here,
+which is weaker than knowing there is none — `bitcoin-core-rpc` is the
+repository where one was found, by that same move, and its
+`REPOSITORY.md` records it as pinned.
+
+So whoever moves the organization default reads this repository back
+afterwards rather than assuming it followed, and moves it by hand where
+it did not:
+
+```shell
+gh api -X PUT repos/btclib-org/btclib-secp256k1/actions/permissions/workflow \
+  -f default_workflow_permissions=read \
+  -F can_approve_pull_request_reviews=false
+```
 
 ## Publishing
 

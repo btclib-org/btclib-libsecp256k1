@@ -181,6 +181,23 @@ release-notes length in the first place, and are still in
   It leaves the entry above where it was. The gates exercise what the
   tree already held, so what a diff decides with has been run by nothing
   whether they ran or not, and a review runs that either way.
+- **`REPOSITORY.md` reads the whole workflow-permissions object back and
+  says the value is untested against the organization default**
+  (btclib-org/.github#23). The read-back was there, but as
+  `--jq '.default_workflow_permissions'`, which drops
+  `can_approve_pull_request_reviews` — the field that decides whether a
+  run can approve a pull request, and so whether the one rule saying
+  somebody other than the author approves has a way around it. It reads
+  back `false`. What the section did not say at all is which side of the
+  organization default this repository is on: it already held `read`
+  when that default moved there on 21 August 2026, so it was never
+  observed following the move, and an override set before that day is
+  indistinguishable from an inheritance. That is recorded as untested
+  rather than known good, with the `PUT` that moves this repository by
+  hand the next time the organization default moves, and a link to the
+  organization standard for why no endpoint can answer it. Documentation
+  only: nothing was set, and the read-back is the same object before and
+  after.
 
 ### CI
 
@@ -271,6 +288,27 @@ release-notes length in the first place, and are still in
   this repository's own `CONTRIBUTING.md` would have rendered. The step's
   comment carries the reasoning. What is left is `href="#\./`, and the hook is
   what makes it sufficient rather than merely first.
+
+- **`latest.yml`'s pre-commit cache is keyed on the runner image and the
+  interpreter rather than on the config hash alone**
+  (btclib-org/.github#25). #296 put those segments into `lint.yml`'s key
+  and #309 corrected this file's comment, which had claimed the bare key
+  was "as in `lint.yml`"; the key itself was out of that pull request's
+  scope and is what changes here. What the cache holds is virtualenvs,
+  so the config hash alone survives an `ubuntu-latest` rotation and
+  restores environments built on the previous image — not a graceful
+  miss but a hit, surfacing as whichever hook touches the broken
+  environment first. `lint-latest` is the job with the most to lose from
+  that: it runs to report what a new release of a dependency breaks, so
+  a failure the cache caused arrives looking exactly like the one the
+  workflow exists to find, and is chased in the tree. The `Identify the
+  runner image` step reading `ImageOS` from a shell, the key over
+  `runner.os`, that output and `hashFiles` of `.pre-commit-config.yaml`
+  and `.python-version`, and `restore-keys` still naming the image so a
+  partial restore cannot cross an image boundary, are all `lint.yml`'s.
+  The comment now carries this job's own reason for the key, with
+  `git grep -n 'pre-commit-\${{' -- .github/workflows/` beside it as the
+  command that re-reads both keys together.
 
 ### The gate
 
