@@ -290,7 +290,8 @@ kill rate, which is the one failure mode that looks like good news.
   releases are cut by a maintainer, and the release workflow checks the
   tag against it. The one bump that is not a release is the fourth number
   opened straight after one, so that the tree stops claiming the version
-  it shipped: step 10 of RELEASING.md, and the reason it is a step
+  it shipped: RELEASING.md's step that opens the next version, and the
+  reason that step exists
 - **the `secp256k1` submodule moves in a change of its own,** with the
   version named in `README.md` and `RELEASE_NOTES.md` moved with it
 - **`main` is the only long-lived branch**, so a pull request targets it

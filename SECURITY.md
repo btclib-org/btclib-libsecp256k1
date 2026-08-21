@@ -84,7 +84,7 @@ These are known and inherent, not vulnerabilities:
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
 - **`into` moves that last copy somewhere the caller can overwrite,**
-    and is the whole of what it does. Eight entry points take a
+    and is the whole of what it does. A named set of entry points take a
     keyword-only `into` — a writable buffer of exactly the secret's
     length, contiguous and one octet an item, `bytearray` and
     `memoryview` and `mmap` and `array.array("B")` alike — write the
@@ -92,8 +92,8 @@ These are known and inherent, not vulnerabilities:
     That breadth is the run time's: the annotation is a `bytearray` or a
     `memoryview`, `collections.abc.Buffer` being python 3.12 where the
     floor here is 3.10, so a caller running `mypy --strict` passes
-    anything else as `memoryview(x)`, which copies nothing. The eight
-    are `keys.prvkey_negate`, `keys.prvkey_tweak_add`,
+    anything else as `memoryview(x)`, which copies nothing. They are
+    `keys.prvkey_negate`, `keys.prvkey_tweak_add`,
     `keys.prvkey_tweak_mul`, `xonly.prvkey_tweak_add`,
     `ecdh.shared_secret`, `ellswift.xdh`, `dsa.nonce_rfc6979` and
     `ssa.nonce_bip340`. **The two secrets `silentpayments` answers do

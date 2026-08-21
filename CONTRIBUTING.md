@@ -196,10 +196,11 @@ read by every checkout of this repository.
 The first two rows are what a merge waits for.
 
 What the rows below them have in common is one number: GitHub Free gives an
-organization twenty concurrent jobs, shared across every repository in it.
-A commit here asked for seventy-three, one in btclib for thirty-nine and one
-in bitcoin-core-rpc for forty-four, so a pull request in any of the three
-spent its wall clock waiting for a slot. A platform therefore earns a place
+organization twenty concurrent jobs (as of 2026-08-21), shared across every
+repository in it. A commit here, in btclib and in bitcoin-core-rpc each ask
+for more jobs than that ceiling alone allows, so a pull request in any of
+the three spent its wall clock waiting for a slot. A platform therefore
+earns a place
 before a review only if it is cheap to wait for, and neither of these is:
 macOS runners queue for tens of minutes rather than for two, and the
 twenty-one Windows suite cells were 27.3 of a run's 112.9 runner-minutes,
@@ -489,9 +490,12 @@ targets and where every change lands; a tag on `main` is a release.
   manual" in its own words. A scan into a file has no old baseline to
   merge, so those marks go back to their defaults, and slim output prints
   no `is_secret` at all when it is unset: the loss shows up as a diff of
-  nothing. Nothing is lost today, all 53 and all 466 findings being
-  unverified and none carrying `is_secret`, but an audit's marks want
-  saving elsewhere or re-applying after the next regeneration.
+  nothing. `jq '[.results[][]] | length' .secrets.baseline` (and the
+  same against `.secrets.vectors.baseline`) is how to check whether
+  there is anything to lose — every finding in either file being
+  unverified and none carrying `is_secret` means there isn't, today —
+  but an audit's marks want saving elsewhere or re-applying after the
+  next regeneration.
 
   read the diff before committing it, which is the whole point of a
   baseline: what appears there is what nobody has looked at yet
