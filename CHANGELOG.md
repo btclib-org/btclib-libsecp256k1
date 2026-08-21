@@ -129,6 +129,34 @@ release-notes length in the first place, and are still in
   — cosmic-ray takes its configuration's path as an argument, so nothing
   forces a name or a place — only the reason given for it.
 
+- **`REVIEWING.md` asks a review to run what a diff decides with.** A
+  regex, a grep, a pattern in a hook, a script or a query decides an
+  outcome by matching or computing, and a review of one executes it
+  rather than reading it — against the shapes the diff's own prose
+  claims to cover, and against the shapes the tree actually holds. A
+  claim the prose makes about the tree takes the same treatment, "every
+  link here is already `./`-prefixed" being one `git grep`'s worth of
+  evidence and the reason a change is offered as safe.
+
+  What earned the rule is this repository's own review of the
+  `local-link-prefix` pygrep hook, pull request #317: it traced the
+  pattern by hand across inline links, reference definitions, anchors,
+  schemes and badge links, and acked. The leading clause `\[[^]]*\]\(`
+  cannot cross the `]` that closes an image's alt text, so on the badge
+  shape `[![alt](./src)](./href)` it examines the image source and never
+  the destination the link itself carries, which is left free to lose
+  its `./` unreported — and the badge shape is what the block at the top
+  of `README.md` and of `CONTRIBUTING.md` is built from. The sibling
+  review that ran the clause against a real line found it
+  (btclib-org/bitcoin-core-rpc#192); tracing it did not.
+
+  The section says what it is not, `claude-review.yml`'s prompt telling
+  a review here not to re-run the gates: those run what the rest of the
+  tree already exercises, where a pattern a diff adds has been run
+  against nothing until a review runs it. The prompt is unchanged — it
+  names `REVIEWING.md` rather than restating it, so the standard moves
+  without the workflow being edited.
+
 ### CI
 
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
