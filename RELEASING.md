@@ -13,10 +13,14 @@ the index's attestation says nothing about.
 
 **No CycloneDX bill of materials is attached, on purpose**, unlike
 btclib's release. This package's `Requires-Dist` names only `cffi` —
-the dependency it actually wraps, the vendored, statically-linked
-libsecp256k1 C library pinned by commit in the `secp256k1` submodule
-and compiled directly into the wheel, does not appear there and so is
-invisible to the generator btclib uses. btclib's `RELEASING.md` (the
+the dependency it actually wraps, the vendored libsecp256k1 C
+library at its pinned commit in the `secp256k1` submodule, does not
+appear there and so is invisible to the generator btclib uses. That
+holds for both wheels this package ships, not only the static one:
+a static build links the library into the extension, a dynamic
+(ABI-mode) build ships it as a shared object beside the extension
+instead (see CLAUDE.md's Architecture section) — `Requires-Dist`
+says nothing about the pin either way. btclib's `RELEASING.md` (the
 "Read the bill of materials attached to the release" step) has the
 full reasoning, and issue
 [btclib-org/btclib#1159](https://github.com/btclib-org/btclib/issues/1159)
