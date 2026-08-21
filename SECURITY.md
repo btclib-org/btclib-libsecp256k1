@@ -84,7 +84,7 @@ These are known and inherent, not vulnerabilities:
     not safety: the `bytes` handed to the caller holds the same secret
     and cannot be overwritten
 - **`into` moves that last copy somewhere the caller can overwrite,**
-    and is the whole of what it does. A named set of entry points take a
+    and is the whole of what it does. The entry points that take a
     keyword-only `into` — a writable buffer of exactly the secret's
     length, contiguous and one octet an item, `bytearray` and
     `memoryview` and `mmap` and `array.array("B")` alike — write the

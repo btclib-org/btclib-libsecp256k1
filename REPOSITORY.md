@@ -619,16 +619,16 @@ GitHub free to move the numbers without notice):
 twenty is what `windows.yml`'s header measured against, and paying for
 Team would triple it; the five is what `macos.yml`'s header measured
 against, and Team does not move it at all. A macOS column that queued for
-tens of minutes was thirty-five jobs asking for five slots, and only
-Enterprise changes that arithmetic. So the split that took those cells
-out of the merge gate is not a workaround for a plan — on this repository
-it is the answer, and the plan below Enterprise that would undo it does
-not exist.
+tens of minutes was far more jobs than five slots could clear at once,
+and only Enterprise changes that arithmetic. So the split that took those
+cells out of the merge gate is not a workaround for a plan — on this
+repository it is the answer, and the plan below Enterprise that would
+undo it does not exist.
 
 What Team would buy is the rest: the Linux and Windows crowding, and the
-contention with the other repositories of the organization, `btclib`
-asking for thirty-nine jobs a commit and `bitcoin-core-rpc` for
-forty-four. Whether that is worth three seats is a question for whoever
+contention with the other repositories of the organization, `btclib` and
+`bitcoin-core-rpc` each asking for well more than the twenty on their own
+commits too. Whether that is worth three seats is a question for whoever
 pays for them, and it is recorded here so that it is asked with the
 second column in view.
 

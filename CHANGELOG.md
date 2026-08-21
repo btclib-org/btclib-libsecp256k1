@@ -35,6 +35,16 @@ release-notes length in the first place, and are still in
   builds the C extension, and that build does not exist to check yet in
   a fresh clone. The new step uses `--isolated --no-project -s .`
   instead, griffe reading only Python source.
+- **Prose stops stating counts nothing checks** (#293, #294): a
+  cross-reference by "step N" into RELEASING.md's numbered list, which
+  the list itself proved fragile by moving once this cycle (#292);
+  GitHub's own platform limits (concurrent jobs, the plan table,
+  artifact retention), dated rather than removed, since they are
+  someone else's settings and can move without notice; and counts of
+  this repository's own growing things — a `.dev<run><attempt>` worked
+  example, a redundant entry-point count, and two `detect-secrets`
+  baseline sizes, one of which had already drifted:
+  `.secrets.baseline`'s documented 53 findings against the actual 54.
 
 ## v0.8.0.4
 
