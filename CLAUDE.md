@@ -331,8 +331,13 @@ findings.
   branch, and one cancels the other
 - `actions/checkout` passes `persist-credentials: false`, so the token
   does not stay in `.git/config` where an artifact upload could carry it
-- uv commands pass `--locked`, never `--frozen`: the second takes
-  `uv.lock` as it finds it and never checks it
+- uv commands pass `--locked`, never `--frozen` — except the wheel-build
+  steps of `test.yml` (`build-cibuildwheel`, `build-dynamic`,
+  `build-sdist`, the Windows cross-build), which run after the
+  `dev-version` action has rewritten `pyproject.toml` on the rehearsal
+  path; `--locked` refuses exactly that disagreement, so those steps use
+  `--frozen`, and the comment above `build-cibuildwheel`'s `Build wheels`
+  step has the reasoning in full
 - the packaging tools come from the pinned `check` group, not from `uvx`,
   which would fetch whatever the index holds when the job runs
 - a hook that needs a tool carries it in `additional_dependencies`, with
