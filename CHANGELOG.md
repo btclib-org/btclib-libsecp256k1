@@ -342,10 +342,22 @@ release-notes length in the first place, and are still in
   render `#./` followed by the destination, so the one grep sees them
   all; the same destinations without the `./` render the destination
   alone, which no pattern reaches without also matching the autodoc
-  anchors these pages carry. `CONTRIBUTING.md`'s link to the README's Build
-  section was a live instance of the gap -- an anchor after a bare name, where
-  the bare-name grep's character class stops. `uvx pre-commit run local-link-
-  prefix --all-files` re-derives the whole of it.
+  anchors these pages carry. `CONTRIBUTING.md`'s link to the README's
+  Build section was a live instance of the gap -- an anchor after a bare
+  name, where the bare-name grep's character class stops.
+
+  A badge, `[![alt](src)](href)`, needed the pattern's link text to step
+  over the image inside it: written `[^]]*` it stops at the `]` closing
+  the alt text, so the scan checked the image `src` and never the
+  badge's own destination -- measured on the built html, where a badge
+  href renders exactly what a plain href renders. Link text is
+  therefore `(?:[^]]|\]\([^)]*\))*`, which reaches the destination
+  behind the image and still checks the `src` by backtracking. This
+  repository's `README.md` and `CONTRIBUTING.md` carry badge links, none
+  of them violating the rule.
+
+  `uvx pre-commit run local-link-prefix --all-files` re-derives the
+  whole of it.
 
 ## v0.8.0.4
 
