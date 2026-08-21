@@ -31,8 +31,9 @@ hand. Telling them apart is most of what can go wrong:
   published, on either index, and the only one a human edits
 - **`0.7.1.1`**, a fourth number on an already-final version, plays two
   roles this list would otherwise leave out: right after 0.7.1 ships,
-  step 11 opens the tree on it as a placeholder, nothing having moved the
-  submodule since to renumber it; and if 0.7.1 itself shipped broken,
+  the step that opens the next version puts the tree on it as a
+  placeholder, nothing having moved the submodule since to renumber
+  it; and if 0.7.1 itself shipped broken,
   "When a release turns out to be broken" ships the very same string
   as the fix, tagged. Both are typed by hand, like `0.7.1` above, and
   both read the same way — "the same libsecp256k1, one change since" —
@@ -47,9 +48,11 @@ hand. Telling them apart is most of what can go wrong:
   ever carries it
 - **`0.7.1.dev1`** is what the earlier `.dev<run number>` template
   produced the first time this workflow was dispatched, rehearsing
-  0.7.1: `0.7.1` from `pyproject.toml`, and run number 1. Today the same
-  run would produce `0.7.1.dev101`. `github.run_number` counts the runs
-  of `release.yml` alone, not of the repository, so it started at one
+  0.7.1: `0.7.1` from `pyproject.toml`, and run number 1. A later
+  dispatch's suffix is whatever the formula above computes for it then,
+  not a value worth writing down here, since it moves with every
+  dispatch. `github.run_number` counts the runs of `release.yml` alone,
+  not of the repository, so it started at one
   and rises by one per dispatch; `github.run_attempt` starts at one and
   rises with each re-run of a single dispatch, which is what a run
   number alone could not tell apart. Between them every attempt of every
@@ -111,7 +114,8 @@ Then:
    it into `uv.lock`. Version numbers track the wrapped libsecp256k1,
    with a fourth number for a release of the bindings alone: see the
    Versioning section of [README.md](README.md). The previous release
-   left a fourth number open, by step 11 below, so this is often a matter
+   left a fourth number open, by the step that opens the next version
+   below, so this is often a matter
    of confirming what is already declared, or of renumbering it if the
    submodule has moved since
 1. check the breaking-changes list against the API itself, which
@@ -151,7 +155,7 @@ Then:
    written as each change lands, not here, so what is left is to read
    the open section of both against `git log`, drop the `(work in
    progress, not released yet)` from each heading, and renumber them
-   if step 1 renumbered the version. `version-check` refuses a tag
+   if the version bump above renumbered it. `version-check` refuses a tag
    whose section in either file is missing, empty, or still carrying
    anything after the version in its heading, so a forgotten retitle
    stops the release before the matrix builds anything. Dropping those
@@ -179,10 +183,11 @@ Then:
    ```
 
    and against the open sections of `CHANGELOG.md` and
-   `RELEASE_NOTES.md`, which step 3 has just closed and which are
-   where each change was described as it landed. `latest`'s result and
-   step 2's griffe findings belong here too, a line rather than a
-   screenshot: neither gates anything, and a pull request that never
+   `RELEASE_NOTES.md`, which closing the release notes above has just
+   closed and which are where each change was described as it landed.
+   `latest`'s result and the breaking-changes check's griffe findings
+   belong here too, a line rather than a screenshot: neither gates
+   anything, and a pull request that never
    mentions them having run reads exactly like one that skipped them.
 
    A deliberate skip and an item nobody has gotten to yet are different
@@ -446,7 +451,8 @@ Then:
 1. open the next version, in a pull request of its own and before
     anything else lands: bump `pyproject.toml` to a fourth number over
     what was just published — `0.7.1.1` after `0.7.1` — and run `uv
-    lock`. It is a placeholder, and step 1 renumbers it if the submodule
+    lock`. It is a placeholder, and the version-bump step renumbers it if
+    the submodule
     moves before the next release; what it buys is a tree that no longer
     claims to be a version it is not. `__version__` reads installed
     metadata, so a checkout a developer installed stops reporting itself
@@ -461,9 +467,10 @@ Then:
     section for it in `CHANGELOG.md` and in `RELEASE_NOTES.md` at the
     same time, headed `## v<version> (work in progress, not released yet)`
     and empty: what lands next then has somewhere to be written down as
-    it lands, which is the whole of step 3 — and, with one branch and no
-    long-lived release pull request to hold a body, the whole of what
-    step 4 reads the cycle off at the end of it
+    it lands, which is the whole of closing the release notes — and,
+    with one branch and no long-lived release pull request to hold a
+    body, the whole of what giving the pull request its title and body
+    reads the cycle off at the end of it
 
 ## Rehearsing on TestPyPI
 
@@ -504,8 +511,9 @@ without rebuilding anything.
    alone against the artifacts already built, instead of an hour of
    matrix again. That is what published 0.7.1.dev1, three minutes after
    a registration was corrected, and it holds for as long as the
-   artifacts do: ninety days, this repository not having narrowed the
-   retention. Note that a re-run rebuilding the matrix now carries the
+   artifacts do: ninety days (as of 2026-08-21, GitHub's own default),
+   this repository not having narrowed the retention. Note that a
+   re-run rebuilding the matrix now carries the
    attempt in its version, so what it uploads is not what the first
    attempt built under a different name.
    Never tag a rehearsal: the trigger is what picks the index, so a

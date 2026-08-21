@@ -38,10 +38,10 @@ gh api repos/btclib-org/btclib-secp256k1/branches/main/protection \
 
 `codeql: every job passed` is not among them, and that is the one place a
 check was traded for the slots it held. GitHub Free gives an organization
-twenty concurrent jobs, shared across every repository in it: this one asked
-for seventy-three on every commit, btclib for thirty-nine and
-bitcoin-core-rpc for forty-four, so a pull request in any of the three
-waited for a slot rather than for the work. `codeql.yml` now runs on `main`
+twenty concurrent jobs (as of 2026-08-21), shared across every repository
+in it: this one, btclib and bitcoin-core-rpc each ask for more jobs than
+that on every commit, so a pull request in any of the three waited for a
+slot rather than for the work. `codeql.yml` now runs on `main`
 and on its Tuesday schedule, the analysis landing on the merge commit rather
 than ahead of it, and it still produces that aggregate — the name is
 available, so requiring it again is a patch to the rule and nothing in the
@@ -246,9 +246,9 @@ gh api -X PATCH repos/btclib-org/btclib-secp256k1/code-quality/setup \
 What decided it is the ceiling the section above already trades against,
 not the queries. `Analyze (python)` ran on every pull request and every
 push to `main` — `Code Quality: PR #N` in the run list — for some 52
-seconds of a slot each time, and the twenty concurrent jobs are shared
-with every other repository in the organization, where the same setting
-was on.
+seconds of a slot each time, and the twenty concurrent jobs (as of
+2026-08-21) are shared with every other repository in the organization,
+where the same setting was on.
 
 What it produced in exchange cannot be read from outside a browser. There
 is no `code-quality/alerts` and no `code-quality/analyses`, both 404, and
@@ -605,7 +605,8 @@ gh api orgs/btclib-org --jq .plan.name        # free
 ```
 
 [GitHub's own table](https://docs.github.com/en/actions/reference/limits)
-is the authority, and two of its columns matter here:
+is the authority, and two of its columns matter here (as of 2026-08-21,
+GitHub free to move the numbers without notice):
 
 | plan | concurrent jobs | of which macOS |
 | --- | --- | --- |
@@ -618,16 +619,16 @@ is the authority, and two of its columns matter here:
 twenty is what `windows.yml`'s header measured against, and paying for
 Team would triple it; the five is what `macos.yml`'s header measured
 against, and Team does not move it at all. A macOS column that queued for
-tens of minutes was thirty-five jobs asking for five slots, and only
-Enterprise changes that arithmetic. So the split that took those cells
-out of the merge gate is not a workaround for a plan — on this repository
-it is the answer, and the plan below Enterprise that would undo it does
-not exist.
+tens of minutes was far more jobs than five slots could clear at once,
+and only Enterprise changes that arithmetic. So the split that took those
+cells out of the merge gate is not a workaround for a plan — on this
+repository it is the answer, and the plan below Enterprise that would
+undo it does not exist.
 
 What Team would buy is the rest: the Linux and Windows crowding, and the
-contention with the other repositories of the organization, `btclib`
-asking for thirty-nine jobs a commit and `bitcoin-core-rpc` for
-forty-four. Whether that is worth three seats is a question for whoever
+contention with the other repositories of the organization, `btclib` and
+`bitcoin-core-rpc` each asking for well more than the twenty on their own
+commits too. Whether that is worth three seats is a question for whoever
 pays for them, and it is recorded here so that it is asked with the
 second column in view.
 
