@@ -24,6 +24,27 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **`CONTRIBUTING.md` and `CLAUDE.md` catch up with `test.yml`'s
+  `--frozen`** (btclib-org/.github#8). The organization standard's
+  `--locked`, never `--frozen` rule is stated flatly, and the wheel-build
+  steps of `test.yml` (`build-cibuildwheel`, `build-dynamic`,
+  `build-sdist`, the Windows cross-build) have used `--frozen` since
+  `test.yml` was first written, with a comment beside the first of them:
+  they run after the `dev-version` action has rewritten `pyproject.toml`
+  on the rehearsal path, and `--locked` refuses exactly that
+  disagreement, `uv sync --locked` measured to fail there with "The
+  lockfile at `uv.lock` needs to be updated" where `--frozen` measured to
+  pass. The rule was not a copy nobody examined; two other files were
+  stale. `CONTRIBUTING.md`'s `Build wheels on <os>` reproduction command
+  had dropped the flag, so it no longer matched the step it claims to
+  reproduce, and `CLAUDE.md`'s "uv commands pass `--locked`, never
+  `--frozen`" line stated the rule with no exception, which is wrong
+  about a job it also documents elsewhere. Every other repository of the
+  organization was checked the same way (`grep -rn -- '--frozen'
+  .github/workflows/` in `btclib`, `bitcoin-core-rpc` and
+  `btclib-benchmarks`): each hit there is inside a comment explaining why
+  the flag is *not* used, and no `run:` step passes it.
+
 - **The Slack badge is gone from `README.md` and `CONTRIBUTING.md`.**
   The badge block's own comment states the criterion — a badge reports
   state, which is why "we use ruff" is not one — and this badge reported

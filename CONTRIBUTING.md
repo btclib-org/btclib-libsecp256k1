@@ -294,11 +294,13 @@ command at all, for the reason above, and no longer gates.
 - `Build wheels on <os>`, for this platform only
 
   ```shell
-  uv run --only-group build cibuildwheel
+  uv run --frozen --only-group build cibuildwheel
   ```
 
-  the Linux wheels of that job are built in a manylinux container, so
-  reproducing them needs a container runtime (`colima` on macOS)
+  `--frozen`, not `--locked`: `test.yml` has the reason, next to the step
+  itself. The Linux wheels of that job are built in a manylinux
+  container, so reproducing them needs a container runtime (`colima` on
+  macOS)
 
 - `Build dynamic wheel on <os>`
 
