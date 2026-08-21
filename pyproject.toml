@@ -243,16 +243,21 @@ dev = [
 ]
 
 [tool.uv]
-# the oldest uv allowed to touch uv.lock, and it is the version the
-# uv-lock hook of .pre-commit-config.yaml pins: that hook is what
-# regenerates the file, and its rev is something pre-commit.ci moves.
-# Declared here the floor holds for every uv command rather than for the
-# hook alone, so an older uv on a developer's machine says so instead of
-# rewriting the lock in a format the runners then fail to read — uv is
-# pre-1.0 and changes that format. It also reaches CI without a second
-# pin: setup-uv, given no version input, reads this key, and a bare
-# minimum specifier makes it install the latest uv, so the runners are
-# never behind the floor and there is nothing here to go stale
+# the oldest uv allowed to touch uv.lock -- not the version the uv-lock
+# hook of .pre-commit-config.yaml pins, which is newer and moves on its
+# own schedule under pre-commit.ci; a floor here has to stay at or below
+# whatever Dependabot's own uv-ecosystem updater bundles instead. That
+# updater runs `uv lock` with exactly the uv it bundles regardless of
+# this key, and refuses rather than upgrading itself when it falls short
+# of the key, so raising this past what it bundles silently stops every
+# lock update it attempts, including security ones. Declared here the
+# floor still holds for every uv command rather than for that one
+# updater alone, so an older uv on a developer's machine says so instead
+# of rewriting the lock in a format the runners then fail to read — uv
+# is pre-1.0 and changes that format. It also reaches CI without a
+# second pin: setup-uv, given no version input, reads this key, and a
+# bare minimum specifier makes it install the latest uv, so the runners
+# are never behind the floor and there is nothing here to go stale
 required-version = ">=0.12.0"
 
 [tool.mypy]
