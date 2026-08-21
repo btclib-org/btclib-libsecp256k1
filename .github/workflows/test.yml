@@ -378,7 +378,14 @@ jobs:
         shell: bash
         run: echo "CIBW_BUILD=cp314-*" >> "$GITHUB_ENV"
 
+      # this job's own matrix carries windows-latest and windows-11-arm,
+      # the same reason the step above already declares shell: bash --
+      # see its comment. This step is one plain command and runs
+      # identically under PowerShell today; the hazard is the same one
+      # that step's comment names for the next edit that is not
+      # (issue btclib-org/btclib#1148)
       - name: Build wheels
+        shell: bash
         run: uv run --frozen --only-group build cibuildwheel
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -592,7 +599,13 @@ jobs:
           python -m pip install -U pip pytest
           python -m pip install --verbose dist/*.tar.gz
 
+      # this job's matrix carries windows-latest and windows-11-arm, the
+      # same reason the step above already declares shell: bash. `pytest`
+      # alone has no POSIX-only syntax and runs identically under
+      # PowerShell today; the hazard is the next edit that adds some
+      # (issue btclib-org/btclib#1148)
       - name: Test
+        shell: bash
         run: pytest
 
   build-windows:
