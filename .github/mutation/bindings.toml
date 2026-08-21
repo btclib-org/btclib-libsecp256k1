@@ -86,9 +86,13 @@
 #
 # Here rather than at the repository root: cosmic-ray takes the path of its
 # configuration as an argument, so nothing forces a name or a place, and
-# .github/ is a directory check-manifest already ignores -- a root file
-# would need an entry in [tool.check-wheel-contents] or the sdist to say
-# what its location says here.
+# this repository runs no check-manifest to make a root file's placement
+# something that needs recording. What that tool would ask -- whether the
+# sdist carries what a build from it needs -- is answered here instead by
+# suite-sdist in test.yml, which installs from the built sdist and compiles
+# the vendored library on every platform its matrix covers; this file plays
+# no part in that build, so where it sits does not bear on the question.
+# .github/ is simply where the rest of the CI configuration already lives.
 #
 # One file where btclib has two, and the asymmetry that makes it want two is
 # absent: there the two halves of the scope cost 1.1 s and 7.2 s of cpu per
