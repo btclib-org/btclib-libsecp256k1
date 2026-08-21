@@ -115,6 +115,19 @@ release-notes length in the first place, and are still in
   answer ever to change. It now carries that trigger and names the
   issue holding it, which is open — btclib-org/btclib#1159, cited
   beside it for the evaluation, is not, and watches nothing.
+- **`.github/mutation/bindings.toml`'s comment on why the mutation config
+  lives under `.github/` no longer cites a tool this repository does not
+  run** (#314). The reasoning had been carried across from btclib, where
+  check-manifest gates a pull request and treats `.github/` as a directory
+  already safe to leave out of the sdist; nothing here runs check-manifest,
+  so a reader checking the claim found a tool never wired into this tree
+  and could not tell whether the placement was still right or the tool had
+  gone missing. The comment now names what answers the same question here
+  instead: `suite-sdist` in `test.yml`, which installs from the built sdist
+  and compiles the vendored library across its matrix, and would fail were
+  anything a build needs missing from it. The placement itself is unchanged
+  — cosmic-ray takes its configuration's path as an argument, so nothing
+  forces a name or a place — only the reason given for it.
 
 ### CI
 
