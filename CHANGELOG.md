@@ -95,6 +95,17 @@ release-notes length in the first place, and are still in
   of one the same bytes — the compiler, its version and the toolchain
   the runner happened to have are inputs nothing here pins.
 
+- **`RELEASING.md` records why no CycloneDX bill of materials is
+  attached to this repository's releases**, unlike btclib's. This
+  package's `Requires-Dist` names only `cffi`; the dependency it
+  actually wraps, the vendored libsecp256k1 C library at its
+  pinned commit, does not appear there, for either wheel this
+  package ships — statically linked into the extension in a
+  static build, a shared object beside it in a dynamic (ABI-mode)
+  one. btclib's `RELEASING.md` carries the reasoning; see its
+  "Read the bill of materials attached to the release" step and
+  btclib-org/btclib#1159 for the evaluation.
+
 ### CI
 
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
