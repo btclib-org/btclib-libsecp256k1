@@ -72,8 +72,11 @@ def _calls(function: FunctionType) -> set[str]:
 def _take_through_a_table(buffer: Any) -> Any:
     """Read a secret out through a subscript, which names no function.
 
-    Parsed and never run, and at module level because that is the only
-    source `_calls` can read: `inspect.getsource` of a nested function
+    Two things read this. `_calls` parses it below, to see that a call
+    reached as `table["take"](buffer)` contributes no name; the test
+    that follows also runs it, on a real secret, to check that the
+    secret still comes out through the subscript. It is at module level
+    for the first of those: `inspect.getsource` of a nested function
     answers its indented block, which `ast.parse` refuses outright.
 
     Args:
