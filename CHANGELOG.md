@@ -22,6 +22,20 @@ release-notes length in the first place, and are still in
 
 ## v0.8.0.5 (work in progress, not released yet)
 
+### Documentation
+
+- **`RELEASING.md` checks the breaking-changes list against the API
+  itself, with griffe** (#292, closing #291). Both sibling repositories
+  already had this step; `v0.8.0.2` to `v0.8.0.3` is what makes it not
+  hypothetical — a module removed, eight trailing-underscore names gone,
+  four signatures changed and three functions' parameters renamed, all
+  correctly recorded by hand in that release's own `RELEASE_NOTES.md`,
+  but nothing would have caught it if it hadn't been. The command both
+  siblings use fails here: `uv run` syncs the project first, which
+  builds the C extension, and that build does not exist to check yet in
+  a fresh clone. The new step uses `--isolated --no-project -s .`
+  instead, griffe reading only Python source.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for

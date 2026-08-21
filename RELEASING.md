@@ -134,7 +134,7 @@ Then:
    additive; `v0.8.0.2` to `v0.8.0.3` reports 23 findings, matching what
    that release's own `RELEASE_NOTES.md` already named one by one, and
    is the positive control that says the command is reading the package
-   rather than finding nothing (issue #291)
+   rather than finding nothing (#291)
 1. close the release notes. `CHANGELOG.md` and `RELEASE_NOTES.md` are
    written as each change lands, not here, so what is left is to read
    the open section of both against `git log`, drop the `(work in
