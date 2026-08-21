@@ -90,6 +90,26 @@ release-notes length in the first place, and are still in
   `0.12.1` still clears `0.12.0`, so the floor itself does not move here
   -- only the comment does.
 
+- **`published.yml`'s index-wait step no longer skips when there is no
+  release behind the run** (btclib issue #1151). The step carried `if:
+  inputs.version != ''`, true only on the one path a tag takes through
+  `workflow_call`; the monthly schedule and a manual dispatch both
+  skipped it outright, so its script had never once been parsed before a
+  tag reached it -- which is why the Windows PowerShell defect this
+  repository fixed on its own v2026.8.12 (`28701641`, the whole diff
+  `+        shell: bash`) shipped again in `btclib` on v2026.8.21, four
+  months later, in the same step of the same file (btclib issue #1141).
+  Nothing between the two releases ever ran the step to notice the fix
+  had not carried across. The `if:` is gone; the script now runs on
+  every trigger and exits 0 immediately when `TAG` is empty, so a shell
+  defect in it is parsed, and would fail, on the next monthly run or
+  dispatch rather than waiting for the next tag. Considered and set
+  aside: a `version` input on `workflow_dispatch` reintroduces the
+  remembering `workflow_call` exists to replace, and a `pull_request`
+  trigger on this file's own path leaves `inputs.version` empty and
+  would not have caught the defect either -- both recorded in btclib
+  issue #1151 rather than adopted.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for
