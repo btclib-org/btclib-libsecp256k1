@@ -21,7 +21,6 @@ bitcoin-core-rpc carry the same three lines. -->
 [![documentation build](https://readthedocs.org/projects/btclib-secp256k1/badge/?version=latest)](https://btclib-secp256k1.readthedocs.io)
 
 [![GitHub repository: btclib-org/btclib-secp256k1](https://img.shields.io/badge/GitHub-btclib--org%2Fbtclib--libsecp256k1-181717?logo=github)](https://github.com/btclib-org/btclib-secp256k1/)
-[![slack: btclib_dev](https://img.shields.io/badge/slack-btclib_dev-white.svg?logo=slack)](https://bbt-training.slack.com/messages/C01CCJ85AES)
 
 ---
 
