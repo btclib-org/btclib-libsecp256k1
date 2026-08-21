@@ -111,6 +111,20 @@ release-notes length in the first place, and are still in
   `0.12.1` still clears `0.12.0`, so the floor itself does not move here
   -- only the comment does.
 
+- **`lint.yml`'s pre-commit cache key now carries the runner image and
+  the interpreter, not only `.pre-commit-config.yaml`'s hash** (#296).
+  What the cache holds is compiled artifacts and interpreter-linked
+  virtualenvs, so restoring one built on a different runner image is not
+  a graceful miss but a hit that hands the run a broken environment, the
+  failure surfacing as whichever hook touches it first -- the config
+  hash alone would have survived an `ubuntu-latest` rotation, 22.04 to
+  24.04 and the next one, and kept restoring an environment built on the
+  image before it. Both siblings already key on `runner.os`, the
+  `ImageOS` environment variable read by a new `Identify the runner
+  image` step, and `.python-version`'s hash alongside the config's; this
+  repository's file is now the same, `restore-keys` included so a
+  revision bump in the config stays a warm start rather than a cold one.
+
 ## v0.8.0.4
 
 ### `musig` wraps MuSig2, closing the one exception `lib` was for
