@@ -110,6 +110,22 @@ release-notes length in the first place, and are still in
   failed with `tool_version_not_supported` before a single one started.
   `0.12.1` still clears `0.12.0`, so the floor itself does not move here
   -- only the comment does.
+- **`docs.yml`'s unresolved-link grep now carries both known shapes**,
+  closing btclib-org/btclib#1157. MyST renders a link its
+  `RootFileLinks` transform cannot resolve as `href="#<target>"`
+  verbatim, so what the grep matches depends on how the target was
+  written -- `href="#[A-Za-z0-9_.-]*\.md"` for a bare `SECURITY.md` with
+  no `./`, most of this package's own root-file links, and `href="#\./`
+  for `./REVIEWING.md` and `./RELEASE_NOTES.md`, which CONTRIBUTING.md
+  and CHANGELOG.md write with the `./` the rest of this package's links
+  omit -- the same shape the comment this replaces claimed the package
+  never used. This job ran only the bare-name grep, which is blind to
+  either of those two live links breaking. Built the documentation with
+  a deliberately unresolved link of each shape and confirmed the added
+  grep reports it before removing it; `sphinx-build -W --keep-going`
+  passes on both unchanged, since neither is the broken *reference* `-W`
+  already catches -- a link myst resolves happily and is dead anyway is
+  the whole reason this second check exists.
 
 ## v0.8.0.4
 
