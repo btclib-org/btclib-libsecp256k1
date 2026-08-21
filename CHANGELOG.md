@@ -372,6 +372,24 @@ release-notes length in the first place, and are still in
 
 ### The gate
 
+- **`CLAUDE.md`'s roster of the gate names only what gates** (issue
+  #323). It said "`lint`, `docs`, `test` and `codeql` are the gate", and
+  `codeql` is none of it: the endpoint returns three contexts, and the
+  workflow has no `pull_request` trigger at all, so there is nothing for
+  a branch rule to require and nothing a merge could wait on. The claim
+  sat a few lines under the paragraph stating the required checks
+  correctly, and that adjacency is what made it worth fixing rather than
+  leaving: `REVIEWING.md` now has a reviewer *rely* on those runs where
+  they are on the record, so a file naming a fourth one turns a
+  documented reliance into a wrong one — a reviewer waiting for a run
+  that will not come, or acking on one that holds nothing. It is also
+  wrong in the direction nobody audits, claiming more is gated than is.
+  What replaces it says where `codeql` does run, the push to `main` a
+  merge creates and the weekly cron, which is what its own `on:` block
+  argues at length. The `release` half of the sentence was sound and
+  keeps its reasoning, with "the merge gate has already scanned"
+  corrected to the analysis that actually reads that tree.
+
 - **Coverage measures `tests/` as well as the package**
   (btclib-org/.github#7). `[tool.coverage.run] source` named
   `btclib_secp256k1` alone, so the one thing the 100% ratchet said
