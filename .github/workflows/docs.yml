@@ -116,16 +116,32 @@ jobs:
 
       # the one defect the build above cannot report on itself, matching
       # btclib's own second step and the reasoning in its docs/source/conf.py:
-      # a relative link myst cannot resolve becomes an anchor on the page it
-      # is already on -- href="#SECURITY.md", an id nothing has -- rather
-      # than a warning, which conf.py's RootFileLinks transform exists to
-      # prevent. This is the same claim made about the artifact rather than
-      # about the configuration, and what would catch a suppression added
-      # back. No "./" prefix in the pattern, unlike btclib's: the root files
-      # here link to each other by bare name ("SECURITY.md"), never "./SECURITY.md"
+      # a link myst cannot resolve becomes an anchor on the page it is
+      # already on -- an id nothing has -- rather than a warning, which
+      # conf.py's RootFileLinks transform exists to prevent. This is the
+      # same claim made about the artifact rather than about the
+      # configuration, and what would catch a suppression added back.
+      #
+      # Two greps, not one (issue btclib-org/btclib#1157). This
+      # repository's root files do not settle on one spelling:
+      # CONTRIBUTING.md and SECURITY.md link by bare name
+      # ("SECURITY.md" -> href="#SECURITY.md" if it broke,
+      # the second grep below), but CONTRIBUTING.md's own link to
+      # REVIEWING.md and CHANGELOG.md's to RELEASE_NOTES.md are written
+      # "./REVIEWING.md" and "./RELEASE_NOTES.md" -- the first grep, and
+      # the one a single-pattern check here used to leave uncovered. A
+      # survey of the other two repositories in this organization, and of
+      # every link these root files carry, found no third shape, so two
+      # greps is the union rather than a guess at how far to generalize.
       - name: Check the built pages for unresolved links
         run: |
-          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
-            echo "::error::the links above resolve to no page"
-            exit 1
+          status=0
+          if grep -rn 'href="#\./' docs/build/html --include='*.html'; then
+            echo "::error::the links above resolve to no page (unresolved relative path)"
+            status=1
           fi
+          if grep -rn 'href="#[A-Za-z0-9_.-]*\.md"' docs/build/html --include='*.html'; then
+            echo "::error::the links above resolve to no page (unresolved bare .md target)"
+            status=1
+          fi
+          exit $status
