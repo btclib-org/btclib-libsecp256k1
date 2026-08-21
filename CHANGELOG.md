@@ -24,6 +24,25 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **`CONTRIBUTING.md` sends a contributor to the organization standard**
+  (btclib-org/.github#52). `README.md` in `btclib-org/.github` states
+  the toolchain, the lint gate, the workflow set and the branch rules
+  once for this repository and its siblings, and it claims to be linked
+  from each repository's `CONTRIBUTING.md`. Nothing here named it: the
+  only mentions of that repository in this tree were `CHANGELOG.md` and
+  `RELEASING.md` citing issue numbers filed there, so a contributor
+  following `CONTRIBUTING.md` to `REPOSITORY.md` to `CLAUDE.md` was
+  never told a document above them existed — and a rule stated only
+  there was one they could not find. The pointer is in the opening
+  rather than in `REPOSITORY.md` or `CLAUDE.md`: the audit and the
+  normalizing checklist that standard carries are performed *holding*
+  it, so the reader who arrives without it is the contributor, and this
+  is the file that reader is already in — and the one of the three the
+  documentation build renders, `docs/source/contributing_link.md`
+  including it. Hence the absolute github.com url, the shape a sibling
+  repository is linked with elsewhere here: a relative destination
+  resolves against the rendered site.
+
 - **`CONTRIBUTING.md` and `CLAUDE.md` catch up with `test.yml`'s
   `--frozen`** (btclib-org/.github#8). The organization standard's
   `--locked`, never `--frozen` rule is stated flatly, and the wheel-build
