@@ -93,6 +93,18 @@ pull requests had changed wrappers a survivor list had not seen since —
 and that is the right shape for it: read on its own terms, the sqlite
 kept or discarded on its own schedule, never a condition of the tag.
 
+Updating the pinned dependencies is a decision of the same shape, and
+belongs here for the same reason: whether to run `uv lock --upgrade` (or
+wait for Dependabot's own pull requests to catch up) is not itself a
+release-timing question, `uv.lock` pinning what ships regardless of what
+`latest` resolved against. Unlike `mutation`, though, it is worth
+deciding on purpose rather than defaulting by omission: `latest`'s run
+for 0.8.0.4 found ruff 0.16.3→0.16.4, stevedore 5.9.0→5.9.1 and pygments
+2.20.0→2.21.0 already past what `uv.lock` pinned, with nobody having
+chosen either way. State the choice — upgraded, or left as `latest`
+found it, and why — in the release pull request, the same line
+`latest`'s own result already gets.
+
 Then:
 
 1. bump the version in `pyproject.toml` and run `uv lock`, which carries
@@ -191,6 +203,21 @@ Then:
    everyone now, this pull request included: the bypass that once allowed
    it moved from `always` to `pull_request` mode, so nothing reaches
    `main` outside a pull request GitHub itself merges.
+
+   `gh pr merge <n> --squash` alone still refuses this pull request —
+   `the base branch policy prohibits the merge`, gh's own client-side
+   mergeable check reading `REVIEW_REQUIRED` and declining before it
+   asks the server at all. `--auto` is the wrong answer to that message:
+   it waits for the same approving review that a solo-maintainer
+   repository cannot produce, so it never fires. `--admin` is gh's own
+   suggestion, asking for the pair REPOSITORY.md's "Branch protection"
+   names — `enforce_admins` `false` together with holding `admin` — and
+   `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f
+   merge_method=squash` asks the same question of the endpoint directly,
+   bypassing gh's client-side check rather than satisfying it: this is
+   the one measured, on 0.8.0.4 (#288), which carried no approving
+   review — only comments — and landed through the direct call after
+   the plain `gh pr merge` refused it locally.
 
    The button used to be the wrong landing on this pull request in
    particular: it is the release commit that gets tagged, and fast-
