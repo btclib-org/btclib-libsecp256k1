@@ -584,6 +584,80 @@ reach has none of, nor the checks of `version-check` that need a tag: the
 version comparison, the `RELEASE_NOTES.md` section, and the ancestry on
 `main`.
 
+## Rebuild a release from its tag
+
+A rebuild of a released tag is the same bytes as the sdist that was
+published, and needs neither `SOURCE_DATE_EPOCH` nor a normalizing step
+to get there:
+
+```shell
+git worktree add --detach /tmp/btclib-secp256k1-rebuild v0.8.0.4
+cd /tmp/btclib-secp256k1-rebuild
+git submodule update --init --recursive
+uv run --locked --only-group build python -m build -s
+shasum -a 256 dist/btclib_secp256k1-0.8.0.4.tar.gz
+```
+
+is the whole of it — against a worktree rather than the primary
+checkout, for the reason CLAUDE.md gives, and `--locked` rather than
+the `--frozen` that `build-sdist` in `test.yml` runs. That is
+deliberate, not the two files drifting apart: `test.yml`'s own comment
+on `--frozen` names its reason, the rehearsal path patching a
+`.dev<run><attempt>` suffix into `pyproject.toml` before that step,
+which is exactly the lock-and-tree disagreement `--locked` refuses. A
+rebuild from a released tag carries no such patch — nothing rewrote the
+version, so the lock and `pyproject.toml` already agree — and
+`--locked` asserts that agreement rather than skipping it, checking
+that the lock is the one the tag committed instead of taking
+`uv.lock` as `--frozen` finds it. Both flags build the same sdist:
+`v0.8.0.4` rebuilt with `--locked` matches the published digest exactly
+as it did with `--frozen`, so this changes what the rebuild checks on
+the way, not what it produces. Compare the digest against
+`pypi.org/pypi/btclib-secp256k1/<version>/json`'s own, or against the
+`sdist` artifact `gh run download` pulls from the release's run; both
+name the file this reproduces.
+
+**Why no `SOURCE_DATE_EPOCH` step, where both siblings have one.** The
+build backend does the work here on its own. This repository's
+`build-system.build-backend` is `hatchling.build`; both siblings' is
+`setuptools.build_meta`. Hatchling's sdist and wheel writers default to
+a `reproducible` mode that reads `SOURCE_DATE_EPOCH` and, when it is
+unset, falls back to a fixed constant — `1580601600`, not the moment of
+the build — for every member's timestamp, and stamp ownership and mode
+the same way regardless of who built it or when. Nothing in
+`pyproject.toml` turns that default off. setuptools' sdist writer has no
+such fallback: unset, it stamps the actual checkout's clock, sub-second,
+which is why btclib and bitcoin-core-rpc each carry a
+`.github/scripts/normalize_sdist.py` and a `SOURCE_DATE_EPOCH` step in
+their release workflow, rewriting after the fact what their backend
+will not fix by default. Looking for that script here on the strength
+of the siblings' example finds nothing, and correctly so — there is
+nothing here for it to fix, and adding one would rewrite bytes that
+already reproduce.
+
+The vendored `secp256k1` submodule is not a second source of drift, and
+looks riskier than it is: `.gitmodules` pins it to a commit, and a git
+checkout of a pinned commit is the same bytes wherever and whenever it
+happens, the recursive `submodule update` above included. What made the
+siblings' sdists non-reproducible was never vendored content — neither
+sibling vendors any — it was their build backend's clock, and this
+repository's backend does not read one.
+
+Only the sdist reproduces this way; the wheels do not, and are not
+worth chasing to make them. They are `cibuildwheel` output over that
+same vendored C library, one build per platform and interpreter, and
+pinning a timestamp would not be enough to make two builds of one the
+same bytes: the compiler, its version, and the toolchain the runner
+happened to have are inputs neither cibuildwheel nor this repository
+pins. Making them reproducible is a different and much larger project
+than this section — compiler output, toolchain versions, the vendored
+source's own build — for a guarantee the attestation every wheel
+already carries mostly already gives. Both siblings ship one
+pure-Python wheel each, and `uv build` builds it directly from the very
+sdist that already reproduces there too, no compiled step in between —
+which is why neither sibling's file draws this line. This repository's
+wheels are compiled, and that is the whole of the asymmetry.
+
 ## When a release turns out to be broken
 
 Nothing can be reuploaded under the same version, on either index. A
