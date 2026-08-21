@@ -1,6 +1,6 @@
 # Working on btclib_secp256k1
 
-Python bindings to a vendored [libsecp256k1](secp256k1/), built from
+Python bindings to a vendored [libsecp256k1](./secp256k1/), built from
 source. The package is thin: the cryptography is upstream, and what lives
 here is the wrapping, the argument validation at the cffi boundary, and
 the packaging — one wheel per platform and linkage, which is where most of
@@ -11,23 +11,23 @@ fail when it was not edited.
 
 Repository configuration — branch protection, required checks, token
 permissions, publishing environments, Dependabot, secret scanning — is in
-[REPOSITORY.md](REPOSITORY.md). Read that file before changing a workflow,
+[REPOSITORY.md](./REPOSITORY.md). Read that file before changing a workflow,
 a branch rule or a repository setting. Writing code does not need it.
 
 Reviewing a pull request — what a review establishes before it gives
 an ack, what a finding must contain, and why everything it notices
 that the diff is not about becomes an issue rather than a comment — is
-[REVIEWING.md](REVIEWING.md), and `/review` is that file as a command.
+[REVIEWING.md](./REVIEWING.md), and `/review` is that file as a command.
 
 This file is for what is not written down elsewhere. The documentation is,
 and stays, in:
 
-- [README.md](README.md) — design, wrapped modules, build, and the
+- [README.md](./README.md) — design, wrapped modules, build, and the
   static/dynamic/sdist distinction
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build and test
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — how to build and test
   locally, how to reproduce each CI job, and what a change has to satisfy
-- [RELEASING.md](RELEASING.md) — the release, and the rehearsal
-- [scripts/README.md](scripts/README.md) — the build backend, one file at
+- [RELEASING.md](./RELEASING.md) — the release, and the rehearsal
+- [scripts/README.md](./scripts/README.md) — the build backend, one file at
   a time
 - the comments in `.github/workflows/*.yml` and `pyproject.toml`, which
   carry the reasoning behind their choices

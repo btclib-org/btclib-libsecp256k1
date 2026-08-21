@@ -209,6 +209,15 @@ release-notes length in the first place, and are still in
   (`windows-arm.yml` in `bitcoin-core-rpc`), fixed in a pull request of
   their own; `btclib`'s `test.yml` carries no Windows row and
   `bitcoin-core-rpc`'s carried one further instance of its own.
+- **`docs.yml`'s unresolved-link check is one grep again**
+  (btclib-org/.github#20). The second pattern, for a bare destination ending
+  `.md`, has nothing left to catch now that the `local-link-prefix` hook
+  refuses that spelling, and it was no superset of the first even before: a
+  character class of name characters stops at the `#` of an anchor, so
+  `#README.md#build` is a shape both patterns pass over -- and that is what
+  this repository's own `CONTRIBUTING.md` would have rendered. The step's
+  comment carries the reasoning. What is left is `href="#\./`, and the hook is
+  what makes it sufficient rather than merely first.
 
 ### The gate
 
@@ -296,6 +305,59 @@ release-notes length in the first place, and are still in
   and modelling the members the vendored `secp256k1/` submodule alone
   contributes would be an allowlist nobody could maintain for a
   question `exclude` already answers by construction.
+- **A `local-link-prefix` hook refuses a local markdown link
+  destination that does not begin with `./`, and every link here now
+  begins with one** (btclib-org/.github#20). `docs.yml` greps the built
+  html for `href="#./`, which is what myst renders in place of a link
+  `docs/source/conf.py`'s `RootFileLinks` transform cannot resolve. One
+  pattern can key on one spelling, and this repository wrote two:
+  `CHANGELOG.md`, `RELEASE_NOTES.md`, `REVIEWING.md` and one line of
+  `CONTRIBUTING.md` wrote `./REVIEWING.md`, while the rest of
+  `CONTRIBUTING.md` and all of `CLAUDE.md`, `RELEASING.md` and
+  `REPOSITORY.md` wrote the bare name -- so a link of the second kind
+  breaking rendered an anchor the grep was not looking for. Rewriting
+  those is the smaller half of this; the hook is what keeps the drift
+  from coming back, and it is the same hook in every repository of the
+  organization, `pinned-rev`'s arrangement rather than a shared hook
+  repository that does not exist.
+
+  The rule is the prefix and not the extension, and the table in
+  btclib-org/btclib#1175 is what decides that: `DOES_NOT_EXIST.txt`,
+  `sub/DOES_NOT_EXIST.md`, `DOES_NOT_EXIST` and `../DOES_NOT_EXIST.md`
+  each reach MyST's fallback and each is missed by the union of both
+  greps, so an `.md`-scoped rule would leave all four writable. `../`
+  is the row with nothing downstream behind it at all: the transform
+  *declines* a target normalizing above the repository root, so that
+  shape reaches the fallback by design and renders `href="#../X.md"`,
+  which the surviving grep does not match and should not be widened to
+  reach — the hook is the only place it can be caught. A link reference
+  definition, `[label]: page.md`, renders the same fallback and carries
+  no `(`, so the pattern has a second branch for it, anchored at the
+  start of a line so that a reference *use* followed by a colon is not
+  mistaken for one.
+
+  Measured here too, by building this documentation with an
+  unresolvable link written each way: `./page.md`, `./page.md#anchor`,
+  `./page.txt`, `./sub/page.md` and an extensionless `./page` each
+  render `#./` followed by the destination, so the one grep sees them
+  all; the same destinations without the `./` render the destination
+  alone, which no pattern reaches without also matching the autodoc
+  anchors these pages carry. `CONTRIBUTING.md`'s link to the README's
+  Build section was a live instance of the gap -- an anchor after a bare
+  name, where the bare-name grep's character class stops.
+
+  A badge, `[![alt](src)](href)`, needed the pattern's link text to step
+  over the image inside it: written `[^]]*` it stops at the `]` closing
+  the alt text, so the scan checked the image `src` and never the
+  badge's own destination -- measured on the built html, where a badge
+  href renders exactly what a plain href renders. Link text is
+  therefore `(?:[^]]|\]\([^)]*\))*`, which reaches the destination
+  behind the image and still checks the `src` by backtracking. This
+  repository's `README.md` and `CONTRIBUTING.md` carry badge links, none
+  of them violating the rule.
+
+  `uvx pre-commit run local-link-prefix --all-files` re-derives the
+  whole of it.
 
 ## v0.8.0.4
 

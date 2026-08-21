@@ -1,7 +1,7 @@
 # Repository configuration
 
 Read this before changing a workflow, a branch rule or a repository
-setting; writing code does not need it. [CLAUDE.md](CLAUDE.md) points here
+setting; writing code does not need it. [CLAUDE.md](./CLAUDE.md) points here
 rather than carrying it, so that a session fixing a wrapper does not hold
 it in context.
 
@@ -550,7 +550,7 @@ What that rule constrains is the *name* of the ref and nothing else. A
 commit satisfies it exactly as the release tag does, so it is not the
 check that a release is a release: the `version-check` job of
 `release.yml` fails a tag that is not an ancestor of `main`, before the
-matrix builds anything. [RELEASING.md](RELEASING.md) has the rest,
+matrix builds anything. [RELEASING.md](./RELEASING.md) has the rest,
 including what a mismatched trusted publisher looks like and why
 self-review stays allowed.
 
