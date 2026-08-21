@@ -151,8 +151,8 @@ jobs:
         with:
           enable-cache: true
 
-      # keyed on the config file, as in lint.yml: the hook environments are
-      # the slow part, and the upgrade below does not touch them
+      # keyed on the config file: the hook environments are the slow
+      # part, and the upgrade below does not touch them
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pre-commit

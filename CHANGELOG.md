@@ -95,6 +95,17 @@ release-notes length in the first place, and are still in
   of one the same bytes — the compiler, its version and the toolchain
   the runner happened to have are inputs nothing here pins.
 
+- **`RELEASING.md` records why no CycloneDX bill of materials is
+  attached to this repository's releases**, unlike btclib's. This
+  package's `Requires-Dist` names only `cffi`; the dependency it
+  actually wraps, the vendored libsecp256k1 C library at its
+  pinned commit, does not appear there, for either wheel this
+  package ships — statically linked into the extension in a
+  static build, a shared object beside it in a dynamic (ABI-mode)
+  one. btclib's `RELEASING.md` carries the reasoning; see its
+  "Read the bill of materials attached to the release" step and
+  btclib-org/btclib#1159 for the evaluation.
+
 ### CI
 
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
@@ -126,6 +137,20 @@ release-notes length in the first place, and are still in
   passes on both unchanged, since neither is the broken *reference* `-W`
   already catches -- a link myst resolves happily and is dead anyway is
   the whole reason this second check exists.
+
+- **`lint.yml`'s pre-commit cache key now carries the runner image and
+  the interpreter, not only `.pre-commit-config.yaml`'s hash** (#296).
+  What the cache holds is compiled artifacts and interpreter-linked
+  virtualenvs, so restoring one built on a different runner image is not
+  a graceful miss but a hit that hands the run a broken environment, the
+  failure surfacing as whichever hook touches it first -- the config
+  hash alone would have survived an `ubuntu-latest` rotation, 22.04 to
+  24.04 and the next one, and kept restoring an environment built on the
+  image before it. Both siblings already key on `runner.os`, the
+  `ImageOS` environment variable read by a new `Identify the runner
+  image` step, and `.python-version`'s hash alongside the config's; this
+  repository's file is now the same, `restore-keys` included so a
+  revision bump in the config stays a warm start rather than a cold one.
 
 ## v0.8.0.4
 
