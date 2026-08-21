@@ -221,6 +221,43 @@ release-notes length in the first place, and are still in
   organization standard for why no endpoint can answer it. Documentation
   only: nothing was set, and the read-back is the same object before and
   after.
+- **`.readthedocs.yaml` records that no release of this package has ever
+  been built under a name of its own** (btclib-org/.github#26). Read the
+  docs activates a new tag from an automation rule of its own; this
+  project has none, so every build of this file has been `latest`, which
+  follows `main`, or `stable`, which read the docs moves to the highest
+  release tag and rebuilds by itself. No version named for a release has
+  ever been built, v0.8.0.4 included, and `/en/v<version>/` is therefore
+  a 404 here where both siblings serve it — that URL being what a reader
+  is given wherever a version is named. What is *not* broken is the
+  build: `stable` runs this file against a release tag's tree and
+  succeeds, so what is missing is the URL and not an untested build. The
+  comment says exactly that, a reader of the file otherwise having
+  nowhere in this tree to learn it — `REPOSITORY.md` has no Read the
+  Docs section, where btclib's does.
+
+  The slug is the other half and is #302's. The documentation is served
+  under `btclib-libsecp256k1`, which the rename never followed, while
+  `README.md`'s badge and the link behind it name `btclib-secp256k1`;
+  the read the docs project's *name* has been renamed and only its slug
+  has not, which is a finer reading than #302 records. Both halves are
+  dashboard actions rather than anything a pull request reaches, so what
+  lands here is the record beside the file: #302 for the slug, #295 for
+  the release check that reads the rendered tag URL and stays blocked
+  while there is none, and btclib-org/.github#26 for the commands that
+  re-derive all of it. That check would be reachable only on a tag, the
+  shape btclib-org/.github#49 is about — a reason to order it after the
+  URL exists rather than a change to what that issue asks.
+
+- **The same file carries the reasoning its siblings give for leaving uv
+  unpinned.** Nothing about this repository made it different: no
+  dependabot ecosystem watches this file, so a pin here is a version
+  nobody bumps, and `--locked` makes the uv version irrelevant to what
+  gets installed — `uv.lock` decides that, and a uv too old to read the
+  lock fails loudly rather than resolving something else. The
+  `docs/requirements.txt` sentence gains the half that says why the
+  group and the lock are the single declaration, which was the argument
+  for having no such file and had been left out.
 
 ### CI
 

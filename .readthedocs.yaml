@@ -3,7 +3,37 @@
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 #
 # The dotted name is the canonical one; readthedocs.yml is honored too,
-# but documented as deprecated.
+# but documented as deprecated. btclib's copy of this line goes on to
+# say that "include *.yml" would drag the file into the sdist; there is
+# no MANIFEST.in here and no site served from this root for that clause
+# to be about.
+#
+# What this file cannot say is *which* versions run it, and here that is
+# where the defect is rather than a footnote. `latest`, `stable` and each
+# release tag are versions on read the docs' side, and an automation rule
+# is what activates a new tag there. This project has no such rule, so
+# every build of this file has been `latest`, which follows main, or
+# `stable`, which read the docs moves to the highest release tag and
+# rebuilds by itself. No version named for a release has ever been built,
+# v0.8.0.4 included, and `/en/v<version>/` is therefore a 404 here where
+# both siblings serve it -- the permanent URL a reader is given wherever
+# a version is named. What is *not* broken is the build: `stable` runs
+# this file against a release tag's tree and succeeds, so the missing
+# thing is the URL and not an untested build.
+#
+# The slug is the other half. The project is served under
+# `btclib-libsecp256k1`, which the rename never followed, while
+# README.md's badge and link name `btclib-secp256k1`; the read the docs
+# project's own *name* has been renamed and its slug has not.
+#
+# Both halves are dashboard actions rather than anything a pull request
+# reaches: issue #302 for the slug, btclib-org/.github#26 for the rule
+# and for the commands that re-derive all of this, and issue #295 for
+# the release check that reads the rendered tag URL, which stays blocked
+# while there is no such URL to read. That check would be reachable only
+# on a tag, the shape btclib-org/.github#49 is about, which is a reason
+# to order it after the URL exists rather than before; nothing here
+# settles btclib-org/.github#49.
 
 # Required
 version: 2
@@ -30,7 +60,15 @@ build:
   # build.commands rather than the sphinx: and python: keys, which cannot
   # express installing this package's own dependency group and are
   # rejected when it is present. uv installs the docs group from
-  # uv.lock, which is why there is no docs/requirements.txt.
+  # uv.lock, which is why there is no docs/requirements.txt: the group in
+  # pyproject.toml is the single declaration and the lock pins it, where
+  # a requirements file would be unpinned and kept in step by a header
+  # asking a human to do it.
+  # uv itself is not pinned, deliberately: no dependabot ecosystem
+  # watches this file, so a pin here is a version nobody bumps, and
+  # --locked makes the uv version irrelevant to what gets installed --
+  # uv.lock decides that, and a uv too old to read the lock fails loudly
+  # rather than resolving something else.
   # -W turns a failed import into a failed build, which is the point of
   # the whole file; --keep-going comes first so one broken module
   # reports every other problem in the same run instead of one per push
