@@ -27,9 +27,15 @@ _FORBIDDEN_IN_SUMMARY = r"(?m)^- \d+ [a-z]"
 
 
 def _summary() -> str:
-    """Return the Summary section, which ends at the end of the file."""
+    """Return the Summary section, heading to the next one or the end.
+
+    The slice stops at the next `## ` rather than at the end of the file:
+    the patterns below are claims about this section, and a section after
+    it would otherwise be read as part of it, silently.
+    """
     text = _README.read_text(encoding="utf-8")
-    return text[text.index("\n## Summary\n") :]
+    section = text[text.index("\n## Summary\n") + 1 :]
+    return section.split("\n## ", 1)[0]
 
 
 def test_the_readme_states_no_total() -> None:

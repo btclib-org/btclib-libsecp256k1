@@ -281,3 +281,54 @@ also self-checks the RFC6979 `(k, r, s)` triples in its own docstring
 against `r == x(k*G)`, which is not a citation to a vendored file, and
 constructs the recovery id 2 and 3 signature published nowhere, holding
 it to arithmetic it does itself.
+
+## Convention tests
+
+Section 7 of the [organization standard][std] lists eight conventions a
+suite can turn into a red test, and says a repository needs the ones its
+own prose states rather than all of them. That escape clause is right and
+it costs something: an absent convention test reads exactly like a
+convention this repository does not have, and a `grep` over `tests/`
+cannot tell the two apart — the suites of the organization name the same
+idea three different ways.
+
+So which of the eight this repository tests is **declared here**, and
+`test_conventions.py` asserts the declaration is true: every convention
+named below is one of section 7's, every module named exists and holds at
+least one test, and the two halves together account for all eight.
+
+| convention | tested in |
+| --- | --- |
+| the copyright header | `test_copyright.py` |
+| the documentation | `test_docs.py` |
+
+Not tested here: the public surface; the import graph; the changelog;
+the build system; the calling convention; input validation.
+
+The reasons the rest are absent differ, and are given one by one because
+a reader needs which and not how many. **The public surface** is not a
+convention this package has: nothing here declares `__all__`, and no
+prose asks for one, so there is no census to walk and none of the three
+bullets that rest on such a walk applies. **Input validation** is one of
+those three — section 7 asks for it "driven by a walk over the public
+surface rather than by a hand-written list", and `test_core.py` refuses
+plenty by hand. **The calling convention** is the other: two tests read a
+signature, but each about one function rather than as a rule over the
+package.
+
+**The changelog** is the near miss. `test_vendored_data.py` forbids
+exactly the count section 7 forbids — a number nothing derives — but of
+this file rather than of `CHANGELOG.md` and `RELEASE_NOTES.md`, which is
+what that bullet names. The rule is here; the bullet's subject is not.
+
+**The import graph** and **the build system** have nothing standing in
+for them: `test_extension.py` reads `sys.modules` to hold an import cost
+rather than to establish that every module imports first, and
+`test_wheel_contents.py` tests the script that inspects a built wheel
+rather than what runs while one is built.
+
+What must not be aligned across the organization is where these live or
+what they are called; only which conventions are tested, and that each
+tree says which.
+
+[std]: https://github.com/btclib-org/.github/blob/main/README.md
