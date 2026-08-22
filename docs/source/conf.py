@@ -94,12 +94,13 @@ html_theme = "sphinx_rtd_theme"
 
 # -- Links out of the included root markdown files ----------------------------
 
-# Four pages of the toctree are this repository's README, CONTRIBUTING,
-# SECURITY and RELEASE_NOTES, each pulled into a *_link.md shim by a myst
-# {include} -- three fewer than btclib, which also has CODE_OF_CONDUCT,
-# REPOSITORY and RELEASING among its root files but not among its shims,
-# and no CHANGELOG at all, RELEASE_NOTES being the only release notes
-# file here.
+# Some of the toctree's pages are this repository's own root markdown,
+# each pulled into a *_link.md shim by a myst {include}. Which ones is
+# `ls docs/source/*_link.md`, and that glob is also what INCLUDED reads
+# below, so the set is derived in one place and this comment does not
+# become a second copy of it the next time a shim is added or dropped.
+# What is not shimmed is a root file no page renders, which is a fact
+# about this repository rather than a rule.
 # Those root files are written for the three places that read them
 # unrendered -- the GitHub file view, the PyPI long description, and (for
 # this repository) nothing else, there being no website served from it --
