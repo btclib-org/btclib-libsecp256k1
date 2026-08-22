@@ -245,8 +245,8 @@ Then:
    the plain `gh pr merge` refused it locally.
 
    The button used to be the wrong landing on this pull request in
-   particular: it is the release commit that gets tagged, and fast-
-   forwarding from the command line kept that commit's signature the
+   particular: it is the release commit that gets tagged, and
+   fast-forwarding from the command line kept that commit's signature the
    maintainer's own where a squash composed by GitHub would have left it
    under the web-flow key instead. That distinction stopped mattering
    once `required_signatures` was read as asking for a valid signature

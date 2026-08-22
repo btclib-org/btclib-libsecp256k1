@@ -1120,11 +1120,11 @@ calls writing to it.
 
 `musig.SecretNonce` is neither of the two shapes above, being narrower
 than both: it is meant to be read exactly once, from whichever thread
-gets there first, and refused everywhere else — a keypair's read-any-
-number-of-times constness does not apply, and neither does a chain's
-one-object-one-thread convention, since a shared secret nonce is
-exactly the case this class has to make safe rather than ask a caller
-to avoid. Reading `self._secnonce` and then clearing it are two
+gets there first, and refused everywhere else — a keypair's
+read-any-number-of-times constness does not apply, and neither does a
+chain's one-object-one-thread convention, since a shared secret nonce
+is exactly the case this class has to make safe rather than ask a
+caller to avoid. Reading `self._secnonce` and then clearing it are two
 statements, and without ordering them two threads calling
 `partial_sign` on the same object could each pass the read before
 either reaches the clear, and both go on to drive

@@ -42,6 +42,23 @@ release-notes length in the first place, and are still in
   sibling repository shims is that repository's business, and a
   paragraph here that tracks it is a paragraph that goes stale when
   something happens somewhere else.
+- **Three hyphenated tokens stop being split across a line break**
+  (issue #318). Markdown joins two source lines with a space, so a word
+  wrapped at its own hyphen renders with the hyphen and then a space
+  inside it: `README.md`'s "read-any-number-of-times" came out as
+  "read-any- number-of-times", and `CHANGELOG.md`'s "33-" and
+  `RELEASING.md`'s "fast-forwarding" the same way. The source looks
+  right, which is why reading a diff does not find them -- the one that
+  opened the issue was found by scanning rendered `<code>` spans in
+  built HTML across the organization's documentation.
+
+  Nothing gates it. markdownlint has no rule for it, and `sphinx-build
+  -W` is not asked whether a token means anything. `git grep -n -E
+  '[A-Za-z0-9]-$' -- '*.md'` is what finds them, and it now answers
+  nothing here; it answers nothing in the sibling repositories either,
+  so this was the tree that had them. Whether that command becomes a
+  hook is btclib-org/.github#71, since a rule about markdown wrapping
+  belongs to every repository or to none.
 
 - **`CONTRIBUTING.md` sends a contributor to the organization standard**
   (btclib-org/.github#52). `README.md` in `btclib-org/.github` states
@@ -2036,9 +2053,10 @@ release-notes length in the first place, and are still in
   concerned — `lift_x` is the even-y point whatever form the x arrived
   in, and a signer whose point has odd y signs with `n - d` for exactly
   that reason — so the parity is a property of the serialization and not
-  of the key. `ssa.verify` and `xonly.tweak_add` used to refuse the 33-
-  and 65-byte forms, on the reasoning that a key with odd y "verifies as
-  the point that is not the one passed": it is not another point, it is
+  of the key. `ssa.verify` and `xonly.tweak_add` used to refuse the
+  33- and 65-byte forms, on the reasoning that a key with odd y
+  "verifies as the point that is not the one passed": it is not another
+  point, it is
   the same key, and what the refusal cost was a lift. Which form to hand
   in is now a question of cost alone — the uncompressed one is read
   rather than lifted, so `tweak_add` on it is **4.11 us against the 5.92**
