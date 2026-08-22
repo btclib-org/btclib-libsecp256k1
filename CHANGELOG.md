@@ -337,6 +337,28 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **The mypy hook's pins are checked against `uv.lock`**. The type gate
+  runs in an environment of its own, built from the mirror's `rev` and
+  its `additional_dependencies`; the editor cannot use that environment,
+  this package being a compiled extension whose import does not resolve
+  where nothing built one, so it reads the project's instead. The two
+  are the same mypy only while the two declarations say so, and what
+  said so was a procedure -- `.pre-commit-config.yaml`'s own "moved by
+  hand, with the lint and test groups of uv.lock".
+
+  `tests/test_hook_pins.py` makes it a red test instead. It is the
+  second declaration section 4 of the organization standard names as the
+  price of this branch, and the part that was unchecked is now the part
+  that fails: a `uv lock` moving mypy, `cffi`, `types-cffi`, `hatchling`
+  or `pytest` without the hook following is silent otherwise -- both
+  environments still build, and mypy still passes in each, against
+  different versions.
+
+  Parsed rather than loaded, for the reason `test_copyright.py` gives:
+  `tomllib` arrives in 3.11 and the floor here is 3.10, and no group
+  carries a yaml parser. Each of the three ways the pins can drift was
+  made to happen and watched to fail.
+
 - **Which of section 7's conventions this suite tests is declared, and a
   test says the declaration is true** (btclib-org/.github#32).
   `tests/README.md` gains a table naming each convention the organization
