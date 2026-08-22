@@ -24,6 +24,50 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **`RELEASING.md` says what to do rather than what happened**. Two
+  paragraphs were an account of the 0.7.1 rehearsal that failed before it
+  worked and of the setup the rename made necessary a second time. What a
+  reader needs from them is neither: that a trusted publisher can only be
+  registered by an owner of the project, so a name an unrelated project
+  holds on an index cannot be registered from here and the run stops at
+  the token exchange with `invalid-publisher` having built the whole
+  matrix; and that a registration is per project name, so a name this has
+  not been done for needs it done on both indexes before anything is
+  published under it. Both now say that, in the present tense, and
+  `gh run rerun <run id> --failed` is named where the recovery is
+  described, the artifacts being already built.
+
+- **Read the Docs serves `btclib-secp256k1`, and `.readthedocs.yaml`
+  says so** (issue #302). The project was published under the old slug
+  and `README.md`'s badge, the link behind it and `pyproject.toml`'s
+  `documentation` url all named the new one, so the URL this package
+  advertises everywhere -- including in the metadata of every version
+  already on PyPI, and in the bodies of the v0.8.0 and v0.7.1.1 GitHub
+  releases, neither of which a pull request can edit -- answered 404.
+  The slug has been renamed on the dashboard and all of them resolve.
+
+  What the file's comment still records is the half that has not moved:
+  no version named for a release has been built, so `/en/v<version>/` is
+  a 404 where both siblings serve it. `stable` and `latest` both answer
+  200, and the twenty-one tags moved with the project, so what is
+  missing is the automation rule and not a build --
+  btclib-org/.github#26 carries it, with the command that re-derives all
+  of this.
+
+- **The benchmarks link in `README.md` names the file that exists**
+  (btclib-org/.github#22). The Comparison section pointed at
+  `btclib-benchmarks/blob/main/results/libsecp256k1-wrappers.md`, which
+  `#152` wrote on 2026-08-14 and `btclib-org/btclib-benchmarks#11` renamed
+  on 2026-08-15, one day later, when that repository named every result
+  file for what it answers. The table is `results/01-libsecp256k1.md`,
+  titled "The libsecp256k1 wrappers", which is what the link text already
+  said.
+
+  `links.yml` is what found it, on its Monday run of 2026-08-17, and that
+  run has been red ever since with nobody acting on the notification. It
+  is the sentinel working: a link rots because somebody edits a different
+  repository, which is the one case reading a diff here cannot catch.
+
 - **`docs/source/conf.py`'s toctree comment stops enumerating the pages
   a glob already derives** (issue #313). It said "Four pages of the
   toctree are this repository's README, CONTRIBUTING, SECURITY and
@@ -272,13 +316,9 @@ release-notes length in the first place, and are still in
   nowhere in this tree to learn it — `REPOSITORY.md` has no Read the
   Docs section, where btclib's does.
 
-  The slug is the other half and is #302's. The documentation is served
-  under `btclib-libsecp256k1`, which the rename never followed, while
-  `README.md`'s badge and the link behind it name `btclib-secp256k1`;
-  the read the docs project's *name* has been renamed and only its slug
-  has not, which is a finer reading than #302 records. Both halves are
-  dashboard actions rather than anything a pull request reaches, so what
-  lands here is the record beside the file: #302 for the slug, #295 for
+  The slug is the other half and is #302's. Both halves are dashboard
+  actions rather than anything a pull request reaches, so what lands
+  here is the record beside the file: #302 for the slug, #295 for
   the release check that reads the rendered tag URL and stays blocked
   while there is none, and btclib-org/.github#26 for the commands that
   re-derive all of it. That check would be reachable only on a tag, the
@@ -296,6 +336,96 @@ release-notes length in the first place, and are still in
   for having no such file and had been left out.
 
 ### CI
+
+- **Every workflow comment read end to end, and `codeql.yml` stopped
+  calling itself a gate** (btclib-org/.github#22). #142 moved this
+  analysis off `main`'s required checks and removed its `pull_request`
+  trigger, correctly, and updated the `on:` block to say so. Three
+  statements #114 had written survived it, in the same file: the header
+  called this "the fourth gate"; the `analyze` job said "neither name is
+  a required check -- the aggregate below is", which the `on:` block
+  twelve lines up already contradicted with "no longer a required check
+  on main"; and the job carried `if: ${{ !github.event.pull_request.draft
+  }}` under a comment saying "ready_for_review is a trigger type above",
+  in a workflow that has no `pull_request` trigger at all, so the
+  expression could only ever read empty. `main` requires three checks
+  here -- `Lint and type-check`, `Build the documentation` and `test:
+  every job passed` -- and the file now says so once, where it used to
+  say two different things and imply a third. The dead condition is gone,
+  taking btclib's own wording for why there is none.
+
+- **`latest.yml`'s lint job says what it actually reaches** here, which
+  is not mypy (btclib-org/.github#22). The header and the job both
+  claimed mypy moves with `uv lock --upgrade` "through the local hook
+  that shells out to uv", and that this is "the reason the lint job
+  below exists at all". No hook in `.pre-commit-config.yaml` shells out
+  to uv: mypy is `mirrors-mypy` at a pinned `rev`, and the packages it
+  type-checks against are pinned by hand in `additional_dependencies`,
+  as that file's own comment says. The sentence is btclib's, where it is
+  true -- its mypy hook is `repo: local` running `uv run --locked ...
+  mypy`. Section 4 of the organization standard calls this "a trade-off
+  with two right answers rather than a rule", and by its own criterion a
+  package whose types rest on a handful of stubs takes the second: the
+  configuration is right and the comment was wrong. What the job does
+  reach is `pre-commit` itself, from the lint group, which is worth a
+  weekly run and is now what it claims.
+
+- **`published.yml` is on no weekday, and two files put it on Tuesday**
+  (btclib-org/.github#22). `links.yml` and `mutation.yml` both enumerate
+  the weekday sentinels as links, published, latest, Dependabot; its cron
+  is `23 6 1 * *`, monthly, and has been since the run stopped being
+  weekly. The same sentence was fixed in btclib by btclib-org/btclib#1236
+  and in bitcoin-core-rpc before that: three copies of one calendar, and
+  this is the shape btclib-org/.github#76 is about.
+
+- **Three cron-minute lists and three counts replaced by the commands
+  that re-derive them** (btclib-org/.github#22). `macos.yml` named five
+  of this repository's minutes where there are eight, `windows.yml` six,
+  `vendored-vectors.yml` four; each list was complete when it was
+  written. `vendored-vectors.yml` also said `tests/README.md` pins "the
+  three vendored test vectors", where it pins ten, and called a
+  `49 4 1 * *` cron "the weekly schedule". `test.yml` said
+  `.github/scripts/` holds "the three of them", where it holds four, and
+  that "two tests" load a script by path, where three do. Every one of
+  them now points at `grep -h 'cron:' .github/workflows/*.yml`, at
+  `git ls-files .github/scripts`, or at nothing at all -- a count written
+  out is complete on the day it is written.
+
+- **`codeql.yml` and `docs.yml` stop saying `release.yml` calls three
+  workflows** (btclib-org/.github#22). It calls six: `lint`, `docs`,
+  `test`, `macos`, `windows` and `published`, five of which declare the
+  `concurrency-suffix` input the two comments are about. `codeql.yml`'s
+  was true when #114 wrote it and drifted; `docs.yml`'s was written by
+  `35c6931`, the very commit that added two of the calls it does not
+  name.
+
+- **`test.yml`'s prose allowlist gains `CODE_OF_CONDUCT.md` and
+  `REVIEWING.md`, and records why `AUTHORS.md` is not on it**
+  (btclib-org/.github#22). The comment describes the list as "the prose
+  files of the root and of .github"; three of the eleven root markdown
+  files were missing from it, so editing one spent the whole matrix to
+  prove it changes nothing built. `AUTHORS.md` is the one that must stay
+  off: the wheel carries it as a license file, named by
+  `WHEEL_LICENSE_FILES` in `.github/scripts/verify_wheel_contents.py` and
+  asserted by `tests/test_wheel_contents.py`, so adding it would skip the
+  matrix on a change `check-dist` reads. That reason is now in the
+  comment, because the sentence as it stood invited exactly that edit.
+
+- **Prose repairs with nothing behind them but the reading**
+  (btclib-org/.github#22). `latest.yml` said `uv.lock` moves on "a
+  monthly dependabot pull request" and could sit unseen "five weeks",
+  where `.github/dependabot.yml` has said `interval: weekly, day:
+  thursday` since #111 -- and where line 55 of the same file already said
+  "Thursday is left for Dependabot". `codeql.yml` said Tuesday is "shared
+  with no other cron here, nor with btclib's or bitcoin-core-rpc's", where
+  both siblings analyse on Tuesday deliberately and it is the minute that
+  is unique. `links.yml`'s "Eighty-six distinct external URLs" is
+  eighty-seven seventeen days later, and its narrower glob is now
+  explained rather than left to look like an omission: the nine markdown
+  files btclib's and bitcoin-core-rpc's globs would add carry no external
+  URL at all. `macos.yml` carried the one comment line in these thirteen
+  files past eighty columns, at eighty-five, which is how the paragraph
+  came to be reread.
 
 - **A markdown line does not end inside a word**
   (btclib-org/.github#71). Markdown joins two source lines with a space,

@@ -51,7 +51,9 @@ on:
     # Dependabot Thursday -- so a failure notification still names the
     # workflow by the day it arrived. A minute that is not the hour, as
     # every cron here, for the reason links.yml gives, and minute 17 is
-    # shared with none of them (07, 11, 23, 29, 37, 49).
+    # shared with none of them, which
+    # `grep -h 'cron:' .github/workflows/*.yml` is what re-derives rather
+    # than a list here.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
     - cron: "17 4 * * 6"

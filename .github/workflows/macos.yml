@@ -5,8 +5,9 @@ name: macos
 # is the other, and its header carries the number that moved it. test.yml
 # runs the suite on the two ubuntu images on every pull request and this one
 # runs the two macOS images, weekly and before a release, because macOS is
-# where the wait came from: the numbers, and the command that re-derives them, are in
-# test.yml's own header, next to the matrices these cells left.
+# where the wait came from: the numbers, and the command that re-derives
+# them, are in test.yml's own header, next to the matrices these cells
+# left.
 #
 # What runs here is not what left, and the difference is the point. The
 # cells that moved installed a wheel built earlier in the same run, which
@@ -32,8 +33,9 @@ on:
     # Wednesday, the morning latest.yml also runs, and thirty minutes before
     # it: the two answer halves of the same question and are worth reading
     # together. A minute that is not the hour, as every cron here, for the
-    # reason links.yml gives, and minute 07 is shared with none of them
-    # (11, 23, 29, 37, 49).
+    # reason links.yml gives, and minute 07 is shared with none of them,
+    # which `grep -h 'cron:' .github/workflows/*.yml` is what re-derives
+    # rather than a list here.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
     - cron: "07 4 * * 3"

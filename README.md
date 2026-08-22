@@ -1259,7 +1259,7 @@ calls — how much a caller pays to cross it. Measuring that honestly, and
 publishing the run rather than a claim, is what
 [btclib-benchmarks](https://github.com/btclib-org/btclib-benchmarks) is
 for, and
-[the libsecp256k1 wrappers table](https://github.com/btclib-org/btclib-benchmarks/blob/main/results/libsecp256k1-wrappers.md)
+[the libsecp256k1 wrappers table](https://github.com/btclib-org/btclib-benchmarks/blob/main/results/01-libsecp256k1.md)
 is where this project's own boundary is timed against the others', one
 run kept whole rather than reduced to a single figure — an order of
 magnitude to read there, never a number to quote here.

@@ -16,10 +16,11 @@ name: latest
 # library is built, breaks the build itself and not a test. That has
 # happened, and it was found by other means.
 #
-# uv.lock moves on a monthly dependabot pull request here, with a seven day
-# cooldown in front of it, so without this workflow an upstream break can
-# sit unseen for five weeks and then arrive inside a diff of many entries,
-# where its cause is one line among them.
+# uv.lock moves on a weekly dependabot pull request here -- Thursdays, the
+# day the cron below runs one ahead of -- with a seven day cooldown in
+# front of it, so without this workflow an upstream break can sit unseen
+# for a fortnight and then arrive inside a diff of many entries, where its
+# cause is one line among them.
 #
 # The obvious alternative -- dropping --locked from test.yml and resolving
 # afresh every run -- is what this exists instead of: a pull request would
@@ -33,9 +34,14 @@ name: latest
 #
 # Scope: what uv resolves. Not the pre-commit hook revisions, which are
 # pinned by rev in .pre-commit-config.yaml and moved by pre-commit.ci's
-# weekly pull request, which runs the whole matrix. mypy is the exception
-# and the reason the lint job below exists at all: its hook is a local one
-# shelling out to uv, so it is the lock that pins it.
+# weekly pull request, which runs the whole matrix. mypy is one of those
+# and not an exception to it: its hook is `mirrors-mypy` at a pinned rev,
+# and the stub packages it type-checks against are pinned by hand in
+# `additional_dependencies`, so nothing `uv lock --upgrade` writes reaches
+# it. That is the second of the two answers section 4 of the organization
+# standard gives, and the right one for a package whose types rest on a
+# handful of stubs rather than on itself. It is also why the lint job
+# below reaches less here than the job of the same name in btclib.
 #
 # Nothing here gates anything, by construction: a workflow of its own, no
 # aggregate job, named by no branch protection rule (see REPOSITORY.md).
@@ -140,13 +146,14 @@ jobs:
         shell: bash
         run: uv run --locked --no-default-groups --group test pytest
 
-  # mypy is the whole reason this job exists, and it is worth being explicit
-  # about how little else differs from the lint gate: the hooks pinned by
-  # rev are the same ones a commit runs, pre-commit.ci moving those and this
-  # not being able to. What the upgrade reaches is pre-commit itself and,
-  # through the local hook that shells out to uv, mypy and types-cffi -- a
-  # new release of either adding a check this tree fails, on a schedule
-  # rather than on somebody's branch
+  # what this adds over the lint gate is one release, and it is worth
+  # being explicit about which: the hooks are pinned by rev in
+  # .pre-commit-config.yaml and are the same ones a commit runs,
+  # pre-commit.ci moving those and this not being able to, and mypy is
+  # among them rather than among what uv resolves -- the header has why.
+  # What the upgrade does reach is pre-commit itself, which comes from the
+  # lint group, so a release of it that changes how a hook is invoked
+  # fails here on a schedule rather than on somebody's branch
   lint-latest:
     name: Lint and type-check, dependencies at latest
     runs-on: ubuntu-latest
