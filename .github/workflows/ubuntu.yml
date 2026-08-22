@@ -1,0 +1,192 @@
+---
+name: ubuntu
+
+# the ubuntu third of the platform sweep, and the header the other two
+# point at: what the merge gate keeps, what a sentinel then owes, and why
+# a cell of any of the three builds from the tree rather than installing a
+# wheel.
+#
+# **The gate is one cell**: ubuntu-latest on the interpreter
+# .python-version pins, which is the `coverage` job of test.yml, beside
+# the lint, docs and packaging jobs. Everything exhaustive is here or in
+# macos.yml or windows.yml. What that gives up is the point of the
+# arrangement rather than a cost it hides: a regression on 3.10, on arm or
+# on PyPy is no longer refused before a merge, and sits on main until the
+# weekly sentinel for it runs. What it buys is every pull request --
+# GitHub Free gives an organization twenty concurrent jobs, shared across
+# every repository in it, and a matrix on each commit is what a reviewer
+# waits behind. test.yml's header has the measurement.
+#
+# **The matrix is whole**, the cell the gate already covers included. A
+# sweep that subtracted it would be a matrix with a hole in it, and
+# whoever asked what ran would have to re-derive the hole from another
+# file.
+#
+# **A cell builds from the tree, twice.** Installing a wheel instead would
+# mean building one here -- cibuildwheel per image, and artifact names the
+# release must not confuse with test.yml's. So each cell compiles the static
+# extension a CPython wheel carries, runs the suite, then compiles the
+# dynamic one and runs it again: the choice
+# `BTCLIB_LIBSECP256K1_DYNAMIC` gives a developer, and both branches of
+# `_load_lib`. Two steps of one job rather than two jobs, because the
+# queue is the cost being managed and a second job pays it again.
+#
+# What that trades away, stated here rather than discovered later: pip's
+# *selection* among a directory of wheels tagged for several interpreters
+# is now asked nowhere. Each wheel is still tested by the job that builds
+# it -- `test-command` in pyproject.toml runs the whole suite against
+# every wheel cibuildwheel produces, on the runner that produced it --
+# and check-dist installs one by path into an empty environment. What no
+# longer runs is pip choosing between them.
+#
+# The other half of that same trade: no suite runs against the dynamic
+# wheel as a package. `test-command` in pyproject.toml reaches
+# cibuildwheel's static wheels alone, and test.yml's build-dynamic and
+# build-windows jobs run `python -m build -w` and no tests. The cells
+# below cover the dynamic *extension* compiled from this tree, which is
+# `_load_lib`'s second branch, and not the artifact pip resolves to
+# wherever no static wheel matches. That set is wider than one cell:
+#
+#     uv run --frozen --only-group build cibuildwheel \
+#         --platform windows --print-build-identifiers | grep pp
+#
+# answers nothing at all, and neither does musllinux on any PyPy, so
+# pypy3.10 everywhere and any PyPy on musl take the py3-none wheel too.
+#
+# What that artifact's packaging is asserted by, so the gap is the size
+# it is and no larger: check-dist installs the dynamic manylinux wheel
+# by path into an empty environment and imports it, which is the .so
+# beside the module, hatch_build.py's tag and the cffi requirement;
+# published.yml's `kind: dynamic` cell asks the same of what the index
+# actually serves. What no run asks is the suite through the packaged
+# artifact, against an extension the cells below have already compiled
+# and tested byte for byte.
+#
+# **Both images**, and not the newest alone: what differs between them is
+# the architecture the vendored library, the extension and the interpreter
+# are compiled for, and ubuntu-24.04-arm is the only Linux aarch64 this
+# package is asked about from source. macos.yml and windows.yml carry the
+# arm image of their own platform for the same reason.
+#
+# It gates no commit and no merge, but release.yml calls it, so one cannot
+# be published over a platform this never answered for
+
+on:
+  schedule:
+    # Friday, alone: a platform sentinel is two images times every
+    # interpreter, compiling libsecp256k1 twice a cell, and three of them
+    # in one morning is the queue this arrangement exists to avoid.
+    # macos.yml and windows.yml share Saturday between them; this one
+    # takes the day before.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "8 4 * * 5"
+  # lets release.yml gate a publication on this platform too, which is what
+  # keeps a weekly sentinel from being the only thing that ever asks
+  workflow_call:
+    inputs:
+      concurrency-suffix:
+        description: >
+          Appended to the concurrency group, and the release workflow is
+          the only caller that passes one. See the group below.
+        type: string
+        default: ""
+  # the escape hatch: the platform on demand, for a branch that touches the
+  # build, the loader or anything a toolchain decides
+  workflow_dispatch:
+
+# least privilege for the GITHUB_TOKEN: everything running in a job
+# (actions, dependencies, build scripts) can read the token, so it must not
+# be able to write to the repository
+permissions:
+  contents: read
+
+# cancel superseded runs: the subject here is the commit, which a newer one
+# supersedes. Named literally rather than through github.workflow, which in
+# a called workflow is the caller's name -- release.yml calls this one
+# alongside test.yml, and with that expression the two would share a group
+# and cancel each other. The suffix is the second half of the same problem,
+# github.ref inside a called workflow being the caller's ref: see lint.yml
+concurrency:
+  group: ubuntu-${{ github.ref }}${{ inputs.concurrency-suffix }}
+  cancel-in-progress: true
+
+jobs:
+  suite-ubuntu:
+    name: Run the suite on ${{ matrix.python-version }}, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # libsecp256k1 is compiled twice per cell, from a cache that is cold
+    # whenever the lock moved: far above what the suite itself needs, and
+    # what it bounds is a hung job rather than a slow one. The queueing this
+    # workflow exists to move happens before a job starts and is not counted
+    # here
+    timeout-minutes: 40
+    strategy:
+      # every cell to the end: which interpreter fails on which image is the
+      # whole answer, and stopping at the first one hides the rest
+      fail-fast: false
+      matrix:
+        # both images, for the reason the header gives
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+        # every interpreter this package claims, as macos.yml and
+        # windows.yml carry it, so that the platform is the only thing
+        # that differs between the three. What "claims" means is checked
+        # rather than asserted: tests/test_interpreters.py reads this
+        # list against `requires-python`, the classifiers, and the lists
+        # the other two sentinels declare, which it requires to be equal
+        # to this one rather than merely to overlap it.
+        # 3.14t is the free-threaded build, and it is here for what this
+        # package is: a cffi extension holding no interpreter lock of its
+        # own, whose thread safety is a claim tests/test_concurrency.py
+        # makes and only a build without the GIL can put under load.
+        # Spelled as uv spells them, this being uv rather than
+        # setup-python: `pypy3.11`, not the `pypy-3.11` setup-python takes
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+          - "pypy3.10"
+          - "pypy3.11"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the vendored library is what gets compiled here
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # the wheels of the test group, not the extension, which is built
+          # from the tree twice below whatever the cache holds
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      # the command CONTRIBUTING.md gives a developer, and the one the
+      # coverage job of test.yml runs: a static build, where `_load_lib`
+      # returns the extension's own `lib`. No --cov here, against the
+      # --cov that job passes: what a cell asks is whether an (image,
+      # interpreter) pair passes, and coverage is measured and gated once,
+      # there, on lines no interpreter here walks differently
+      - name: Run pytest against a static build
+        run: uv run --locked --no-default-groups --group test pytest
+
+      # the other branch of `_load_lib`: cffi in ABI mode, dlopening the
+      # shared object beside the module.
+      # --reinstall-package with --no-cache because the extension already
+      # installed by the step above is the other linkage, and neither the
+      # environment nor the build cache is keyed on the variable that
+      # chooses between them
+      - name: Run pytest against a dynamic build
+        env:
+          BTCLIB_LIBSECP256K1_DYNAMIC: "true"
+        run: >
+          uv run --locked --no-default-groups --group test
+          --reinstall-package btclib_secp256k1 --no-cache pytest

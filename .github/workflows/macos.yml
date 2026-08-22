@@ -1,44 +1,41 @@
 ---
 name: macos
 
-# one of the two platforms the merge gate does not wait for -- windows.yml
-# is the other, and its header carries the number that moved it. test.yml
-# runs the suite on the two ubuntu images on every pull request and this one
-# runs the two macOS images, weekly and before a release, because macOS is
-# where the wait came from: the numbers, and the command that re-derives
-# them, are in test.yml's own header, next to the matrices these cells
-# left.
+# the macOS third of the platform sweep, and ubuntu.yml's header is the
+# argument for all three: what the merge gate keeps, what a sentinel then
+# owes, and why a cell here builds from the tree rather than installing a
+# wheel.
 #
-# What runs here is not what left, and the difference is the point. The
-# cells that moved installed a wheel built earlier in the same run, which
-# would mean rebuilding those wheels here -- ten minutes of cibuildwheel per
-# image, and artifact names the release must not confuse with test.yml's.
-# This builds from the tree instead, twice per cell: the static extension a
+# macOS is where the queue is longest, and that is why the split is a
+# measurement rather than a preference: the numbers, and the command that
+# re-derives them, are in test.yml's own header, next to the wheel builds
+# it keeps.
+#
+# This builds from the tree, twice per cell: the static extension a
 # CPython wheel carries, then the dynamic one, which is the same choice
 # `BTCLIB_LIBSECP256K1_DYNAMIC` gives a developer and covers both branches
 # of `_load_lib`. Two steps of one job rather than two jobs, because the
 # queue is the cost being managed here and a second job pays it again.
 #
 # So this is the platform against the lock, on every interpreter, and
-# latest.yml is the dependencies against the platforms; the two are
-# scheduled on the same morning half an hour apart. A red macOS column in
-# latest.yml with this workflow green is an upgrade; red in both is macOS.
-# One variable each, and the pair reads as a difference.
+# latest.yml is the dependencies against the platforms. A red macOS column
+# in latest.yml with this workflow green is an upgrade; red in both is
+# macOS. One variable each, and the pair reads as a difference.
 #
 # It gates no commit and no merge -- a macOS regression sits on main for at
 # most a week -- but release.yml calls it, so one cannot be published
 
 on:
   schedule:
-    # Wednesday, the morning latest.yml also runs, and thirty minutes before
-    # it: the two answer halves of the same question and are worth reading
-    # together. A minute that is not the hour, as every cron here, for the
-    # reason links.yml gives, and minute 07 is shared with none of them,
-    # which `grep -h 'cron:' .github/workflows/*.yml` is what re-derives
-    # rather than a list here.
+    # Saturday, with windows.yml an hour later: the two platforms a
+    # reviewer would wait longest for, sharing the day the grid gives to
+    # platforms and not the hour. Red in both is the tree; red in one is
+    # that platform, which is the whole of what running them apart buys.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
-    - cron: "07 4 * * 3"
+    - cron: "8 4 * * 6"
   # lets release.yml gate a publication on this platform too, which is what
   # keeps a weekly sentinel from being the only thing that ever asks
   workflow_call:
@@ -84,17 +81,19 @@ jobs:
       # whole answer, and stopping at the first one hides the rest
       fail-fast: false
       matrix:
-        # the two images test.yml no longer runs the suite on. Both, and not
-        # the newest alone: one is Apple silicon and the other Intel, and
-        # what differs between them is the architecture the vendored library
-        # and the extension are compiled for
+        # both images, and not the newest alone: one is Apple silicon and
+        # the other Intel, and what differs between them is the
+        # architecture the vendored library and the extension are compiled
+        # for
         os:
           - macos-26-intel
           - macos-latest
-        # the union of the interpreters the two matrices of test.yml ran
-        # here, so that the platform is the only thing this workflow moved.
+        # every interpreter this package claims. ubuntu.yml and
+        # windows.yml carry the same list, so that the platform is the
+        # only thing that differs between the three and a red cell here is
+        # attributable to it.
         # Spelled as uv spells them, this being uv rather than
-        # setup-python: `pypy3.11`, not the `pypy-3.11` of test.yml
+        # setup-python: `pypy3.11`, not the `pypy-3.11` setup-python takes
         python-version:
           - "3.10"
           - "3.11"

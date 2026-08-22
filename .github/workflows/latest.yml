@@ -53,16 +53,16 @@ name: latest
 
 on:
   schedule:
-    # Wednesday 04:37 UTC, and not on the hour, for the reason links.yml
-    # gives. Wednesday, matching btclib's own latest.yml, and thirty minutes
-    # after macos.yml, which shares the morning on purpose: this one moves
-    # the dependencies over every platform, that one moves the platform at
-    # the lock, and the pair reads as a difference -- red in both is macOS,
-    # red here alone is the upgrade. Thursday is left for Dependabot,
-    # opening the day after this has already reported.
+    # Wednesday, the day before Dependabot's, which is the whole of the
+    # placement: this reports on the upgrade before the pull request
+    # carrying it opens. published.yml follows an hour later, the pair
+    # asking what moved underneath -- the dependencies here, and what the
+    # index serves there.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
-    - cron: "37 4 * * 3"
+    - cron: "8 4 * * 3"
   workflow_dispatch:
 
 # least privilege for the GITHUB_TOKEN: everything running in a job

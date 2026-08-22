@@ -382,10 +382,10 @@ Then:
    finishes it has already installed from PyPI what was just uploaded, on
    every platform and at both ends of the supported interpreter range, and
    verified BIP340 vector 0 with it. Read its result in the run rather
-   than dispatching a second one. It still runs monthly on its own too, on
-   the first, and a failure there means the outside world moved, not this
-   repository — which is why it stayed a workflow of its own rather than
-   folding into `release.yml` outright.
+   than dispatching a second one. It still runs weekly on its own too, and
+   a failure there means the outside world moved, not this repository —
+   which is why it stayed a workflow of its own rather than folding into
+   `release.yml` outright.
 
    A cell of that matrix can still lose the race with the index even
    though `version-check` already confirmed PyPI serves the version: 0.8.0

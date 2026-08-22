@@ -50,7 +50,7 @@ on:
   # runs the default branch's copy of a workflow with the token of a push
   # nobody reviewed -- where a call runs inside the release that gated it, in
   # its graph and in its log. The caller passes the tag, and only the caller
-  # does: the monthly run and a dispatch have no particular version in mind,
+  # does: the weekly run and a dispatch have no particular version in mind,
   # which is the point of them
   workflow_call:
     inputs:
@@ -61,16 +61,16 @@ on:
         type: string
         default: ""
   schedule:
-    # monthly, on the first, where this was weekly: what it watches is
-    # external rot -- a new runner image, a new interpreter, a yanked
-    # dependency, a cffi ABI change -- and nothing in this repository moves
-    # it, so a week was a sample rate without a reason. After a release the
-    # trigger above answers immediately, which is what the weekly was
-    # standing in for.
-    # A minute that is not the hour: what everyone schedules on the hour
-    # queues together, and a run that waits is a failure noticed later. The
-    # minute and the hour are the ones this workflow always had, so a
-    # comparison with an older run compares like with like.
+    # Wednesday, the hour after latest.yml, and the pair is why this is
+    # weekly: latest.yml upgrades every dependency and runs the suite from
+    # the tree, this asks what the index actually serves, and read
+    # together they separate a break this repository caused from one that
+    # arrived. What it watches is external rot -- a new runner image, a
+    # new interpreter, a yanked dependency, a cffi ABI change -- which a
+    # week samples as well as anything longer, and after a release the
+    # trigger above answers immediately regardless.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone.
     # One caveat has no fix inside this file: GitHub suspends a schedule
@@ -78,7 +78,7 @@ on:
     # quiet period a sentinel exists to cover, and announces it only by
     # email. A silence from this workflow is worth a look at the Actions
     # tab before it is read as green
-    - cron: "23 6 1 * *"
+    - cron: "8 5 * * 3"
   workflow_dispatch:
 
 # least privilege for the GITHUB_TOKEN: everything running in a job
@@ -88,7 +88,7 @@ permissions:
   contents: read
 
 # never cancel a sentinel, unlike every other workflow here: the run a
-# release calls, the monthly one and a dispatch share this group, each is a
+# release calls, the weekly one and a dispatch share this group, each is a
 # sample worth keeping, and none supersedes the others. A concurrent run
 # queues instead
 concurrency:

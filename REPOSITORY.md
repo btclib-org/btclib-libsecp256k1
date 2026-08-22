@@ -14,12 +14,12 @@ and the command that reads it is beside it.
 
 **Never name matrix contexts in a branch rule.** The rule lives outside
 the repository, so a context that stops being produced blocks every merge
-with nothing in the tree to explain why — and the matrix here is
-`Run the suite on the static wheel, ${{ matrix.python-version }},
-${{ matrix.os }}`, whose contexts change with every interpreter added or
-dropped. `test: every job passed` is the aggregate job at the end of
-`test.yml` that `needs` every other job in it; a job added to that
-workflow belongs in its `needs` list, or it gates nothing. The name
+with nothing in the tree to explain why — and the matrices here are
+`Build wheels on ${{ matrix.os }}` and its siblings, whose contexts
+change with every image added or dropped. `test: every job passed` is the
+aggregate job at the end of `test.yml` that `needs` every other job in it;
+a job added to that workflow belongs in its `needs` list, or it gates
+nothing. The name
 carries the workflow because a context is keyed by name alone: two
 workflows with a job named the same thing produce one ambiguous check.
 
@@ -32,7 +32,7 @@ gh api repos/btclib-org/btclib-secp256k1/branches/main/protection \
 
 | Check | Produced by |
 | --- | --- |
-| `test: every job passed` | `test.yml`, aggregate over the matrix |
+| `test: every job passed` | `test.yml`, aggregate over its jobs |
 | `Lint and type-check` | `lint.yml`, its only job |
 | `Build the documentation` | `docs.yml`, its only job |
 
@@ -42,7 +42,7 @@ twenty concurrent jobs (as of 2026-08-21), shared across every repository
 in it: this one, btclib and bitcoin-core-rpc each ask for more jobs than
 that on every commit, so a pull request in any of the three waited for a
 slot rather than for the work. `codeql.yml` now runs on `main`
-and on its Tuesday schedule, the analysis landing on the merge commit rather
+and on its weekly schedule, the analysis landing on the merge commit rather
 than ahead of it, and it still produces that aggregate — the name is
 available, so requiring it again is a patch to the rule and nothing in the
 tree.
@@ -76,15 +76,14 @@ rule names, `Lint and type-check`, checks the submodule out with
 developer's own commit. Re-read that skip list before adding to it: an
 entry may join for a reason of that kind and no other.
 
-Neither `macos.yml`, `windows.yml`, `latest.yml`, `links.yml`,
-`mutation.yml`, `published.yml` nor `vendored-vectors.yml` appears in the
-rule, and none of them must: each is expected to go red for a reason no pull
-request introduced. `macos.yml` and `windows.yml` are the two worth naming
+Neither `ubuntu.yml`, `macos.yml`, `windows.yml`, `latest.yml`,
+`links.yml`, `mutation.yml`, `published.yml` nor `vendored-vectors.yml`
+appears in the rule, and none of them must: each is expected to go red for a
+reason no pull request introduced. The first three are the ones worth naming
 twice, because they do run the suite: what a merge no longer waits for is
-the platform whose runners queue for tens of minutes and the one whose cells
-were the largest family of jobs in a run, both measured in `test.yml`'s
-header and theirs, and `release.yml` calls both so that a publication still
-does.
+every cell of it but one, the reasoning being in `ubuntu.yml`'s header and
+the numbers in `test.yml`'s, and `release.yml` calls all three so that a
+publication still does.
 
 A check can be bound to the app that produces it — `checks` with an
 `app_id` rather than the bare `contexts` list — so that nothing else can
@@ -649,13 +648,13 @@ GitHub free to move the numbers without notice):
 
 **Read the second column before spending anything on the first.** The
 twenty is what `windows.yml`'s header measured against, and paying for
-Team would triple it; the five is what `macos.yml`'s header measured
-against, and Team does not move it at all. A macOS column that queued for
-tens of minutes was far more jobs than five slots could clear at once,
-and only Enterprise changes that arithmetic. So the split that took those
-cells out of the merge gate is not a workaround for a plan — on this
-repository it is the answer, and the plan below Enterprise that would
-undo it does not exist.
+Team would triple it; the five is the ceiling behind the macOS queue
+`test.yml`'s header measures, and Team does not move it at all. A macOS
+column that queued for tens of minutes was far more jobs than five slots
+could clear at once, and only Enterprise changes that arithmetic. So the
+split that took those cells out of the merge gate is not a workaround
+for a plan — on this repository it is the answer, and the plan below
+Enterprise that would undo it does not exist.
 
 What Team would buy is the rest: the Linux and Windows crowding, and the
 contention with the other repositories of the organization, `btclib` and
