@@ -261,6 +261,28 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **`.yamllint.yaml` and `.taplo.toml` stop carrying one tree's claims**
+  (btclib-org/.github#40). Both files are shared byte-for-byte across
+  the organization's repositories, deliberately, and both had been
+  written as though they lived in one: `.yamllint.yaml` recorded the
+  findings of a survey run somewhere else -- "62 lines against 8 at
+  100" -- as settled fact, and `.taplo.toml` justified `reorder_keys`
+  and `array_auto_collapse` by naming this tree's furniture, "the ruff
+  rule sets", "a module to the mutation session". A number measured in
+  another repository and copied here is not a measurement of this one,
+  and the reader who checks it has no way to learn that from the file.
+
+  Both are now the copies `btclib`, `bitcoin-core-rpc` and
+  `btclib-benchmarks` already carry, which state the rule and the
+  command that re-derives the numbers in whichever tree is asking,
+  rather than the answers. Each also says outright that it is shared and
+  that nothing in it may be true of one tree only, which is what makes
+  the next edit to any copy answerable. The settings themselves do not
+  move: `max: 100`, `document-start: enable`, four-space indent,
+  `array_auto_collapse = false` -- `diff` against a sibling is what shows
+  the files are identical, and the gate passing unchanged is what shows
+  the configuration did not.
+
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
   (#299): it read as though the floor were the version the uv-lock hook
   of `.pre-commit-config.yaml` pins, but that hook pins `0.12.5` while
