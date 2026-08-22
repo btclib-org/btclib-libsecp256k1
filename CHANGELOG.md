@@ -297,6 +297,30 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **`claude-review.yml` stops counting the required checks, and here
+  the count was wrong** (btclib-org/.github#22). "The four required
+  checks stay what they are": `main` requires three in this repository.
+  The sentence is `btclib`'s, where four is right, and it travelled with
+  the workflow -- being true in the tree it was written in is exactly
+  what let it be wrong in the two it was copied to, this one and
+  `btclib-benchmarks`.
+
+  Nothing checks a workflow comment: `actionlint` reads the workflow,
+  `zizmor` reads it for injection, and prose beside them reads as
+  authoritative for sitting there. What the paragraph is for survives
+  without the number -- this job is not a required check and must not
+  become one, a model's judgement not being a branch rule -- so it now
+  says the required checks stay what they are and sends the reader to
+  `REPOSITORY.md` and the endpoint.
+
+  Found by the sweep that issue asks for, run here over the claims a
+  command can settle: every workflow named in a comment exists, every
+  cron matches the day its comment claims, and the trigger claims match
+  each `on:` block, `codeql.yml`'s "no `pull_request` trigger" included.
+  The prose half of the sweep -- reading every comment end to end, which
+  is how a stale claim that reads like a true one is found -- is not
+  done, and is what keeps that issue open.
+
 - **`.yamllint.yaml` keeps the default rule set on, and stops carrying
   one tree's claims** (btclib-org/.github#40, and the shared file's own
   defect found reviewing that change). Two things, one file.
