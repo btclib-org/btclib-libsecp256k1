@@ -24,6 +24,25 @@ release-notes length in the first place, and are still in
 
 ### Documentation
 
+- **`docs/source/conf.py`'s toctree comment stops enumerating the pages
+  a glob already derives** (issue #313). It said "Four pages of the
+  toctree are this repository's README, CONTRIBUTING, SECURITY and
+  RELEASE_NOTES", and `docs/source/index.rst` lists six of them: the
+  comment missed `REVIEWING` and `CHANGELOG`, both of which have a
+  `*_link.md` shim and are globbed into `INCLUDED` twenty lines below it
+  exactly as the four it named are. Its "no CHANGELOG at all" clause was
+  flatly false by the time it was read.
+
+  The count and the list were the same defect twice. `ls
+  docs/source/*_link.md` is the set, and `INCLUDED`'s own
+  `glob("*_link.md")` is what the code reads, so the comment now points
+  at the derivation instead of restating its result -- which is what
+  keeps it right the next time a shim is added or dropped. The
+  comparison against `btclib`'s root files went with it: which files a
+  sibling repository shims is that repository's business, and a
+  paragraph here that tracks it is a paragraph that goes stale when
+  something happens somewhere else.
+
 - **`CONTRIBUTING.md` sends a contributor to the organization standard**
   (btclib-org/.github#52). `README.md` in `btclib-org/.github` states
   the toolchain, the lint gate, the workflow set and the branch rules
