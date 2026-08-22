@@ -284,7 +284,10 @@ release-notes length in the first place, and are still in
   the shared file unchanged would have turned the set off here too; the
   shared file gains it back instead, with the two exceptions named under
   `rules:` where a reader can see them rather than inferred from what is
-  missing. Nothing new is reported in this tree:
+  missing. `.pre-commit-config.yaml`'s comment above the hook follows:
+  it described a width check, which is what the hook was, and now names
+  what actionlint and zizmor still do not read -- a key written twice, a
+  block indented under nothing. Nothing new is reported in this tree:
   `git ls-files '*.yml' '*.yaml' | xargs uvx yamllint` is clean before
   and after.
 

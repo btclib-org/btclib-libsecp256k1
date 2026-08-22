@@ -202,11 +202,13 @@ repos:
     hooks:
       - id: check-dependabot
       - id: check-readthedocs
-  # the shape of the workflows, which actionlint and zizmor do not read:
-  # the first says whether one is valid, the second whether it is safe,
-  # and neither says whether a line has grown to 118 columns. The limit is
-  # 100 rather than the 80 the prose gets, and .yamllint.yaml carries the
-  # arithmetic behind that
+  # the shape of the yaml itself, which actionlint and zizmor do not read:
+  # the first says whether a workflow is valid, the second whether it is
+  # safe, and neither says whether a line has grown to 118 columns, a key
+  # is written twice, or a block is indented under nothing. yamllint's
+  # default rule set, less the two .yamllint.yaml disables by name, with
+  # the width at 100 rather than the 80 the prose gets -- that file
+  # carries the arithmetic behind both
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
