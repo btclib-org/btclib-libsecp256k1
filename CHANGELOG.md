@@ -337,6 +337,38 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **Which of section 7's conventions this suite tests is declared, and a
+  test says the declaration is true** (btclib-org/.github#32).
+  `tests/README.md` gains a table naming each convention the organization
+  standard lists that this repository tests and the module that tests it,
+  followed by a line naming the ones it does not.
+
+  **Some of the eight and not the rest**, which is the point of declaring
+  it rather than leaving it to be inferred: section 7 says a repository
+  needs the conventions its own prose states, so an absent convention
+  test reads exactly like a convention this repository does not have.
+  The reasons differ and are given one by one. The public surface is not
+  a convention this package has -- nothing here declares `__all__` --
+  and input validation and the calling convention are the two bullets
+  that rest on walking one, so `test_core.py` refusing plenty by hand is
+  not what section 7 asks for. The changelog is the near miss:
+  `test_vendored_data.py` forbids exactly the count that bullet forbids,
+  of `tests/README.md` rather than of the two history files it names.
+  The import graph and the build system have nothing standing in for
+  them.
+
+  `tests/test_conventions.py` is what keeps the declaration from being
+  prose -- section 7's own rule applied to section 7 itself -- and its
+  four assertions were each checked by making the declaration wrong in
+  that way and watching the suite go red.
+
+- **`test_vendored_data.py` stops assuming the Summary is the last
+  section**. `_summary()` sliced from its heading to the end of the file,
+  which was true while it was last and stops being true the moment a
+  section is added after it -- silently, its patterns then reading prose
+  it has no claim about. The change above is what would have made it
+  false, so it is what fixes it: the slice now ends at the next `##`.
+
 - **A Dependabot pull request can be reviewed**
   (btclib-org/.github#77). `claude-review.yml`'s review job fails on one,
   twice over. The credential is the first half and is fixed off the tree:
