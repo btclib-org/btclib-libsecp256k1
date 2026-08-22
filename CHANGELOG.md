@@ -297,6 +297,24 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **A markdown line does not end inside a word**
+  (btclib-org/.github#71). Markdown joins two source lines with a space,
+  so a word wrapped at its own hyphen renders with the hyphen and then a
+  space inside it. This is the repository the rule came from: #318 fixed
+  three of them here, in `README.md`, `CHANGELOG.md` and `RELEASING.md`,
+  and the one that started it was found by scanning rendered `<code>`
+  spans in built html rather than by reading markdown -- the source
+  looks correct, which is why reading a diff does not find one.
+
+  Nothing here read the output: markdownlint has no rule for it, the
+  width rules read a line rather than what two lines become, and
+  `sphinx-build -W` is not asked whether a token means anything. A
+  `pygrep` hook now does, for the reason `local-link-prefix` beside it
+  is one. The rule and what the hook cannot see -- a code span whose
+  content breaks at a `/` or a `.` renders the same way and has no
+  hyphen to match -- are in section 4 of the organization standard,
+  which the comment points at rather than restates.
+
 - **`claude-review.yml` stops counting the required checks, and here
   the count was wrong** (btclib-org/.github#22). "The four required
   checks stay what they are": `main` requires three in this repository.
