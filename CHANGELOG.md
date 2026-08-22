@@ -337,6 +337,33 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **The interpreters this package claims are the ones it runs on**
+  (btclib-org/.github#83). `requires-python`, the per-version
+  `Programming Language :: Python ::` classifiers and `test.yml`'s own
+  `PYTHONS` block are one fact written three times, and nothing compared
+  them. `tests/test_interpreters.py` does: the floor is the lowest
+  classifier, the classified set and the matrix's CPython set are each
+  other, and the PyPy classifier is present exactly when a PyPy
+  interpreter runs.
+
+  The drift it catches is the kind that misleads somebody who is not
+  reading this repository — PyPI shows a classifier to whoever is
+  choosing the package, so a version left behind when a floor moves is
+  an interpreter advertised and never touched.
+
+  What it does not encode is the calendar. The organization standard's
+  rule is that a library covers every Python still in support, which
+  moves twice around each October; python.org keeps that schedule and a
+  test that hard-coded a date would be one more thing to move. The claim
+  here is the weaker and checkable one: whatever the three say, they say
+  the same thing.
+
+  `Programming Language :: Python :: 3` was missing beside `:: 3 :: Only`,
+  where the three sibling repositories carry both. Added — and outside
+  what the test above reads, which is deliberately the per-version
+  classifiers alone: `:: 3` is a claim about the major version rather
+  than about an interpreter the matrix could run.
+
 - **The mypy hook's pins are checked against `uv.lock`**. The type gate
   runs in an environment of its own, built from the mirror's `rev` and
   its `additional_dependencies`; the editor cannot use that environment,
