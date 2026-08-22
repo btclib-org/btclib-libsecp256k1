@@ -203,10 +203,11 @@ Verdict: **identical**. Every case, both directions of each. It is also
 the blob libsecp256k1 vendors, at
 `src/modules/silentpayments/bip352_send_and_receive_test_vectors.json`
 in the submodule: byte for byte the same file, which is worth saying
-because it makes the copy here look redundant and it is not. The wheel
-test jobs check out without `submodules: recursive` -- what they exercise
-is the module inside an installed wheel, not a build -- so a test reading
-the submodule would silently not run there.
+because it makes the copy here look redundant and it is not. The sdist
+suite job checks out without `submodules: recursive` -- what it exercises
+is an install of the published sdist, which carries the vendored sources
+of its own -- so a test reading the submodule would silently not run
+there.
 
 Read in part, and the part is a decision rather than a limit. Each case
 carries its transaction as scriptSig, witness and prevout scriptPubKey

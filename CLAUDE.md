@@ -236,30 +236,24 @@ is deliberate in every case — each is expected to go red for a reason no
 pull request introduced, and a red check nobody can act on from a branch
 is noise. Their crons are spread out, because sentinels landing in one inbox
 on one morning are one sentinel, and `codeql` keeps a morning of its own
-for the same reason. Two pairs share a morning even so. `macos` and
-`latest` do it deliberately, and both cron comments say why: half an hour
-apart on Wednesday, they answer halves of one question and are worth
-reading together. `published` and `vendored-vectors` are the other pair,
-both monthly on the 1st.
+for the same reason. Which day and which minute each takes is section 10
+of the organization standard in `btclib-org/.github` and not this file's to
+restate; where two deliberately share a morning an hour apart, their cron
+comments say what reading the pair together buys. What each
+sentinel asks is the first thing its own header says, and the `on:` block
+under that header is when.
 
-| workflow | asks | when |
-| --- | --- | --- |
-| `links` | do the URLs in the prose still resolve | Mon |
-| `macos` | does the suite pass on macOS | Wed, and a release |
-| `latest` | does the tree survive every dependency at its newest | Wed |
-| `windows` | does the suite pass on Windows | Sat, and a release |
-| `mutation` | would the suite notice a wrong line | Sun |
-| `published` | can the world install what PyPI serves | 1st, a release |
-| `vendored-vectors` | do the vendored vectors still match upstream | 1st |
-
-`macos` and `windows` are the two sentinels a pull request would otherwise
-have waited for, and each left the gate on a measurement rather than a
-preference — the macOS runners queue for tens of minutes where every other
-platform queues for two, and the Windows cells were the largest family of
-jobs in a run asking for more of them at once than an organization on GitHub
-Free is given. `test.yml`'s header carries the first measurement and
-`windows.yml`'s the second. A release calls both, so what a merge no longer
-waits for a publication still does.
+`ubuntu`, `macos` and `windows` are the three platform sentinels: the suite
+on both images of a platform and on every interpreter, which is the whole
+of what the gate's single cell does not ask. Keeping them off the gate is a
+measurement rather than a preference — macOS runners queue for tens of
+minutes where every other platform queues for two, and GitHub Free gives an
+organization twenty concurrent jobs shared across every repository in it,
+which a matrix on every commit spends before a reviewer is reached.
+`test.yml`'s header carries the numbers and the command that re-derives
+them, `windows.yml`'s the rest of the second, and `ubuntu.yml`'s header is
+the argument the other two point at. `release` calls all three, so what a
+merge does not wait for a publication still does.
 
 `latest` is the one that covers a gap nothing else does. Every uv command
 elsewhere passes `--locked`, the dependency groups declare no version, and
@@ -267,11 +261,11 @@ the one runtime dependency is cffi — which this package does not merely
 import but *compiles against*, so a cffi, setuptools or cmake release can
 break the build rather than a test — and none of those three is something
 Dependabot moves, `[build-system] requires` being resolved at build time
-and pinned by no lock file. Dependabot is weekly, on the Thursday after
-this runs, which is the other half of the arrangement: the sentinel
-answers on Wednesday, so the pull requests that arrive the next morning
-are a diff whose result is already known. `.github/dependabot.yml` carries
-that reasoning where the day is set.
+and pinned by no lock file. Dependabot is weekly and lands the morning
+after this runs, which is the other half of the arrangement: the sentinel
+answers first, so the pull requests that arrive next are a diff whose
+result is already known. `.github/dependabot.yml` carries that reasoning
+where the day is set, and `latest.yml`'s cron comment where this one is.
 
 `mutation` is scoped by `.github/mutation/bindings.toml`, which is also
 what a local run reads, so there is one statement of what is mutated and

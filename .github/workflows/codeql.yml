@@ -64,23 +64,18 @@ on:
     # to be scanned itself, and a merge creates a commit nothing else tested
     branches: [main]
   schedule:
-    # Tuesday 04:33 UTC. Weekly, which is what default setup ran, and it
-    # earns the slot: a CodeQL release can find in unchanged code what the
-    # queries of the week before did not look for, so a repository that
-    # sits still is not a repository that stays clean.
-    # Not on the hour: GitHub queues scheduled workflows across every
-    # repository that asked for the same minute, and a run can be dropped
-    # outright when that queue is long. Tuesday is the day btclib and
-    # bitcoin-core-rpc analyse on too, and that is the convention rather
-    # than a collision: one workflow, one weekday, across the
-    # organization. What is not shared is the minute -- 33 here, against
-    # their 23 and 27 -- and `grep -rn 'cron:' .github/workflows/*.yml` in
-    # each is what re-derives both. The other days here are Monday
-    # (links), Wednesday (macos, latest), Saturday (windows), Sunday
-    # (mutation) and the 1st (published, vendored vectors).
+    # Tuesday, which the grid gives to this and to nothing else. Weekly,
+    # which is what default setup ran, and it earns the slot: a CodeQL
+    # release can find in unchanged code what the queries of the week
+    # before did not look for, so a repository that sits still is not a
+    # repository that stays clean.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
+    # A sibling repository analyses on the same day and not at the same
+    # minute, which is the whole of what the grid's minute is for.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
-    - cron: "33 4 * * 2"
+    - cron: "8 4 * * 2"
   # the escape hatch, and with no pull_request trigger above it is the only
   # way to scan a branch before it is merged: worth reaching for on one that
   # touches a workflow, which is what the actions queries read

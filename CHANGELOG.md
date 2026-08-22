@@ -337,6 +337,71 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **The merge gate runs one cell of the suite, and the sweeps moved to
+  the calendar** (btclib-org/.github#85). `test.yml`'s `suite-static` and
+  `suite-dynamic` jobs are gone: two ubuntu images, each walking every
+  interpreter against a wheel built earlier in the same run, asked before
+  every review on an organization whose plan gives it twenty concurrent
+  jobs across every repository. What waits for a review now is the
+  `coverage` job -- `ubuntu-latest` on the version `.python-version`
+  names -- beside the lint, docs and packaging jobs, and the wheel builds
+  that a release publishes the artifacts of.
+
+  `ubuntu.yml` is where those cells went, and it is the third of a set
+  `macos.yml` and `windows.yml` already had: both images of a platform,
+  every interpreter, compiling the vendored library twice a cell so that
+  `BTCLIB_LIBSECP256K1_DYNAMIC` and both branches of `_load_lib` are
+  covered. It runs weekly and `release.yml` calls it, so a version cannot
+  be published over a platform nothing answered for. Its header carries
+  the argument for all three, and the other two now point at it.
+
+  Each matrix runs whole, the cell the gate already covers included. A
+  sweep that subtracted the gate would be a matrix with a hole in it, and
+  whoever asked what ran would have to re-derive the hole from another
+  file.
+
+  What it costs, said here rather than found later. A regression on an
+  interpreter or an architecture the gate no longer reaches sits on
+  `main` until the weekly sentinel for it runs. Pip's *selection* among a
+  directory of wheels tagged for several interpreters is now asked
+  nowhere -- each wheel is still tested by the cibuildwheel job that
+  builds it, and `check-dist` still installs one by path into an empty
+  environment, but nothing chooses between them. And no suite runs
+  against the dynamic wheel as a package any more: `test-command` in
+  `pyproject.toml` reaches cibuildwheel's static wheels alone,
+  `build-dynamic` and `build-windows` build without testing, and
+  `check-dist` imports the dynamic wheel rather than running the suite
+  through it. What the sentinels cover is the dynamic extension compiled
+  from the tree, which is `_load_lib`'s second branch and not the
+  artifact pip resolves to where no static wheel matches. `ubuntu.yml`'s
+  header records both, beside each other.
+
+  With no consumer of a whole image's set left on a branch, the wheel
+  shortcut widens to ubuntu too, as it already applied on macOS and
+  Windows: a pull request builds one interpreter's wheels per image,
+  which is what answers whether this tree still builds there, and
+  `check-dist` takes its wheel from `build-dynamic`, which builds whole.
+
+  Every schedule here is on the organization's grid, which gives a
+  workflow its day and its hour and this repository its minute. Eight
+  crons moved and a ninth is new; `published.yml` and
+  `vendored-vectors.yml` go from monthly to weekly with the rest, a month
+  having been a sample rate nothing derived from their subjects. The grid
+  is section 10 of `btclib-org/.github`, which is why the cadence table in
+  `CONTRIBUTING.md` no longer names a day and `CLAUDE.md`'s copy of it is
+  gone: one calendar covering the organization is one thing to remember,
+  and a copy of it per repository is one more thing to keep true in each.
+
+  `tests/test_interpreters.py` reads the three sentinels' matrices where
+  it read `test.yml`'s two `PYTHONS` blocks, the declaration it compares
+  against `requires-python` and the classifiers having moved with the
+  cells. It reads each file separately and requires the three to be
+  equal, rather than comparing their union: each sentinel's matrix
+  comment already says the other two carry the same list, and a union is
+  a reading in which a list that drifted in one file is covered by the
+  other two. `windows.yml` spelled PyPy `pypy-3.11` where the others
+  spell it `pypy3.11`, which is what the new check found first.
+
 - **The interpreters this package claims are the ones it runs on**
   (btclib-org/.github#83). `requires-python`, the per-version
   `Programming Language :: Python ::` classifiers and `test.yml`'s own

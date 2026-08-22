@@ -1,21 +1,31 @@
 ---
 name: test
 
-# the merge gate: everything this package ships, built and then tested on
-# the platforms it claims, minus the two platforms a reviewer would wait
-# for. Their suite cells are macos.yml's and windows.yml's, and each file
-# carries the measurement that moved it; the wheel builds for all six stay
-# here, because the release publishes the artifacts of this run.
+# the merge gate: everything this package ships, built, inspected and
+# installed, and the suite run on the one cell a reviewer should wait for.
+# That cell is the `coverage` job below -- ubuntu-latest on the
+# interpreter .python-version pins -- and every other cell of the suite is
+# ubuntu.yml's, macos.yml's or windows.yml's, run weekly and before a
+# release. ubuntu.yml's header is the argument for the split; the numbers
+# behind it are here, next to the jobs they were measured on.
 #
-# macOS was the first of the two, and the split is a measurement rather than
-# a preference. Over six pull request runs of this workflow, ninety-eight jobs
-# each, thirty-five of them on the two macOS images: a macOS job waited 20.8
-# and 19.0 minutes on average for a runner, against 2.1 to 2.6 elsewhere,
-# and the wait grows with the number of cells asking at once -- in the
-# slowest of the six the macOS suite cells took the last thirty places
-# before the aggregate, their queue rising from 16.7 to 70.2 minutes, and
-# the run took 95 minutes for 105 minutes of work spread over 98 jobs. The
-# command that re-derives it, for whoever doubts the split later:
+# **The wheel builds for all six images stay here**, and that is the line
+# this file draws against the sentinels: the release publishes the
+# artifacts of this run, so a wheel not built here is a wheel not on PyPI.
+# They are not what stretched a run either -- the four macOS wheel jobs
+# finished at 24.6 minutes against the 23.5 of the ubuntu-latest build
+# beside them. Four macOS jobs queue; thirty-one contended.
+#
+# macOS was where the wait first showed, and the split is a measurement
+# rather than a preference. Over six pull request runs of this workflow,
+# ninety-eight jobs each, thirty-five of them on the two macOS images: a
+# macOS job waited 20.8 and 19.0 minutes on average for a runner, against
+# 2.1 to 2.6 elsewhere, and the wait grows with the number of cells asking
+# at once -- in the slowest of the six the macOS suite cells took the last
+# thirty places before the aggregate, their queue rising from 16.7 to 70.2
+# minutes, and the run took 95 minutes for 105 minutes of work spread over
+# 98 jobs. The command that re-derives it, for whoever doubts the split
+# later:
 #
 #     id=$(gh run list --workflow=test.yml --limit 1 \
 #         --json databaseId --jq '.[0].databaseId')
@@ -28,13 +38,11 @@ name: test
 # runner-minutes, the largest family of jobs in the run and ahead of every
 # wheel build. windows.yml has the rest of that measurement.
 #
-# So the macOS *suite* cells moved to macos.yml, which runs them weekly and
-# before a release. The macOS *wheel builds* stay here, and the same
-# measurement is why: the release publishes the artifacts of this run, so a
-# macOS wheel not built here is a macOS wheel not on PyPI -- and those four
-# jobs are not what stretched the run, finishing at 24.6 minutes against the
-# 23.5 of the ubuntu-latest build beside them. Four macOS jobs queue;
-# thirty-one contend.
+# The ubuntu suite cells are the third, against the same ceiling: two
+# images times every interpreter, on the platform whose cells are the
+# cheapest to wait for and therefore the last a gate gives up. What
+# decides them is that the gate asks one question of the suite and the
+# calendar asks the rest, which is what ubuntu.yml's header argues.
 
 on:
   push:
@@ -350,21 +358,23 @@ jobs:
       # is in step with pyproject.toml is asserted where it can be, by the
       # uv-lock hook on every commit and by `uv lock --check` in the
       # release workflow
-      # what a pull request has to answer about macOS and Windows is
+      # what a pull request has to answer about any of these images is
       # whether this tree still builds there, and that is answered by the
       # first wheel: the toolchain, the CMake build of the vendored
       # library and the cffi extension are what differ per platform, and
-      # they do not differ per interpreter. The other six wheels of those
-      # images are that build again for another ABI tag, and the four jobs
-      # they happen in were 39.0 of the 59.5 runner-minutes the six wheel
-      # jobs cost. Measured on the run of the change itself, those four
-      # came to 7.2: 14.4 and 5.7 on the two macOS images became 1.5 and
-      # 1.2, and 8.7 and 10.2 on the two Windows ones became 1.8 and 2.7.
+      # they do not differ per interpreter. The rest of an image's wheels
+      # are that build again for another ABI tag. Measured on the macOS
+      # and Windows images, the four jobs were 39.0 of the 59.5
+      # runner-minutes the six wheel jobs cost and came to 7.2 with it:
+      # 14.4 and 5.7 on the two macOS images became 1.5 and 1.2, and 8.7
+      # and 10.2 on the two Windows ones became 1.8 and 2.7.
       #
-      # The two ubuntu images keep the whole set, because suite-static
-      # consumes it: what that job exists to check is pip's selection
-      # among a directory of wheels tagged for seven interpreters, and a
-      # directory holding one is not that question.
+      # Every image, ubuntu included: nothing on a pull request reads past
+      # the first build of an image. check-dist installs one wheel by
+      # path and takes it from build-dynamic, which builds whole, and
+      # pip's selection among a directory of wheels tagged for several
+      # interpreters is asked nowhere -- ubuntu.yml's header carries that
+      # trade and what answers the rest of the question instead.
       #
       # A push to main, a release and a rehearsal all build everything --
       # in a called workflow github.event_name is the caller's, which is
@@ -372,9 +382,7 @@ jobs:
       # branch is reached by the run that follows the merge, and the
       # release publishes nothing this shortcut has touched
       - name: Build one interpreter where a pull request only asks whether it builds
-        if: >-
-          github.event_name == 'pull_request'
-          && !startsWith(matrix.os, 'ubuntu')
+        if: github.event_name == 'pull_request'
         # bash, and the two Windows images are the whole of the reason:
         # the default shell there is PowerShell, where "$GITHUB_ENV" is
         # not the variable but a literal, so this wrote a file of that
@@ -591,14 +599,14 @@ jobs:
       # pattern verbatim.
       #
       # pip and pytest unpinned, unlike every tool that comes from a group
-      # of pyproject.toml, and deliberately: this job and the two wheel
-      # test jobs hold no uv and no lock, because their subject is pip
-      # resolving and building a published artifact the way a user does,
-      # and pinning pytest would reintroduce the resolution they exist to
-      # exclude. The price is that filterwarnings = error makes a pytest
-      # release able to fail these jobs on a day nothing here changed;
-      # that is the same signal the published workflow carries, a fact
-      # about what a user hits, and it surfaces in a pull request
+      # of pyproject.toml, and deliberately: this job holds no uv and no
+      # lock, because its subject is pip resolving and building a
+      # published artifact the way a user does, and pinning pytest would
+      # reintroduce the resolution it exists to exclude. The price is that
+      # filterwarnings = error makes a pytest release able to fail this
+      # job on a day nothing here changed; that is the same signal the
+      # published workflow carries, a fact about what a user hits, and it
+      # surfaces in a pull request
       - name: Install from sdist
         shell: bash
         run: |
@@ -723,15 +731,15 @@ jobs:
           uv run --no-project --python 3.14 \
             .github/scripts/verify_wheel_contents.py dist/*.whl
 
-      # the wheel test jobs install cffi by hand and then the wheel with
-      # --no-index, which resolves nothing: what the metadata declares is
-      # only ever checked against a cffi that is already installed, so a
-      # requirement dropped from it would go unnoticed by all of them.
-      # Here one wheel is installed by path into an environment holding
-      # nothing, its dependencies resolved from PyPI, and imported from an
-      # empty directory, where nothing can resolve to the source tree. The
-      # dynamic wheel is the subject because it is the one that needs cffi
-      # at run time, a static extension carrying its own
+      # one wheel installed by path into an environment holding nothing,
+      # its dependencies resolved from PyPI, and imported from an empty
+      # directory where nothing can resolve to the source tree: what this
+      # asks is whether the metadata a user's pip reads is enough to make
+      # the wheel importable, which a requirement dropped from it would
+      # fail. The dynamic wheel is the subject because it is the one that
+      # needs cffi at run time, a static extension carrying its own.
+      # Importing it is the whole of what runs here -- the suite against
+      # this artifact is a cost ubuntu.yml's header records
       - name: Install a wheel with its dependencies resolved from PyPI
         run: |
           # the glob itself, not ls parsed by a pipeline: nullglob is what
@@ -757,211 +765,19 @@ jobs:
       - name: Rate the packaging metadata
         run: uv run --locked --only-group check pyroma --min 10 dist/*.tar.gz
 
-  suite-dynamic:
-    # the linkage is in the name, and it has to be: this job and the one
-    # below run the same interpreters on the same images against two
-    # different wheels, so one name for both produced two check runs
-    # called the same thing -- and a branch rule matches a context by name
-    # alone, which is what makes an ambiguous one worth avoiding even where
-    # no rule names it today
-    name: >-
-      Run the suite on the dynamic wheel,
-      every interpreter, ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft && github.event.action != 'closed' }}
-    runs-on: ${{ matrix.os }}
-    # one job now walks what eight did, so the cap is the sum of theirs
-    # rather than one of them: eight installs and eight suites in
-    # sequence, where each cell was under two minutes
-    timeout-minutes: 30
-    env:
-      # one statement of which interpreters are tested, read twice in this
-      # job: setup-python installs the list, and the loop below walks it.
-      # A version added to one and not the other is either an interpreter
-      # installed and never run or a run that fails on a missing
-      # executable, and both say so immediately.
-      # 3.14t, the free-threaded interpreter, matters here in particular:
-      # the dynamic wheel is tagged py3-none, so it is what a
-      # free-threaded interpreter installs, and unlike the static wheels
-      # nothing else exercises it (cibuildwheel tests every wheel it
-      # builds, including cp314t; this job has no such counterpart)
-      PYTHONS: |
-        3.10
-        3.11
-        3.12
-        3.13
-        3.14
-        3.14t
-        pypy-3.10
-        pypy-3.11
-    strategy:
-      fail-fast: false
-      matrix:
-        # the macOS images are macos.yml's and the Windows ones are
-        # windows.yml's; see the header
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-    needs: [build-windows, build-dynamic]
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # every interpreter of PYTHONS at once: setup-python takes a list and
-      # puts each on the PATH under its own name, which is what lets one
-      # job do what one cell per version did
-      - name: Set up every interpreter
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHONS }}
-
-      # only the wheel built for this platform: downloading all of them
-      # meant every job in the matrix listing and fetching four
-      # artifacts to install one, and the artifact service answers a
-      # fan-out that wide with the occasional 403. The x86_64 Windows
-      # wheel is the mingw cross-compiled one, hence its artifact name
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dynamic-wheels-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os }}
-          path: dist
-
-      # pip and pytest unpinned, and for the reason spelled out in
-      # suite-sdist: a user's environment rather than the locked one.
-      #
-      # What a red check says is what this trades away, and the loop is
-      # written to give it back: a matrix cell named the interpreter in the
-      # check itself, where this job names the image and leaves the
-      # interpreter to the log. So every version runs even after one has
-      # failed -- `fail-fast: false` between cells, kept between iterations
-      # -- each inside a fold of its own, and the failures are named
-      # together at the end rather than being the first one to abort
-      - name: Install the wheel and run the suite under each interpreter
-        run: |
-          failed=""
-          for version in $PYTHONS; do
-            case $version in
-              pypy-*) python=pypy${version#pypy-} ;;
-              *) python=python$version ;;
-            esac
-            echo "::group::$version ($python)"
-            if "$python" --version \
-              && "$python" -m pip install -U pip pytest cffi \
-              && "$python" -m pip install --verbose --no-index \
-                --find-links dist/ btclib_secp256k1 \
-              && "$python" -m pytest; then
-              echo "$version passed"
-            else
-              failed="$failed $version"
-            fi
-            echo "::endgroup::"
-          done
-          if [ -n "$failed" ]; then
-            echo "::error::the suite failed under:$failed"
-            exit 1
-          fi
-
-  suite-static:
-    # the linkage is in the name: see suite-dynamic
-    name: >-
-      Run the suite on the static wheel,
-      every interpreter, ${{ matrix.os }}
-    if: ${{ !github.event.pull_request.draft && github.event.action != 'closed' }}
-    runs-on: ${{ matrix.os }}
-    # see suite-dynamic, one interpreter fewer
-    timeout-minutes: 30
-    env:
-      # one statement of the interpreters, as in suite-dynamic, and one
-      # shorter by pypy-3.10: no static wheel is built for it.
-      # cibuildwheel already runs the suite against every wheel it builds,
-      # cp314t included: what this job adds is that pip, given a directory
-      # holding all of them, selects the right one, which for the
-      # free-threaded interpreter nothing checked
-      PYTHONS: |
-        3.10
-        3.11
-        3.12
-        3.13
-        3.14
-        3.14t
-        pypy-3.11
-    strategy:
-      fail-fast: false
-      matrix:
-        # the macOS images are macos.yml's and the Windows ones are
-        # windows.yml's; see the header. What is given up there is narrower
-        # than elsewhere, and cibuildwheel is why: it runs the suite against
-        # every wheel it builds, on the runner that built it, so the macOS
-        # and Windows wheels this workflow ships are still tested by the job
-        # that produces them. What moves is pip's selection among them.
-        # With both Windows rows gone so are the three exclusions they
-        # carried, each of them a wheel that is not built rather than a
-        # platform not worth running: no PyPy wheel on Windows on either
-        # architecture, and no CPython before 3.11 on windows arm64
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-    needs: build-cibuildwheel
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # see suite-dynamic
-      - name: Set up every interpreter
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHONS }}
-
-      # only the wheels built for this platform, as above
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: static-wheels-${{ matrix.os }}
-          path: dist
-
-      # the loop, the folds and the failures named together: see
-      # suite-dynamic. The install is the point of this job rather than a
-      # step before it -- pip choosing among a directory of wheels tagged
-      # for seven interpreters -- so it stays inside the loop with the run
-      - name: Install the wheel and run the suite under each interpreter
-        run: |
-          failed=""
-          for version in $PYTHONS; do
-            case $version in
-              pypy-*) python=pypy${version#pypy-} ;;
-              *) python=python$version ;;
-            esac
-            echo "::group::$version ($python)"
-            if "$python" --version \
-              && "$python" -m pip install -U pip pytest cffi \
-              && "$python" -m pip install --verbose --no-index \
-                --find-links dist/ btclib_secp256k1 \
-              && "$python" -m pytest; then
-              echo "$version passed"
-            else
-              failed="$failed $version"
-            fi
-            echo "::endgroup::"
-          done
-          if [ -n "$failed" ]; then
-            echo "::error::the suite failed under:$failed"
-            exit 1
-          fi
-
-  # one context for the branch rule, instead of the matrix's own. A rule
-  # naming `Run the suite on the static wheel, 3.10, ubuntu-latest` names a
-  # context that stops being produced the moment the matrix changes, and a
-  # required check that produces no run blocks every merge with nothing in
-  # the tree to explain why -- the rule living outside the repository. So
-  # the rule names this job, and a job added to this workflow belongs in
-  # the `needs` below or it gates nothing. REPOSITORY.md carries the branch
+  # one context for the branch rule, instead of the matrices' own. A rule
+  # naming `Build wheels on ubuntu-24.04-arm` names a context that stops
+  # being produced the moment the matrix changes, and a required check
+  # that produces no run blocks every merge with nothing in the tree to
+  # explain why -- the rule living outside the repository. So the rule
+  # names this job, and a job added to this workflow belongs in the
+  # `needs` below or it gates nothing. REPOSITORY.md carries the branch
   # rule itself.
   #
   # The name carries the workflow because a context is keyed by name alone:
   # two workflows with a job named the same thing produce one ambiguous
-  # check, and macos.yml and windows.yml are two more workflows over the
-  # same matrix shape.
+  # check, and ubuntu.yml, macos.yml and windows.yml are three more
+  # workflows whose jobs run the suite.
   #
   # `if: !cancelled()` because a job with unmet `needs` is skipped, and a
   # skipped check is not a failed one: without it a failing matrix cell
@@ -989,8 +805,6 @@ jobs:
       - suite-sdist
       - build-windows
       - check-dist
-      - suite-dynamic
-      - suite-static
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

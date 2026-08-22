@@ -3,30 +3,35 @@ name: vendored vectors
 
 # tests/README.md pins every vendored test vector to a commit and a git
 # blob SHA-1, with a documented manual procedure to re-check one. How
-# many there are is that file's to say and not this one's. This runs that procedure
-# once a month instead, over every pin the script can check, and opens or
-# updates an issue on drift rather than fixing anything: refreshing a
-# vector file is a decision the script does not get to make. Matches
-# btclib's own workflow of the same name, script included (issue #397).
+# many there are is that file's to say and not this one's. This runs
+# that procedure weekly instead, over every pin the script can check,
+# and opens or updates an issue on drift rather than fixing anything:
+# refreshing a vector file is a decision the script does not get to
+# make. Matches btclib's own workflow of the same name, script included
+# (issue #397).
 #
 # issues: write is new to this repository -- links.yml's own comment
 # explains why every other scheduled workflow here stops at contents:
 # read, an automatic issue being the usual next step it deliberately
 # does not take. This one does take it, on purpose: a link is noticed
 # the next time somebody follows it, where a vendored vector is trusted
-# without anybody looking at it again, and that is exactly what a
-# monthly issue is for
+# without anybody looking at it again, and that is exactly what an
+# opened issue is for
 
 on:
   schedule:
-    # the 1st of the month, 04:49 UTC. Not on the hour, for the reason
-    # links.yml's own cron comment gives -- GitHub queues same-minute
-    # scheduled workflows across every repository that asked for it, and
-    # a long queue can drop the run outright. Minute 49 is not shared
-    # with any other cron in this repository, which
-    # `grep -h 'cron:' .github/workflows/*.yml` is what re-derives, nor
-    # with btclib's own copy of this workflow, at minute 53
-    - cron: "49 4 1 * *"
+    # Monday, the hour after links.yml: the two ask the same question of
+    # different things, whether what this tree points at is still what it
+    # pointed at, and reading them together separates an upstream edit
+    # from a network having a bad morning. Weekly rather than monthly,
+    # which is what the grid has to give: a vector file drifts when
+    # upstream edits it in place, and the sample rate for that was never
+    # derived from the subject.
+    # The time is the organization grid -- section 10 of
+    # btclib-org/.github's README.md -- and not this file's to restate.
+    # Only the default branch schedules workflows, so on any other branch
+    # this is reachable through the dispatch below alone
+    - cron: "8 5 * * 1"
   workflow_dispatch:
   pull_request:
     # ready_for_review, so a pull request marked ready gets the run the
@@ -42,7 +47,7 @@ on:
     # a branch nobody is going to look at again. "This pull request's
     # own group" is the part github.ref alone gets wrong: for a closed,
     # merged pull request it resolves to the base branch's ref, which
-    # this workflow has no push trigger to collide with, but the monthly
+    # this workflow has no push trigger to collide with, but the weekly
     # schedule and a workflow_dispatch both also run on the default
     # branch and would resolve to that same ref. The concurrency block
     # below groups by the pull request's own number instead, immune to
@@ -134,9 +139,9 @@ jobs:
   # It opens no issue where the job above does, and the asymmetry is in
   # the subject rather than in the effort. A vendored vector file drifts
   # because upstream edits it in place, with nothing here changing and
-  # nobody looking, which is exactly what a monthly issue is for. A pin
+  # nobody looking, which is exactly what an opened issue is for. A pin
   # cannot drift: it moves only in a commit of this repository. So the
-  # monthly run here is a backstop against upstream retagging, or a
+  # scheduled run here is a backstop against upstream retagging, or a
   # signature that stops verifying, and a red run says all of that.
   pin:
     name: Check the pinned libsecp256k1 release

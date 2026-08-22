@@ -189,43 +189,68 @@ read by every checkout of this repository.
 
 | workflow | when | what it varies |
 | --- | --- | --- |
-| `test` | pull request, push | the wheels, and ubuntu × every interpreter |
+| `test` | pull request, push | the wheels, the sdist, one suite cell |
 | `lint`, `docs` | pull request, push | — |
 | `claude-review` | pull request, and `@claude` in a comment | — |
-| `vendored-vectors` | monthly, a change to itself | — |
-| `codeql` | push to main, Tuesday | the two scanned languages |
-| `macos` | Wednesday, a release | both macOS images, both linkages |
-| `windows` | Saturday, a release | both Windows images, both linkages |
-| `latest` | Wednesday | the dependencies, at their newest |
+| `vendored-vectors` | weekly, a change to itself | — |
+| `codeql` | push to main, and weekly | the two scanned languages |
+| `ubuntu` | weekly, a release | both ubuntu images × every interpreter |
+| `macos` | weekly, a release | both macOS images × every interpreter |
+| `windows` | weekly, a release | both Windows images × every interpreter |
+| `latest` | weekly | the dependencies, at their newest |
 | `links`, `mutation` | weekly | — |
-| `published` | monthly, a release | what PyPI serves |
-| `release` | a tag | calls the gates, `macos`, `windows`, `published` |
+| `published` | weekly, a release | what PyPI serves |
+| `release` | a tag | calls the gates and the rows marked *a release* |
 
-The first two rows are what a merge waits for.
+The first two rows are what a merge waits for, and the suite cell among them
+is one: `ubuntu-latest` on the interpreter `.python-version` pins, measured
+for coverage. Which day each of the rest runs, and at which minute, is
+section 10 of the organization standard in `btclib-org/.github` and not this
+file's to restate — one calendar covering the organization is one thing to
+remember, and a copy of it per repository is one more thing to keep true in
+each.
 
-What the rows below them have in common is one number: GitHub Free gives an
-organization twenty concurrent jobs (as of 2026-08-21), shared across every
-repository in it. A commit here, in btclib and in bitcoin-core-rpc each ask
-for more jobs than that ceiling alone allows, so a pull request in any of
-the three spent its wall clock waiting for a slot. A platform therefore
-earns a place
-before a review only if it is cheap to wait for, and neither of these is:
-macOS runners queue for tens of minutes rather than for two, and the
-twenty-one Windows suite cells were 27.3 of a run's 112.9 runner-minutes,
-the largest family of jobs in it and ahead of every wheel build. The numbers
-are in `test.yml`'s header and in each of the two files.
+Why so little gates is one number: GitHub Free gives an organization twenty
+concurrent jobs (as of 2026-08-21), shared across every repository in it. A
+commit here, in btclib and in bitcoin-core-rpc each ask for more jobs than
+that ceiling alone allows, so a pull request in any of the three spent its
+wall clock waiting for a slot. At that ceiling a cell before a review buys a
+rarer answer at the price of every review: macOS runners queue for tens of
+minutes rather than for two, and the twenty-one Windows suite cells were
+27.3 of a run's 112.9 runner-minutes, the largest family of jobs in it and
+ahead of every wheel build. The numbers are in `test.yml`'s header.
 
-**The wheels for both are still built on every pull request**, which is the
-half that does not move: `cibuildwheel` runs the suite against each wheel as
-it builds it, and the release publishes the artifacts of that run. What
-waits a week is pip's *selection* among them, and the dynamic build.
+**What the sentinels vary, they vary whole.** `ubuntu` runs both images on
+every interpreter, the cell the gate already covers included. A matrix with
+the gate's cell cut out of it is one nobody can read the shape of, and
+whoever asked what ran would have to re-derive the hole from the gate.
+
+**Every image still builds wheels on every pull request**: `cibuildwheel`
+runs the suite against each wheel as it builds it, and the release publishes
+the artifacts of a run that built every one. What narrows on a branch is how
+many per image — one interpreter's rather than every interpreter's, ubuntu
+included — because what a pull request asks of an image is whether this tree
+still builds there, and the toolchain, the CMake build of the vendored
+library and the cffi extension are what differ per image rather than per
+interpreter. Nothing on a branch reads past that first build: `check-dist`
+installs one wheel by path and takes it from `build-dynamic`, which builds
+whole. `test.yml` carries the measurement beside the step.
+
+What a pull request no longer asks is pip's *selection* among a directory of
+wheels tagged for several interpreters, which now runs nowhere; the wheel
+each interpreter would get is still tested by the job that builds it, and
+`ubuntu`, `macos` and `windows` still compile both linkages from the tree on
+every interpreter. What no run asks at all is the suite against the dynamic
+wheel as a package — the sentinels compile that linkage from the tree
+instead. `ubuntu.yml`'s header records both costs beside each other.
+
 Everything but the first two rows also takes `workflow_dispatch`, which for
-`codeql` and the two platform workflows is the only way to ask about a
+`codeql` and the three platform workflows is the only way to ask about a
 branch at all. `claude-review` is the exception that takes none: both its
 jobs read the pull request or the comment that triggered them, so a manual
 run would start with nothing to read.
 
-`codeql` runs on `main` and on its Tuesday schedule and not on a pull
+`codeql` runs on `main` and on its weekly schedule and not on a pull
 request, which is the same arithmetic as the rows above: three slots held
 while a review waits. What still reads a branch before it merges is
 `zizmor`, a `pre-commit` hook and therefore part of `lint`, which audits
@@ -282,23 +307,6 @@ command at all, for the reason above, and no longer gates.
   ```shell
   uv run --locked --no-default-groups --group test pytest --cov
   ```
-
-- `Run the suite on the static wheel, <version>, <os>`, and its dynamic
-  counterpart, one row of either matrix. In `test.yml` those two jobs read
-  `every interpreter` where the version would be, one job per image
-  walking the whole list, so the version a failure names is in the log
-  rather than in the name of the check; `macos.yml` and `windows.yml`
-  still have a cell per version
-
-  ```shell
-  uv run --python 3.10 --no-cache pytest
-  BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --python 3.10 --no-cache \
-      --reinstall-package btclib_secp256k1 pytest
-  ```
-
-  the two steps of `macos.yml`'s and `windows.yml`'s own cells are these
-  two, in this order and for the same reason: neither the environment nor
-  the build cache is keyed on the variable that chooses the linkage
 
 - `Build wheels on <os>`, for this platform only
 
@@ -375,9 +383,24 @@ The sentinels beside it gate nothing, so a red one is read in the Actions
 tab rather than fixed on a branch. Each is dispatchable, and all but `links`
 run locally.
 
-- `macos` and `windows`, which are the suite on those images and reproducible only
-  on a Mac. Both linkages, the commands being the pair given above under
-  the suite job
+- `ubuntu`, `macos` and `windows`, which are the suite on both images of
+  a platform and on every interpreter, so only the row matching the
+  machine at hand reproduces. A cell is these two commands in this order —
+  the coverage job's own command without `--cov`, run once against each
+  linkage, with `--python` standing for the interpreter the row names:
+
+  ```shell
+  uv run --locked --no-default-groups --group test --python 3.10 pytest
+  BTCLIB_LIBSECP256K1_DYNAMIC=true uv run --locked --no-default-groups \
+      --group test --python 3.10 --reinstall-package btclib_secp256k1 \
+      --no-cache pytest
+  ```
+
+  the second re-installs rather than reusing what the first built,
+  because neither the environment nor the build cache is keyed on the
+  variable that chooses the linkage. `--cov` is not in either: what a cell
+  asks is whether an (image, interpreter) pair passes, and coverage is
+  measured and gated once, on the gate's cell
 
 - `latest`, which resolves every dependency at its newest before running
   the suite. The upgrade rewrites `uv.lock`, so restore it afterwards with

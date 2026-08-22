@@ -52,10 +52,17 @@ jobs:
       # see the lint job above
       concurrency-suffix: "-release"
 
-  # the platform test.yml does not run the suite on, for the reason its own
-  # header measures: a week is the right sample rate for a regression that
-  # can sit on main for a week, and the wrong one for a version that cannot
-  # be unpublished
+  # the suite on every platform and every interpreter, which test.yml runs
+  # one cell of, for the reason ubuntu.yml's header gives: a week is the
+  # right sample rate for a regression that can sit on main for a week,
+  # and the wrong one for a version that cannot be unpublished
+  ubuntu:
+    name: Run the ubuntu workflow
+    uses: ./.github/workflows/ubuntu.yml
+    with:
+      # see the lint job above
+      concurrency-suffix: "-release"
+
   macos:
     name: Run the macos workflow
     uses: ./.github/workflows/macos.yml
@@ -316,7 +323,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch'
       && github.repository == 'btclib-org/btclib-secp256k1'
-    needs: [test, lint, docs, macos, windows]
+    needs: [test, lint, docs, ubuntu, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -350,7 +357,7 @@ jobs:
     name: Publish to PyPI
     # see publish-testpypi for the repository condition
     if: github.event_name == 'push' && github.repository == 'btclib-org/btclib-secp256k1'
-    needs: [test, lint, docs, macos, windows]
+    needs: [test, lint, docs, ubuntu, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
