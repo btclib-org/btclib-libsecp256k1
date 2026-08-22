@@ -50,7 +50,7 @@ on:
     # dropped outright when that queue is long.
     # Sunday, matching btclib's own mutation.yml: the weekday sentinels
     # run Monday through Thursday in the order the questions build on
-    # each other (links, published, latest, then Dependabot's pull
+    # each other (links, codeql, latest, then Dependabot's pull
     # request), and this one asks something on a different axis
     # entirely -- the suite's own quality, not a dependency's -- which
     # is what leaves it the weekend on its own rather than a weekday.

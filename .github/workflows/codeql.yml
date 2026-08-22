@@ -1,12 +1,11 @@
 ---
 name: codeql
 
-# the fourth gate, and the one that used to have no file: code scanning ran
-# from GitHub's default setup, a repository setting, so the only required
-# check on main whose definition a diff could not review was the one looking
-# for vulnerabilities. Every other check here is a file with pinned SHAs, and
-# this makes CodeQL one too -- the languages, the query suite, the schedule
-# and the permissions all readable, reviewable and moved by dependabot.
+# code scanning as a file rather than as a repository setting: the
+# languages, the query suite, the schedule and the permissions are
+# readable, reviewable and moved by dependabot, as every other check here
+# is. It gates nothing -- the `on:` block below is where that is decided
+# and why.
 #
 # It reproduces what the setting held rather than inventing a configuration,
 # which is what keeps the alert history continuous. Read from the API before
@@ -71,12 +70,14 @@ on:
     # sits still is not a repository that stays clean.
     # Not on the hour: GitHub queues scheduled workflows across every
     # repository that asked for the same minute, and a run can be dropped
-    # outright when that queue is long. Tuesday and minute 33 are shared
-    # with no other cron here, nor with btclib's or bitcoin-core-rpc's --
-    # `grep -rn 'cron:' .github/workflows/*.yml` in each is what re-derives
-    # that, and the other days are Monday (links), Wednesday (macos,
-    # latest), Saturday (windows), Sunday (mutation) and the 1st
-    # (published, vendored vectors).
+    # outright when that queue is long. Tuesday is the day btclib and
+    # bitcoin-core-rpc analyse on too, and that is the convention rather
+    # than a collision: one workflow, one weekday, across the
+    # organization. What is not shared is the minute -- 33 here, against
+    # their 23 and 27 -- and `grep -rn 'cron:' .github/workflows/*.yml` in
+    # each is what re-derives both. The other days here are Monday
+    # (links), Wednesday (macos, latest), Saturday (windows), Sunday
+    # (mutation) and the 1st (published, vendored vectors).
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
     - cron: "33 4 * * 2"
@@ -92,8 +93,9 @@ permissions:
 
 # cancel superseded runs on the same branch/PR, named literally rather than
 # through github.workflow for the reason lint.yml gives at length. No
-# concurrency-suffix input here, unlike the three gates release.yml calls:
-# nothing calls this workflow, so github.ref is this run's own ref
+# concurrency-suffix input here, unlike every workflow release.yml calls
+# but published.yml, which takes a version instead: nothing calls this
+# workflow, so github.ref is this run's own ref
 concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
@@ -103,13 +105,16 @@ jobs:
     # one job per language, so a failure says which analysis failed instead
     # of leaving two to be told apart in a log. Default setup's own two jobs
     # were `Analyze (actions)` and `Analyze (python)`; these are named for
-    # the question they answer, as every job here is, and neither name is a
-    # required check -- the aggregate below is
+    # the question they answer, as every job here is. Neither name is a
+    # required check, and neither is the aggregate below: the three this
+    # repository requires are `Lint and type-check`, `Build the
+    # documentation` and `test: every job passed`, which REPOSITORY.md
+    # records and the branches/main/protection endpoint answers
     name: Analyze ${{ matrix.language }} with CodeQL
-    # a draft pull request is work in progress and spends no runner here
-    # either: the same condition lint.yml, docs.yml and test.yml carry, and
-    # ready_for_review is a trigger type above for the same reason
-    if: ${{ !github.event.pull_request.draft }}
+    # no draft condition, where every job of test.yml carries one: this
+    # workflow no longer runs on a pull request at all, so there is no
+    # draft to skip and `github.event.pull_request.draft` is an expression
+    # that could only read empty here
     runs-on: ubuntu-latest
     # the two analyses of default setup took 41 to 48 seconds each, measured
     # on the last pull request it ran on, so this is tolerance for a cold
@@ -197,9 +202,7 @@ jobs:
     needs: [analyze]
     # not success(): a job whose dependencies failed is skipped, and a
     # skipped check reports `skipped`, which branch protection counts as
-    # satisfied. The gate has to run to be able to fail -- and it carries
-    # the draft condition every job above carries, so a draft skips
-    # uniformly rather than tripping the skip check below
+    # satisfied. The gate has to run to be able to fail
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

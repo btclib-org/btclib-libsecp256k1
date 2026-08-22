@@ -3,8 +3,9 @@ name: links
 
 # the documentation of this package is mostly links: the BIPs a wrapper
 # implements, the upstream functions it calls, the packaging specifications
-# the release follows. Eighty-six distinct external URLs across the
-# markdown, and until this workflow nothing looked at one of them.
+# the release follows. The globs below are which markdown that is, and
+# lychee's own summary is how many URLs it holds; nothing here looked at
+# one of them before this workflow.
 #
 # Not a pull request gate, and that is the design rather than a caution. A
 # link rots without anybody touching the repository, so checking it per
@@ -24,9 +25,11 @@ on:
     # be dropped outright when that queue is long.
     # Monday, matching btclib's own links.yml, and first among the
     # weekday sentinels: whether an external page still resolves is the
-    # least volatile of the four questions this week asks, published.yml
+    # least volatile of the questions this week asks -- codeql.yml
     # (Tuesday), latest.yml (Wednesday) and Dependabot (Thursday) each
     # asking something that changes more often than the last.
+    # published.yml asks the quietest of them all and asks it monthly,
+    # its subject being an artifact already released and therefore fixed.
     # Only the default branch schedules workflows, so on any other branch
     # this is reachable through the dispatch below alone
     - cron: "11 4 * * 1"
@@ -116,7 +119,12 @@ jobs:
         with:
           # the prose, and named by path rather than as `**/*.md`, so that
           # adding `submodules: true` above could not silently widen the
-          # sweep to upstream's documentation.
+          # sweep to upstream's documentation. Narrower than btclib's and
+          # bitcoin-core-rpc's own globs, which reach docs/ and tests/,
+          # and not by omission: what those two would add carries no
+          # external URL, which `grep -rl http --include='*.md' docs
+          # tests` is what says rather than a claim here about what
+          # those pages are.
           # The retries, the timeout and the cache are what keep a slow or
           # throttling host from being reported as a dead one, and the
           # measurement behind them is this repository's own: of the

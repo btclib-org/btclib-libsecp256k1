@@ -71,8 +71,9 @@ permissions:
 # cancel superseded runs on the same branch/PR, named literally and
 # discriminated by an input rather than left to github.ref alone, for the
 # three reasons lint.yml gives at length: release.yml calls this workflow
-# beside lint.yml and test.yml, and a group computed from github.workflow
-# would have the three cancel each other
+# beside lint.yml, test.yml, macos.yml, windows.yml and published.yml, and
+# a group computed from github.workflow would have every one of them
+# cancel the others, that expression being the caller's name in each
 concurrency:
   group: docs-${{ github.event.pull_request.number || github.ref }}${{ inputs.concurrency-suffix }}
   cancel-in-progress: true

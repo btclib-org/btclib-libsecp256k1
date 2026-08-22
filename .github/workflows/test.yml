@@ -161,9 +161,14 @@ jobs:
           cat files.txt
           # the allowlist is what nothing built reads: the prose files of
           # the root and of .github, and neither README.md nor a file
-          # under docs/, which the sdist carries. An empty list is not a
-          # documentation change, it is a question this could not answer,
-          # so the count is checked before the pattern.
+          # under docs/, which the sdist carries. AUTHORS.md is off it for
+          # the same reason as README.md rather than by oversight: the
+          # wheel carries it as a license file, `WHEEL_LICENSE_FILES` in
+          # .github/scripts/verify_wheel_contents.py names it and
+          # tests/test_wheel_contents.py asserts it is there, so adding it
+          # would skip the matrix on a change check-dist reads. An empty
+          # list is not a documentation change, it is a question this
+          # could not answer, so the count is checked before the pattern.
           #
           # The mutation configuration and the detect-secrets baselines are
           # on it for the same reason as the prose and were measured off it:
@@ -178,12 +183,13 @@ jobs:
           # Anchored on the *file* and not on the directory, which is the
           # same staleness this comment declines below in the direction that
           # looks cheap: `^\.github/mutation/` would exempt in advance any
-          # file a later change drops there, and two tests already load a
+          # file a later change drops there, and tests already load a
           # script by path one directory over (`.github/scripts/`), so such
           # a script would skip the matrix and take its own test with it.
           # `.toml` rather than `bindings\.toml` so a second configuration
           # needs no edit here; a script belongs in .github/scripts/, which
-          # is where the three of them are.
+          # is where all of them are, and `git ls-files .github/scripts` is
+          # what counts them rather than a number here.
           #
           # A workflow is *not* on it, deliberately, and that is the answer
           # to the other half of #239 rather than an omission. Which
@@ -195,7 +201,7 @@ jobs:
           # run, which is the expensive direction; leaving every workflow
           # change to run everything is the cheap one, at the cost this
           # comment now records
-          prose='^(CHANGELOG|CLAUDE|CONTRIBUTING|RELEASE_NOTES|RELEASING|REPOSITORY|SECURITY)\.md$|^\.github/[^/]*\.md$|^\.github/mutation/[^/]*\.toml$|^\.secrets\..*baseline$'
+          prose='^(CHANGELOG|CLAUDE|CODE_OF_CONDUCT|CONTRIBUTING|RELEASE_NOTES|RELEASING|REPOSITORY|REVIEWING|SECURITY)\.md$|^\.github/[^/]*\.md$|^\.github/mutation/[^/]*\.toml$|^\.secrets\..*baseline$'
           if [ ! -s files.txt ] || grep -qvE "$prose" files.txt; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "something the matrix reads changed: everything runs"

@@ -21,17 +21,15 @@
 # this file against a release tag's tree and succeeds, so the missing
 # thing is the URL and not an untested build.
 #
-# The slug is the other half. The project is served under
-# `btclib-libsecp256k1`, which the rename never followed, while
-# README.md's badge and link name `btclib-secp256k1`; the read the docs
-# project's own *name* has been renamed and its slug has not.
+# The slug is `btclib-secp256k1`, which is what README.md's badge, the
+# link behind it and pyproject.toml's `documentation` url name.
 #
-# Both halves are dashboard actions rather than anything a pull request
-# reaches: issue #302 for the slug, btclib-org/.github#26 for the rule
-# and for the commands that re-derive all of this, and issue #295 for
-# the release check that reads the rendered tag URL, which stays blocked
-# while there is no such URL to read. That check would be reachable only
-# on a tag, the shape btclib-org/.github#49 is about, which is a reason
+# The rule is a dashboard action rather than anything a pull request
+# reaches: btclib-org/.github#26 carries it, and the commands that
+# re-derive all of this. Issue #295, the release check that reads the
+# rendered tag URL, stays blocked while there is no such URL to read.
+# That check would be reachable only on a tag, the shape
+# btclib-org/.github#49 is about, which is a reason
 # to order it after the URL exists rather than before; nothing here
 # settles btclib-org/.github#49.
 

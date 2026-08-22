@@ -505,15 +505,14 @@ The rehearsal is what the release machinery itself is tested with, when
 the workflow, the packaging metadata or the build matrix changed. A
 release that only bumps versions and notes does not need one.
 
-The rehearsal of 0.7.1 is what taught this section most of what it says,
-having failed once before it worked. The first attempt built the whole
-matrix, collected every artifact, waited for its approval, and then
-stopped at the token exchange with `invalid-publisher`: on TestPyPI the
-name `btclib-libsecp256k1` was an unrelated `0.0.1`, and a trusted
-publisher can only be registered by an owner of the project. Owner
-rights on that project, and a registration matching the claims the
-failure had printed, were all it needed; the second attempt published,
-without rebuilding anything.
+A trusted publisher can only be registered by an owner of the project,
+so a name an unrelated project already holds on an index cannot be
+registered from here: the run builds the whole matrix, collects every
+artifact, waits for its approval and then stops at the token exchange
+with `invalid-publisher`. Owner rights on that project, and a
+registration matching the claims the failure prints, are the whole of
+what it takes; `gh run rerun <run id> --failed` then publishes from the
+artifacts already built.
 
 1. run the `release` workflow from the Actions tab, on the branch holding
    it: a manual run builds the full matrix and stops at the `testpypi`
@@ -689,20 +688,14 @@ worth keeping, as what a yanked file was built from.
 
 ## One-time setup, per index
 
-The PyPI side was done for `btclib-libsecp256k1`, and a registration is
-per project name, so **the rename needed it done again** — on PyPI and on
-TestPyPI both — before 0.8.0 could be published at all. For a name no
-project holds yet the form to use is a *pending* publisher, which is the
-same registration made against a name rather than a project and which
-creates the project on the first upload it accepts. Without it the run
-gets as far as the token exchange and stops there with
-`invalid-publisher`, having built the whole matrix first: the failure
-this file already describes twice, and a third time would have been
-expected rather than mysterious. It was not needed a third time: the
-0.8.0 TestPyPI rehearsal published `0.8.0.dev701` cleanly, proving both
-pending publishers were already registered against `btclib-secp256k1`
-before the tag needed them, and the tag itself published just as cleanly
-after. The next rename, if there is one, still needs this done again.
+A registration is per project name, so **a name this has not been done
+for needs it done** — on PyPI and on TestPyPI both — before anything can
+be published under it. For a name no project holds yet the form to use
+is a *pending* publisher, which is the same registration made against a
+name rather than a project and which creates the project on the first
+upload it accepts. Without it the run gets as far as the token exchange
+and stops there with `invalid-publisher`, having built the whole matrix
+first.
 
 The rest of this section is here for the next index, or the next fork.
 
