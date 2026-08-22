@@ -261,6 +261,47 @@ release-notes length in the first place, and are still in
 
 ### CI
 
+- **`.yamllint.yaml` keeps the default rule set on, and stops carrying
+  one tree's claims** (btclib-org/.github#40, and the shared file's own
+  defect found reviewing that change). Two things, one file.
+
+  The claims first: the file recorded the findings of a survey run
+  somewhere else — "80 reports 62 lines against 8 at 100" — as settled
+  fact, in a file shared byte-for-byte across the organization's
+  repositories. A number measured in another tree and copied here is not
+  a measurement of this one, and nothing in the file told the reader who
+  checked it so. It now states the rule and the command that re-derives
+  the numbers in whichever tree is asking.
+
+  The defect that came with the shared copy is `extends: default`.
+  yamllint enables no rule a configuration does not name, so a file that
+  lists `line-length` and `document-start` and extends nothing runs those
+  two alone: indentation, trailing whitespace, duplicate keys and the
+  rest of the default set silently off, while the file's own prose said
+  only `comments` and `truthy` were. A lint gate passes either way — a
+  check nobody runs cannot fail — which is why the copy travelled. This
+  repository was the one still carrying `extends: default`, so adopting
+  the shared file unchanged would have turned the set off here too; the
+  shared file gains it back instead, with the two exceptions named under
+  `rules:` where a reader can see them rather than inferred from what is
+  missing. `.pre-commit-config.yaml`'s comment above the hook follows:
+  it described a width check, which is what the hook was, and now names
+  what actionlint and zizmor still do not read -- a key written twice, a
+  block indented under nothing. Nothing new is reported in this tree:
+  `git ls-files '*.yml' '*.yaml' | xargs uvx yamllint` is clean before
+  and after.
+
+- **`.taplo.toml` stops carrying one tree's furniture**
+  (btclib-org/.github#40). It justified `reorder_keys` and
+  `array_auto_collapse` by naming things that are one tree's — "the ruff
+  rule sets", "a module to the mutation session" — where the reasons are
+  that a table's order is an argument rather than an accident, and that
+  one indent across every toml in the organization is the point of having
+  a formatter. It is now the copy the sibling repositories carry, which
+  argues from the rule and says outright that nothing in it may be true
+  of one tree only. `indent_string` and `array_auto_collapse` do not
+  move, which taplo rewriting nothing here is what shows.
+
 - **`[tool.uv]`'s `required-version` comment stated the wrong reason**
   (#299): it read as though the floor were the version the uv-lock hook
   of `.pre-commit-config.yaml` pins, but that hook pins `0.12.5` while
